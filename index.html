@@ -52,10 +52,9 @@
 
       <!-- ═══════════════════════════════════════════════════════════
            ABOUT SECTION IMAGE
-           A wide banner photo displayed below the about text.
-           Good for: a group screenshot, a server panorama, etc.
-           To use: uncomment and set src + alt. The figcaption
-           is optional — remove the whole <figcaption> tag if unused.
+           A single wide banner photo below the about text.
+           Good for a group screenshot or server panorama.
+           To use: uncomment and set src + alt.
            To remove: comment back out — no gap left behind.
       ════════════════════════════════════════════════════════════ -->
       <!--
@@ -65,6 +64,62 @@
       </figure>
       -->
     </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         SLIDESHOW
+         An auto-advancing photo gallery that sits between sections.
+         Auto-plays every 4 seconds, pauses on hover, supports keyboard
+         arrow keys and swipe on mobile.
+
+         TO ADD IMAGES:
+           1. Put your photos in the images/ folder
+           2. Copy one of the <div class="slide"> blocks below
+           3. Set the src and alt on the <img> inside it
+           4. Optionally add a <div class="slide-caption"> with a label
+
+         TO ADD MORE SLIDES: just copy-paste another .slide block.
+         TO REMOVE A SLIDE:  delete that .slide block.
+         TO DISABLE ENTIRELY: comment out this whole section —
+                              slideshow.js will detect its absence
+                              and exit cleanly, leaving no gap.
+
+         The first slide should have class="slide active" so something
+         is visible before JS runs. All others just class="slide".
+    ════════════════════════════════════════════════════════════════ -->
+    <!--
+    <div class="slideshow-section">
+      <div class="section-label">Gallery</div>
+      <h2>From the Server</h2>
+
+      <div class="slideshow">
+
+        <div class="slide active">
+          <img src="images/slide-1.jpg" alt="Describe this screenshot">
+          <div class="slide-caption">Caption for slide 1 — optional, delete this div to hide</div>
+        </div>
+
+        <div class="slide">
+          <img src="images/slide-2.jpg" alt="Describe this screenshot">
+          <div class="slide-caption">Caption for slide 2</div>
+        </div>
+
+        <div class="slide">
+          <img src="images/slide-3.jpg" alt="Describe this screenshot">
+          <div class="slide-caption">Caption for slide 3</div>
+        </div>
+
+        <div class="slide">
+          <img src="images/slide-4.jpg" alt="Describe this screenshot">
+          <!-- No caption on this slide — that's fine, just omit the div -->
+        </div>
+
+        <button class="slideshow-btn prev" aria-label="Previous slide">&#8592;</button>
+        <button class="slideshow-btn next" aria-label="Next slide">&#8594;</button>
+      </div>
+
+      <div class="slideshow-dots"></div>
+    </div>
+    -->
 
     <div class="section">
       <div class="section-label">Quick Facts</div>
@@ -107,5 +162,6 @@
 </div>
 
 <script src="nav.js"></script>
+<script src="slideshow.js"></script>
 </body>
 </html>

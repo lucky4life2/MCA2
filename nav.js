@@ -1,4 +1,4 @@
-/* nav.js — injects the shared nav and footer into every page */
+/* nav.js — shared nav, footer, and global utilities */
 
 const DISCORD_URL = 'https://discord.gg/YOUR_INVITE_HERE';
 
@@ -23,7 +23,7 @@ const FOOTER_HTML = `
     <div class="nav-dot"></div>
     Minecraft Club of America
   </div>
-  <span class="footer-copy">© 2025 Minecraft Club of America · Ratified May 13, 2025</span>
+  <span class="footer-copy">© <span id="year"></span> Minecraft Club of America · Ratified May 13, 2025</span>
 </footer>
 `;
 
@@ -33,17 +33,39 @@ document.addEventListener('DOMContentLoaded', () => {
   // Inject nav
   document.body.insertAdjacentHTML('afterbegin', NAV_HTML);
 
-  // Inject footer + toast before </body>
+  // Inject footer + toast
   document.body.insertAdjacentHTML('beforeend', FOOTER_HTML + TOAST_HTML);
+
+  // Auto-update year in footer
+  const yearEl = document.getElementById('year');
+  if (yearEl) yearEl.textContent = new Date().getFullYear();
 
   // Highlight active nav link based on current filename
   const current = window.location.pathname.split('/').pop() || 'index.html';
   const page = current.replace('.html', '') || 'index';
   const activeLink = document.querySelector(`.nav-links a[data-page="${page}"]`);
   if (activeLink) activeLink.classList.add('active');
+
+  // Join button interaction (index.html)
+  const joinBtn = document.getElementById('joinBtn');
+  if (joinBtn) {
+    joinBtn.addEventListener('click', () => {
+      // Navigate to Discord — change this URL if needed
+      window.open(DISCORD_URL, '_blank');
+
+      // Visual feedback
+      const original = joinBtn.textContent;
+      joinBtn.textContent = "You're In!";
+      joinBtn.classList.add('btn-joined');
+      setTimeout(() => {
+        joinBtn.textContent = original;
+        joinBtn.classList.remove('btn-joined');
+      }, 2000);
+    });
+  }
 });
 
-// Copy-to-clipboard helper used on server.html
+// Copy-to-clipboard helper (server.html)
 function copyAddress() {
   const el = document.getElementById('server-addr');
   if (!el) return;

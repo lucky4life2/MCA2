@@ -16,7 +16,6 @@
 
     <!-- ═══════════════════════════════════════════════════════════
          SERVER PAGE HERO BACKGROUND IMAGE
-         A background photo for the server page hero.
          To use: uncomment and set src to your image path.
          To remove: comment back out — no layout impact.
     ════════════════════════════════════════════════════════════ -->
@@ -28,7 +27,7 @@
 
     <div class="hero-eyebrow">Infrastructure</div>
     <h1>Server<br><em>Information</em></h1>
-    <p class="hero-sub">All servers require the Java edition of Minecraft. The main server is modded — the modpack is pinned in Discord.</p>
+    <p class="hero-sub">All servers require the Java edition of Minecraft. The main server is not modded — see more information <a id="mods">here</a></p>
   </div>
 
   <div class="content">
@@ -40,7 +39,7 @@
 
       <div class="address-row">
         <span class="address-label">Address</span>
-        <span class="address-value" id="server-addr">play.mca.gg</span>
+        <span class="address-value" id="server-addr">172.240.79.112:2023</span>
         <button class="copy-btn" onclick="copyAddress()">Copy</button>
       </div>
 
@@ -54,8 +53,6 @@
 
       <!-- ═══════════════════════════════════════════════════════════
            SERVER SCREENSHOT
-           A wide image below the connection info — good for a
-           screenshot of the spawn area or world map.
            To use: uncomment and fill in src + alt.
            To remove: comment back out — no gap left behind.
       ════════════════════════════════════════════════════════════ -->
@@ -104,7 +101,7 @@
       </ul>
     </div>
 
-    <div class="section">
+    <div class="section" id="mods">
       <div class="section-label">Modifications</div>
       <h2>Allowed &amp; Banned Mods</h2>
       <p>The Anti-Cheat Act applies the <strong>Unfair Advantage Test</strong>: does the mod give you information or capabilities a vanilla player could never achieve? If yes, it's banned.</p>
@@ -164,8 +161,6 @@
 
       <!-- ═══════════════════════════════════════════════════════════
            MODPACK / HOW-TO SCREENSHOT
-           A side-by-side layout: image on one side, extra text
-           on the other. Good for a modpack launcher screenshot.
            To use: uncomment the whole .image-aside block.
            To remove: comment back out — no gap left behind.
       ════════════════════════════════════════════════════════════ -->
@@ -173,7 +168,7 @@
       <div class="image-aside" style="margin-top:2rem;">
         <img src="images/modpack-launcher.jpg" alt="Modpack launcher setup">
         <div class="image-aside-text">
-          <p style="margin-top:0;">The MCA modpack is distributed through the CurseForge or Modrinth launcher. Download the launcher, search for the MCA pack, and hit install — it handles everything automatically.</p>
+          <p style="margin-top:0;">The MCA modpack is distributed through the CurseForge or Modrinth launcher. Download the launcher, search for the MCA pack, and hit install.</p>
           <p>If you run into trouble, drop a message in the #tech-support channel on Discord.</p>
         </div>
       </div>
@@ -184,12 +179,6 @@
 </div>
 
 <script src="nav.js"></script>
-<script>
-  setTimeout(() => {
-    document.getElementById('status-badge').className = 'status-badge online';
-    document.getElementById('status-text').textContent = 'Online';
-    document.getElementById('status-detail').textContent = 'Server is live · Last checked just now';
-  }, 1600);
-</script>
+<script src="server-status.js"></script>
 </body>
 </html>
