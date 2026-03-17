@@ -23,7 +23,7 @@ const FOOTER_HTML = `
     <div class="nav-dot"></div>
     Minecraft Club of America
   </div>
-  <span class="footer-copy">© <span id="year"></span> Minecraft Club of America · Ratified May 13, 2025</span>
+  <span class="footer-copy">© <span id="year"></span> Minecraft Club of America · Ratified May 13, 2025 · Founded Dec 5, 2021</span>
 </footer>
 `;
 
