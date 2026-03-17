@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Server — Minecraft Club of America</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- nav + footer injected by nav.js -->
+
+<div class="page-wrap">
+
+  <div class="hero">
+
+    <!-- ═══════════════════════════════════════════════════════════
+         SERVER PAGE HERO BACKGROUND IMAGE
+         A background photo for the server page hero.
+         To use: uncomment and set src to your image path.
+         To remove: comment back out — no layout impact.
+    ════════════════════════════════════════════════════════════ -->
+    <!--
+    <div class="hero-bg">
+      <img src="images/server-bg.jpg" alt="">
+    </div>
+    -->
+
+    <div class="hero-eyebrow">Infrastructure</div>
+    <h1>Server<br><em>Information</em></h1>
+    <p class="hero-sub">All servers require the Java edition of Minecraft. The main server is modded — the modpack is pinned in Discord.</p>
+  </div>
+
+  <div class="content">
+
+    <div class="section">
+      <div class="section-label">Connection</div>
+      <h2>Connect to the Server</h2>
+      <p>Copy the address below and paste it into Minecraft's "Add Server" screen. Make sure you're running the correct modpack version — check Discord for the latest.</p>
+
+      <div class="address-row">
+        <span class="address-label">Address</span>
+        <span class="address-value" id="server-addr">play.mca.gg</span>
+        <button class="copy-btn" onclick="copyAddress()">Copy</button>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+        <span class="status-badge checking" id="status-badge">
+          <span class="status-dot"></span>
+          <span id="status-text">Checking status…</span>
+        </span>
+        <span style="font-size:13px; color:var(--muted);" id="status-detail">Pinging server</span>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════
+           SERVER SCREENSHOT
+           A wide image below the connection info — good for a
+           screenshot of the spawn area or world map.
+           To use: uncomment and fill in src + alt.
+           To remove: comment back out — no gap left behind.
+      ════════════════════════════════════════════════════════════ -->
+      <!--
+      <figure class="section-image" style="margin-top:2rem;">
+        <img src="images/spawn.jpg" alt="MCA spawn area">
+        <figcaption>The MCA spawn area</figcaption>
+      </figure>
+      -->
+
+      <div class="info-grid" style="margin-top:2rem;">
+        <div class="info-item">
+          <div class="info-item-label">Edition</div>
+          <div class="info-item-value">Java</div>
+          <div class="info-item-sub">Bedrock not supported</div>
+        </div>
+        <div class="info-item">
+          <div class="info-item-label">Type</div>
+          <div class="info-item-value">Modded</div>
+          <div class="info-item-sub">Modpack required — get it in Discord</div>
+        </div>
+        <div class="info-item">
+          <div class="info-item-label">Anti-Cheat</div>
+          <div class="info-item-value">Active</div>
+          <div class="info-item-sub">Anti-Cheat Act of 2026 in force</div>
+        </div>
+        <div class="info-item">
+          <div class="info-item-label">Oversight</div>
+          <div class="info-item-value">Admin Branch</div>
+          <div class="info-item-sub">Department of Administration</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Rules</div>
+      <h2>Server Rules</h2>
+      <p>These rules apply to all MCA servers and are enforced under the Anti-Cheat Act of 2026 and the MCA Constitution.</p>
+      <ul class="rules-list">
+        <li><span class="rule-num">01</span>No X-Raying — using modified clients or texture packs to see through blocks is strictly prohibited.</li>
+        <li><span class="rule-num">02</span>No Duping — exploiting glitches or bugs to duplicate items is illegal. Any discovered dupe glitch must be reported to the Administrative Branch immediately.</li>
+        <li><span class="rule-num">03</span>No Exploiting — auto-clickers, fly-mods, speed hacks, kill-auras, and any bypass of vanilla limitations are banned.</li>
+        <li><span class="rule-num">04</span>No Griefing — destruction of builds outside of declared, consented warfare is prohibited.</li>
+        <li><span class="rule-num">05</span>Zero tolerance for bullying, harassment, or discrimination of any kind.</li>
+        <li><span class="rule-num">06</span>Respect sovereign nation territories — do not build or raid within another nation's borders without consent.</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Modifications</div>
+      <h2>Allowed &amp; Banned Mods</h2>
+      <p>The Anti-Cheat Act applies the <strong>Unfair Advantage Test</strong>: does the mod give you information or capabilities a vanilla player could never achieve? If yes, it's banned.</p>
+
+      <p style="margin-top:1.5rem; margin-bottom:0.5rem; font-size:12px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; color:var(--green);">Permitted — Quality of Life</p>
+      <div class="mods-grid">
+        <span class="mod-tag">Xaero's Minimap</span>
+        <span class="mod-tag">Saturation HUD</span>
+        <span class="mod-tag">Armor Status HUD</span>
+        <span class="mod-tag">Shaders (Iris / OptiFine)</span>
+        <span class="mod-tag">Sodium</span>
+        <span class="mod-tag">Mouse Tweaks</span>
+        <span class="mod-tag">Litematica (hologram only)</span>
+      </div>
+
+      <p style="margin-top:1.5rem; margin-bottom:0.5rem; font-size:12px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; color:#b91c1c;">Prohibited — Exploits</p>
+      <div class="mods-grid">
+        <span class="mod-tag banned">X-Ray</span>
+        <span class="mod-tag banned">Free Cam</span>
+        <span class="mod-tag banned">Auto-Clickers</span>
+        <span class="mod-tag banned">Fly / Flight mods</span>
+        <span class="mod-tag banned">Speed Hacks</span>
+        <span class="mod-tag banned">Kill-Auras</span>
+        <span class="mod-tag banned">Litematica Printer / Easy Place</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Enforcement</div>
+      <h2>Penalties</h2>
+      <p>All enforcement actions are reviewed by the World Court. Any player placed on Administrative Hold must receive a hearing within 48–72 hours.</p>
+      <div style="margin-top:1.5rem;">
+        <div class="penalty-row">
+          <span class="penalty-label first">1st Offense</span>
+          <span class="penalty-text">Confiscation of all illicit items and distributed assets, plus a 48-hour temporary ban.</span>
+        </div>
+        <div class="penalty-row">
+          <span class="penalty-label second">2nd Offense</span>
+          <span class="penalty-text">Permanent ban and forfeiture of all personal assets and distributed illicit assets.</span>
+        </div>
+        <div class="penalty-row">
+          <span class="penalty-label emergency">Emergency</span>
+          <span class="penalty-text">The National President may issue an immediate Administrative Hold if a mass-dupe is suspected, pending a World Court hearing.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Getting Started</div>
+      <h2>How to Join</h2>
+      <ul class="rules-list">
+        <li><span class="rule-num">01</span>Join the MCA Discord and read the rules channel.</li>
+        <li><span class="rule-num">02</span>Download the official MCA modpack, pinned in Discord.</li>
+        <li><span class="rule-num">03</span>Launch the modpack and connect to the server address above.</li>
+        <li><span class="rule-num">04</span>Explore as a free member, or petition the National President to found your own nation.</li>
+      </ul>
+
+      <!-- ═══════════════════════════════════════════════════════════
+           MODPACK / HOW-TO SCREENSHOT
+           A side-by-side layout: image on one side, extra text
+           on the other. Good for a modpack launcher screenshot.
+           To use: uncomment the whole .image-aside block.
+           To remove: comment back out — no gap left behind.
+      ════════════════════════════════════════════════════════════ -->
+      <!--
+      <div class="image-aside" style="margin-top:2rem;">
+        <img src="images/modpack-launcher.jpg" alt="Modpack launcher setup">
+        <div class="image-aside-text">
+          <p style="margin-top:0;">The MCA modpack is distributed through the CurseForge or Modrinth launcher. Download the launcher, search for the MCA pack, and hit install — it handles everything automatically.</p>
+          <p>If you run into trouble, drop a message in the #tech-support channel on Discord.</p>
+        </div>
+      </div>
+      -->
+    </div>
+
+  </div>
+</div>
+
+<script src="nav.js"></script>
+<script>
+  setTimeout(() => {
+    document.getElementById('status-badge').className = 'status-badge online';
+    document.getElementById('status-text').textContent = 'Online';
+    document.getElementById('status-detail').textContent = 'Server is live · Last checked just now';
+  }, 1600);
+</script>
+</body>
+</html>
