@@ -1,17 +1,17 @@
 /* ── MCA Global Styles ── */
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600&display=swap');
 
 :root {
-  --black: #111111;
-  --dark: #1a1a1a;
-  --mid: #444444;
-  --muted: #888888;
-  --border: #e0e0e0;
-  --bg: #fafaf8;
-  --white: #ffffff;
-  --green: #2d6a4f;
-  --green-light: #40916c;
-  --accent: #52b788;
+  --blue:        #18489e;   /* headings, primary brand */
+  --blue-dark:   #123a82;   /* hover states */
+  --green:       #6cd26e;   /* accents, labels, highlights */
+  --green-dark:  #4db84f;   /* hover on green elements */
+  --black:       #111111;
+  --mid:         #444444;
+  --muted:       #888888;
+  --border:      #dde3ee;   /* slightly blue-tinted border */
+  --bg:          #f8f9fc;   /* faint blue-white background */
+  --white:       #ffffff;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -19,7 +19,7 @@ html { scroll-behavior: smooth; }
 body {
   background: var(--bg);
   color: var(--black);
-  font-family: 'Inter', sans-serif;
+  font-family: 'Open Sans', sans-serif;
   font-size: 16px;
   line-height: 1.6;
 }
@@ -32,8 +32,9 @@ nav {
   padding: 0 2.5rem; height: 58px;
 }
 .nav-logo {
-  font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 700;
-  color: var(--black); text-decoration: none;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 16px; font-weight: 700;
+  color: var(--blue); text-decoration: none;
   display: flex; align-items: center; gap: 10px;
 }
 .nav-dot {
@@ -42,13 +43,13 @@ nav {
 }
 .nav-links { display: flex; align-items: center; list-style: none; }
 .nav-links a {
-  font-size: 12px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase;
+  font-size: 12px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase;
   color: var(--muted); text-decoration: none; padding: 6px 14px;
   transition: color 0.15s; border-bottom: 2px solid transparent;
   display: inline-block;
 }
-.nav-links a:hover { color: var(--black); border-bottom-color: var(--green); }
-.nav-links a.active { color: var(--black); border-bottom-color: var(--green); }
+.nav-links a:hover  { color: var(--blue); border-bottom-color: var(--green); }
+.nav-links a.active { color: var(--blue); border-bottom-color: var(--green); }
 .nav-discord {
   margin-left: 8px; background: #5865F2 !important; color: white !important;
   border-bottom: none !important; padding: 6px 16px !important;
@@ -66,96 +67,51 @@ nav {
    will have zero effect on surrounding layout.
 ───────────────────────────────────────────── */
 
-/* Hero background image (index.html)
-   Sits behind the hero text. When present, the
-   hero text gets a subtle overlay for readability.
-   When absent, the hero is plain white — no gap. */
+/* Hero background image — sits behind hero text at low opacity */
 .hero-bg {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
+  position: absolute; inset: 0; z-index: 0;
+  overflow: hidden; pointer-events: none;
 }
 .hero-bg img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-  display: block;
-  opacity: 0.18;          /* keep text readable */
+  width: 100%; height: 100%; object-fit: cover;
+  object-position: center; display: block; opacity: 0.12;
 }
-/* Only add relative positioning when .hero-bg is present */
-.hero:has(.hero-bg) {
-  position: relative;
-}
-.hero:has(.hero-bg) > *:not(.hero-bg) {
-  position: relative;
-  z-index: 1;
-}
+.hero:has(.hero-bg) { position: relative; }
+.hero:has(.hero-bg) > *:not(.hero-bg) { position: relative; z-index: 1; }
 
-/* Section image — full-width banner inside a .section
-   Sits between paragraphs; adds 2rem gap top and bottom.
-   When absent, no gap or empty space appears. */
+/* Section image — full-width banner inside a .section */
 .section-image {
-  margin: 2rem 0;
-  border-radius: 6px;
-  overflow: hidden;
-  border: 1px solid var(--border);
+  margin: 2rem 0; border-radius: 6px;
+  overflow: hidden; border: 1px solid var(--border);
 }
 .section-image img {
-  width: 100%;
-  height: auto;
-  display: block;
-  max-height: 420px;
-  object-fit: cover;
-  object-position: center;
+  width: 100%; height: auto; display: block;
+  max-height: 420px; object-fit: cover; object-position: center;
 }
 .section-image figcaption {
-  font-size: 12px;
-  color: var(--muted);
-  font-weight: 400;
-  padding: 8px 12px;
-  border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--muted); font-weight: 400;
+  padding: 8px 12px; border-top: 1px solid var(--border);
   background: var(--white);
 }
 
-/* Leader portrait — small square next to a table row.
-   Wrap the <table> in .leader-row-with-photo to activate.
-   When the <img> tag is absent the layout is unaffected. */
+/* Leader portrait */
 .leader-photo {
-  width: 52px;
-  height: 52px;
-  border-radius: 4px;
-  object-fit: cover;
-  object-position: top center;
-  border: 1px solid var(--border);
-  flex-shrink: 0;
-  display: block;
+  width: 52px; height: 52px; border-radius: 4px;
+  object-fit: cover; object-position: top center;
+  border: 1px solid var(--border); flex-shrink: 0; display: block;
 }
 
-/* Side-by-side image + text block (optional, any page)
-   Comment out the whole .image-aside element to remove. */
+/* Side-by-side image + text */
 .image-aside {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2.5rem;
-  align-items: start;
-  margin: 2rem 0;
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 2.5rem; align-items: start; margin: 2rem 0;
 }
 .image-aside img {
-  width: 100%;
-  height: auto;
-  display: block;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  object-fit: cover;
-  max-height: 340px;
+  width: 100%; height: auto; display: block;
+  border-radius: 6px; border: 1px solid var(--border);
+  object-fit: cover; max-height: 340px;
 }
-.image-aside-text { /* text column sits next to the image */ }
-@media (max-width: 640px) {
-  .image-aside { grid-template-columns: 1fr; }
-}
+@media (max-width: 640px) { .image-aside { grid-template-columns: 1fr; } }
 
 /* ── HERO ── */
 .hero {
@@ -170,17 +126,17 @@ nav {
 }
 .hero-eyebrow::after {
   content: ''; display: block; height: 1px; width: 40px;
-  background: var(--green); opacity: 0.5;
+  background: var(--green); opacity: 0.6;
 }
 .hero h1 {
-  font-family: 'Playfair Display', serif;
+  font-family: 'Times New Roman', Times, serif;
   font-size: clamp(36px, 6vw, 64px);
-  font-weight: 700; line-height: 1.15; color: var(--black);
-  margin-bottom: 1.5rem; letter-spacing: -0.5px;
+  font-weight: 700; line-height: 1.15; color: var(--blue);
+  margin-bottom: 1.5rem;
 }
 .hero h1 em { font-style: italic; color: var(--green); }
 .hero-sub {
-  font-size: 17px; font-weight: 300; color: var(--mid);
+  font-size: 17px; font-weight: 400; color: var(--mid);
   max-width: 520px; line-height: 1.75; margin-bottom: 2.5rem;
 }
 .hero-ctas { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
@@ -194,38 +150,29 @@ nav {
 }
 .btn-discord:hover { background: #4752c4; }
 .btn-outline {
-  background: transparent; color: var(--black); font-size: 13px; font-weight: 500;
-  padding: 11px 22px; border: 1px solid var(--border); border-radius: 4px;
-  cursor: pointer; text-decoration: none; display: inline-block; transition: border-color 0.15s;
+  background: transparent; color: var(--blue); font-size: 13px; font-weight: 600;
+  padding: 11px 22px; border: 2px solid var(--blue); border-radius: 4px;
+  cursor: pointer; text-decoration: none; display: inline-block;
+  transition: background 0.15s, color 0.15s;
 }
-.btn-outline:hover { border-color: var(--black); }
+.btn-outline:hover { background: var(--blue); color: var(--white); }
 
 /* ── CONTENT ── */
-.content { max-width: 820px; 
-  margin: 0 auto; 
-  padding: 0 2.5rem; 
-}
-
-.section { 
-  padding: 4rem auto; 
-  border-bottom: 1px solid var(--border); 
-}
-
-.section:last-child { 
-  border-bottom: none; 
-}
+.content { max-width: 820px; margin: 0 auto; padding: 0 2.5rem; }
+.section { padding: 4rem 0; border-bottom: 1px solid var(--border); }
+.section:last-child { border-bottom: none; }
 
 .section-label {
-  font-size: 11px; font-weight: 600; letter-spacing: 2.5px;
+  font-size: 11px; font-weight: 700; letter-spacing: 2.5px;
   text-transform: uppercase; color: var(--green); margin-bottom: 1.25rem;
 }
 .section h2 {
-  font-family: 'Playfair Display', serif;
+  font-family: 'Times New Roman', Times, serif;
   font-size: clamp(24px, 3vw, 34px);
-  font-weight: 700; color: var(--black); margin-bottom: 1.5rem; line-height: 1.25;
+  font-weight: 700; color: var(--blue); margin-bottom: 1.5rem; line-height: 1.25;
 }
 .section p {
-  color: var(--mid); font-weight: 300; line-height: 1.8;
+  color: var(--mid); font-weight: 400; line-height: 1.8;
   margin-bottom: 1rem; max-width: 660px; font-size: 15.5px;
 }
 .section p strong { font-weight: 600; color: var(--black); }
@@ -234,14 +181,14 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 2rem 0; 
 /* ── INFO GRID ── */
 .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 1.5rem; }
 .info-item-label {
-  font-size: 11px; font-weight: 600; letter-spacing: 2px;
+  font-size: 11px; font-weight: 700; letter-spacing: 2px;
   text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
 }
 .info-item-value {
-  font-family: 'Playfair Display', serif; font-size: 20px;
-  color: var(--black); margin-bottom: 4px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 20px; color: var(--blue); margin-bottom: 4px;
 }
-.info-item-sub { font-size: 13px; color: var(--muted); font-weight: 300; }
+.info-item-sub { font-size: 13px; color: var(--muted); font-weight: 400; }
 
 /* ── TABLE ── */
 .leader-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
@@ -249,18 +196,18 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 2rem 0; 
   padding: 12px 0; border-bottom: 1px solid var(--border);
   font-size: 15px; vertical-align: middle;
 }
-.leader-table td:first-child { font-weight: 600; color: var(--black); width: 50%; padding-right: 1rem; }
+.leader-table td:first-child { font-weight: 600; color: var(--blue); width: 50%; padding-right: 1rem; }
 .leader-table td:last-child { color: var(--muted); font-size: 13px; font-weight: 500; letter-spacing: 0.5px; }
 .leader-table tr:last-child td { border-bottom: none; }
 
 /* ── BRANCH HEADERS ── */
 .branch-label {
-  font-size: 11px; font-weight: 600; letter-spacing: 2.5px;
-  text-transform: uppercase; color: var(--muted); margin-bottom: 4px;
+  font-size: 11px; font-weight: 700; letter-spacing: 2.5px;
+  text-transform: uppercase; color: var(--green); margin-bottom: 4px;
 }
 .branch-title {
-  font-family: 'Playfair Display', serif; font-size: 26px;
-  color: var(--black); margin-bottom: 6px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 26px; color: var(--blue); margin-bottom: 6px;
 }
 .branch-sub { font-size: 13px; color: var(--muted); margin-bottom: 1.5rem; }
 
@@ -271,20 +218,20 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 2rem 0; 
   margin: 1.5rem 0; max-width: 480px;
 }
 .address-label {
-  font-size: 11px; font-weight: 600; letter-spacing: 2px;
+  font-size: 11px; font-weight: 700; letter-spacing: 2px;
   text-transform: uppercase; color: var(--muted); flex-shrink: 0;
 }
 .address-value {
-  font-family: 'Playfair Display', serif; font-size: 18px;
-  color: var(--black); flex: 1;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 18px; color: var(--blue); flex: 1;
 }
 .copy-btn {
-  font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase;
-  color: var(--green); background: none; border: 1px solid var(--accent);
+  font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--white); background: var(--green); border: 1px solid var(--green);
   border-radius: 4px; padding: 5px 10px; cursor: pointer;
-  transition: background 0.15s, color 0.15s; flex-shrink: 0;
+  transition: background 0.15s; flex-shrink: 0;
 }
-.copy-btn:hover { background: var(--green); color: white; border-color: var(--green); }
+.copy-btn:hover { background: var(--green-dark); border-color: var(--green-dark); }
 
 /* ── STATUS BADGE ── */
 .status-badge {
@@ -292,7 +239,7 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 2rem 0; 
   letter-spacing: 1px; text-transform: uppercase; padding: 5px 12px;
   border-radius: 100px; border: 1px solid;
 }
-.status-badge.online  { color: var(--green); border-color: var(--accent); background: rgba(82,183,136,0.08); }
+.status-badge.online   { color: #1a7a1c; border-color: var(--green); background: rgba(108,210,110,0.1); }
 .status-badge.checking { color: #b45309; border-color: #fbbf24; background: rgba(251,191,36,0.08); }
 .status-badge.offline  { color: #b91c1c; border-color: #fca5a5; background: rgba(248,113,113,0.08); }
 .status-dot {
@@ -305,7 +252,7 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 2rem 0; 
 .rules-list { list-style: none; margin-top: 1rem; }
 .rules-list li {
   display: flex; gap: 16px; align-items: flex-start; padding: 14px 0;
-  border-bottom: 1px solid var(--border); font-size: 15px; color: var(--mid); font-weight: 300;
+  border-bottom: 1px solid var(--border); font-size: 15px; color: var(--mid); font-weight: 400;
 }
 .rules-list li:last-child { border-bottom: none; }
 .rule-num {
@@ -337,25 +284,27 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 2rem 0; 
 .penalty-label.first     { color: #b45309; }
 .penalty-label.second    { color: #b91c1c; }
 .penalty-label.emergency { color: #6d28d9; }
-.penalty-text { font-size: 15px; color: var(--mid); font-weight: 300; line-height: 1.7; }
+.penalty-text { font-size: 15px; color: var(--mid); font-weight: 400; line-height: 1.7; }
 
 /* ── CALLOUT ── */
 .callout {
-  border-left: 3px solid var(--green); padding: 1rem 1.5rem;
-  background: rgba(45,106,79,0.04); border-radius: 0 4px 4px 0; margin-top: 1.5rem;
+  border-left: 3px solid var(--blue); padding: 1rem 1.5rem;
+  background: rgba(24,72,158,0.04); border-radius: 0 4px 4px 0; margin-top: 1.5rem;
 }
-.callout-title { font-weight: 600; color: var(--black); font-size: 14px; margin-bottom: 4px; }
-.callout-body { font-size: 13.5px; color: var(--mid); font-weight: 300; line-height: 1.7; }
+.callout-title { font-weight: 700; color: var(--blue); font-size: 14px; margin-bottom: 4px; }
+.callout-body { font-size: 13.5px; color: var(--mid); font-weight: 400; line-height: 1.7; }
 
 /* ── FOOTER ── */
 footer {
   border-top: 1px solid var(--border); padding: 2rem 2.5rem;
   display: flex; align-items: center; justify-content: space-between;
   flex-wrap: wrap; gap: 1rem;
+  background: var(--white);
 }
 .footer-logo {
-  font-family: 'Playfair Display', serif; font-size: 13px; font-weight: 700;
-  color: var(--black); display: flex; align-items: center; gap: 8px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14px; font-weight: 700;
+  color: var(--blue); display: flex; align-items: center; gap: 8px;
 }
 .footer-copy { font-size: 12px; color: var(--muted); }
 
@@ -363,7 +312,7 @@ footer {
 .toast {
   position: fixed; bottom: 2rem; left: 50%;
   transform: translateX(-50%) translateY(10px);
-  background: var(--black); color: white; font-size: 13px; font-weight: 500;
+  background: var(--blue); color: white; font-size: 13px; font-weight: 500;
   padding: 10px 22px; border-radius: 4px; opacity: 0; pointer-events: none;
   transition: all 0.25s; z-index: 9999;
 }
@@ -378,104 +327,55 @@ footer {
   .info-grid { grid-template-columns: 1fr; }
   footer { padding: 1.5rem 1.25rem; }
 }
+
 /* ── SLIDESHOW ──────────────────────────────────────────────────
-   Self-contained — commenting out the .slideshow block in HTML
-   leaves zero gap or space. The JS (slideshow.js) only runs if
-   the .slideshow element actually exists on the page.
+   Commenting out the .slideshow HTML leaves zero gap.
+   slideshow.js exits cleanly if .slideshow doesn't exist.
 ──────────────────────────────────────────────────────────────── */
 .slideshow-section {
   padding: 4rem 0;
   border-bottom: 1px solid var(--border);
 }
-
 .slideshow {
-  position: relative;
-  width: 100%;
-  border-radius: 6px;
-  overflow: hidden;
+  position: relative; width: 100%;
+  border-radius: 6px; overflow: hidden;
   border: 1px solid var(--border);
-  background: var(--black);     /* fallback while images load */
+  background: var(--blue);
   margin-top: 1.5rem;
-  /* Height is driven by the images — no fixed height needed */
 }
-
-/* Each slide: hidden by default, fades in when .active */
-.slide {
-  display: none;
-  position: relative;
-}
-.slide.active {
-  display: block;
-  animation: slideFadeIn 0.6s ease;
-}
-@keyframes slideFadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
+.slide { display: none; position: relative; }
+.slide.active { display: block; animation: slideFadeIn 0.6s ease; }
+@keyframes slideFadeIn { from { opacity: 0; } to { opacity: 1; } }
 .slide img {
-  width: 100%;
-  height: 420px;
-  object-fit: cover;
-  object-position: center;
-  display: block;
+  width: 100%; height: 420px;
+  object-fit: cover; object-position: center; display: block;
 }
-
-/* Optional caption shown at the bottom of each slide */
 .slide-caption {
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
+  position: absolute; bottom: 0; left: 0; right: 0;
   padding: 10px 16px;
   background: linear-gradient(transparent, rgba(0,0,0,0.55));
-  color: white;
-  font-size: 12px;
-  font-weight: 400;
-  letter-spacing: 0.3px;
+  color: white; font-size: 12px; font-weight: 400; letter-spacing: 0.3px;
 }
-
-/* Prev / Next arrow buttons */
 .slideshow-btn {
-  position: absolute;
-  top: 50%; transform: translateY(-50%);
-  background: rgba(255,255,255,0.9);
-  border: 1px solid var(--border);
-  color: var(--black);
-  width: 36px; height: 36px;
-  border-radius: 50%;
-  font-size: 16px;
-  cursor: pointer;
+  position: absolute; top: 50%; transform: translateY(-50%);
+  background: rgba(255,255,255,0.92); border: 1px solid var(--border);
+  color: var(--blue); width: 36px; height: 36px; border-radius: 50%;
+  font-size: 16px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: background 0.15s, opacity 0.15s;
-  z-index: 10;
-  opacity: 0;                   /* hidden until you hover the slideshow */
-  line-height: 1;
+  z-index: 10; opacity: 0; line-height: 1;
 }
 .slideshow:hover .slideshow-btn { opacity: 1; }
 .slideshow-btn:hover { background: var(--white); }
 .slideshow-btn.prev { left: 12px; }
 .slideshow-btn.next { right: 12px; }
-
-/* Dot indicators along the bottom */
-.slideshow-dots {
-  display: flex;
-  justify-content: center;
-  gap: 6px;
-  margin-top: 12px;
-}
+.slideshow-dots { display: flex; justify-content: center; gap: 6px; margin-top: 12px; }
 .slideshow-dot {
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: var(--border);
-  cursor: pointer;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--border); cursor: pointer;
   transition: background 0.2s, transform 0.2s;
-  border: none;
-  padding: 0;
+  border: none; padding: 0;
 }
-.slideshow-dot.active {
-  background: var(--green);
-  transform: scale(1.3);
-}
+.slideshow-dot.active { background: var(--green); transform: scale(1.3); }
 
-@media (max-width: 640px) {
-  .slide img { height: 240px; }
-}
+@media (max-width: 640px) { .slide img { height: 240px; } }
