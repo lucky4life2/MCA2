@@ -27,7 +27,7 @@
 
     <div class="hero-eyebrow">Infrastructure</div>
     <h1>Server<br><em>Information</em></h1>
-    <p class="hero-sub">All servers require the Java edition of Minecraft. The main server is modded — the modpack is pinned in Discord.</p>
+    <p class="hero-sub">Java and Bedrock editions are both supported. Mods are not required — connect with a vanilla client or use optional mods to enhance your experience.</p>
   </div>
 
   <div class="content">
@@ -35,20 +35,41 @@
     <div class="section">
       <div class="section-label">Connection</div>
       <h2>Connect to the Server</h2>
-      <p>Copy the address below and paste it into Minecraft's "Add Server" screen. Make sure you're running the correct modpack version — check Discord for the latest.</p>
+      <p>Both addresses connect to the same server — try whichever one responds faster for you. Copy it into Minecraft's "Add Server" screen.</p>
 
-      <div class="address-row">
-        <span class="address-label">Address</span>
-        <span class="address-value" id="server-addr">172.240.79.112:2023</span>
-        <button class="copy-btn" onclick="copyAddress()">Copy</button>
-      </div>
+      <!-- Two address + status cards side by side -->
+      <div class="server-cards">
 
-      <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
-        <span class="status-badge checking" id="status-badge">
-          <span class="status-dot"></span>
-          <span id="status-text">Checking status…</span>
-        </span>
-        <span style="font-size:13px; color:var(--muted);" id="status-detail">Pinging server</span>
+        <div class="server-card">
+          <div class="server-card-label">Primary Address</div>
+          <div class="address-row">
+            <span class="address-value" id="server-addr-1">mc.minecraftclubofamerica.me</span>
+            <button class="copy-btn" onclick="copyAddr('server-addr-1')">Copy</button>
+          </div>
+          <div class="server-card-status">
+            <span class="status-badge checking" id="status-badge-1">
+              <span class="status-dot"></span>
+              <span id="status-text-1">Checking…</span>
+            </span>
+            <span class="status-detail" id="status-detail-1">Pinging server</span>
+          </div>
+        </div>
+
+        <div class="server-card">
+          <div class="server-card-label">Alternate Address</div>
+          <div class="address-row">
+            <span class="address-value" id="server-addr-2">172.240.79.112:2023</span>
+            <button class="copy-btn" onclick="copyAddr('server-addr-2')">Copy</button>
+          </div>
+          <div class="server-card-status">
+            <span class="status-badge checking" id="status-badge-2">
+              <span class="status-dot"></span>
+              <span id="status-text-2">Checking…</span>
+            </span>
+            <span class="status-detail" id="status-detail-2">Pinging server</span>
+          </div>
+        </div>
+
       </div>
 
       <!-- ═══════════════════════════════════════════════════════════
@@ -66,13 +87,13 @@
       <div class="info-grid" style="margin-top:2rem;">
         <div class="info-item">
           <div class="info-item-label">Edition</div>
-          <div class="info-item-value">Java</div>
-          <div class="info-item-sub">Bedrock not supported</div>
+          <div class="info-item-value">Java &amp; Bedrock</div>
+          <div class="info-item-sub">Both editions supported</div>
         </div>
         <div class="info-item">
           <div class="info-item-label">Type</div>
-          <div class="info-item-value">Modded</div>
-          <div class="info-item-sub">Modpack required — get it in Discord</div>
+          <div class="info-item-value">Vanilla-Compatible</div>
+          <div class="info-item-sub">No mods required to join</div>
         </div>
         <div class="info-item">
           <div class="info-item-label">Anti-Cheat</div>
@@ -106,7 +127,7 @@
       <h2>Allowed &amp; Banned Mods</h2>
       <p>The Anti-Cheat Act applies the <strong>Unfair Advantage Test</strong>: does the mod give you information or capabilities a vanilla player could never achieve? If yes, it's banned.</p>
 
-      <p style="margin-top:1.5rem; margin-bottom:0.5rem; font-size:12px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; color:var(--green);">Permitted — Quality of Life</p>
+      <p style="margin-top:1.5rem; margin-bottom:0.5rem; font-size:12px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--green);">Permitted — Quality of Life</p>
       <div class="mods-grid">
         <span class="mod-tag">Xaero's Minimap</span>
         <span class="mod-tag">Saturation HUD</span>
@@ -117,7 +138,7 @@
         <span class="mod-tag">Litematica (hologram only)</span>
       </div>
 
-      <p style="margin-top:1.5rem; margin-bottom:0.5rem; font-size:12px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; color:#b91c1c;">Prohibited — Exploits</p>
+      <p style="margin-top:1.5rem; margin-bottom:0.5rem; font-size:12px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#b91c1c;">Prohibited — Exploits</p>
       <div class="mods-grid">
         <span class="mod-tag banned">X-Ray</span>
         <span class="mod-tag banned">Free Cam</span>
@@ -154,8 +175,8 @@
       <h2>How to Join</h2>
       <ul class="rules-list">
         <li><span class="rule-num">01</span>Join the MCA Discord and read the rules channel.</li>
-        <li><span class="rule-num">02</span>Download the official MCA modpack, pinned in Discord.</li>
-        <li><span class="rule-num">03</span>Launch the modpack and connect to the server address above.</li>
+        <li><span class="rule-num">02</span>Connect with any Java or Bedrock client — no modpack required.</li>
+        <li><span class="rule-num">03</span>Launch Minecraft and connect to either server address above.</li>
         <li><span class="rule-num">04</span>Explore as a free member, or petition the National President to found your own nation.</li>
       </ul>
 
@@ -180,5 +201,17 @@
 
 <script src="nav.js"></script>
 <script src="server-status.js"></script>
+<script>
+  // Per-card copy helper (server.html only)
+  function copyAddr(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    navigator.clipboard.writeText(el.textContent.trim()).catch(() => {});
+    const t = document.getElementById('toast');
+    if (!t) return;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2000);
+  }
+</script>
 </body>
 </html>

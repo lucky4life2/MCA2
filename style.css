@@ -379,3 +379,133 @@ footer {
 .slideshow-dot.active { background: var(--green); transform: scale(1.3); }
 
 @media (max-width: 640px) { .slide img { height: 240px; } }
+
+/* ── SERVER CARDS (server.html) ─────────────────────────────────
+   Two side-by-side address + status cards.
+──────────────────────────────────────────────────────────────── */
+.server-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin: 1.5rem 0;
+}
+.server-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1.5rem;
+}
+.server-card-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 2px;
+  text-transform: uppercase; color: var(--blue);
+  margin-bottom: 0.75rem;
+}
+/* override address-row inside a card — no outer border, fills full width */
+.server-card .address-row {
+  border: none; border-bottom: 1px solid var(--border);
+  border-radius: 0; padding: 0 0 0.75rem 0;
+  margin: 0 0 0.75rem 0; max-width: 100%;
+  background: transparent;
+}
+.server-card .address-value {
+  font-size: 14px; word-break: break-all;
+}
+.server-card-status {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.status-detail {
+  font-size: 12px; color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .server-cards { grid-template-columns: 1fr; }
+}
+
+/* ── HISTORY PAGE ────────────────────────────────────────────── */
+
+/* Bullet list used in history sections */
+.history-list {
+  list-style: none;
+  margin: 1rem 0 1rem 0;
+}
+.history-list li {
+  padding: 8px 0 8px 1.25rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+  color: var(--mid);
+  font-weight: 400;
+  line-height: 1.7;
+  position: relative;
+}
+.history-list li:last-child { border-bottom: none; }
+.history-list li::before {
+  content: '—';
+  position: absolute;
+  left: 0;
+  color: var(--green);
+  font-weight: 700;
+}
+.history-list li strong { color: var(--black); font-weight: 600; }
+
+/* Server history table */
+.history-table-wrap {
+  margin-top: 1.5rem;
+  overflow-x: auto;           /* scrolls on narrow screens */
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.history-table thead tr {
+  background: var(--blue);
+  color: var(--white);
+}
+.history-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.history-table td {
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  color: var(--mid);
+  line-height: 1.6;
+}
+.history-table td:first-child { color: var(--black); white-space: nowrap; }
+.history-table td:nth-child(2) { white-space: nowrap; color: var(--muted); font-size: 13px; }
+.history-table tbody tr:last-child td { border-bottom: none; }
+.history-table tbody tr:hover { background: rgba(24,72,158,0.03); }
+
+/* Highlight the current/active server row */
+.history-table .current-row td { background: rgba(108,210,110,0.08); }
+.history-table .current-row td:first-child { color: var(--blue); }
+
+/* ── HOME FEATURE LIST ───────────────────────────────────────── */
+.home-feature-list {
+  list-style: none;
+  margin: 1.25rem 0;
+}
+.home-feature-list li {
+  padding: 10px 0 10px 1.25rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+  color: var(--mid);
+  line-height: 1.7;
+  position: relative;
+}
+.home-feature-list li:last-child { border-bottom: none; }
+.home-feature-list li::before {
+  content: '—';
+  position: absolute;
+  left: 0;
+  color: var(--green);
+  font-weight: 700;
+}
+.home-feature-list li strong { color: var(--black); font-weight: 600; }

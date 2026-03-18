@@ -16,8 +16,6 @@
 
     <!-- ═══════════════════════════════════════════════════════════
          HERO BACKGROUND IMAGE
-         Adds a full-bleed photo behind the hero text with a subtle
-         opacity overlay so the text stays readable.
          To use: uncomment, set src to your image path.
          To remove: comment back out — zero layout side-effects.
     ════════════════════════════════════════════════════════════ -->
@@ -29,7 +27,7 @@
 
     <div class="hero-eyebrow">Est. May 13, 2025</div>
     <h1>Welcome to the<br><em>Minecraft Club</em><br>of America.</h1>
-    <p class="hero-sub">A national community of builders, explorers, and leaders — united by a shared love of Minecraft and a commitment to fair, principled play.</p>
+    <p class="hero-sub">A leadership and learning organization that uses Minecraft as a tool to explore government, economics, geography, and civics — while fostering community across the nation.</p>
     <div class="hero-ctas">
       <a href="https://discord.gg/YOUR_INVITE_HERE" target="_blank" class="btn-discord">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
@@ -44,16 +42,15 @@
   <div class="content">
 
     <div class="section">
-      <div class="section-label">About</div>
+      <div class="section-label">Mission</div>
       <h2>About Us</h2>
-      <p>The Minecraft Club of America is a national organization uniting players from schools and local chapters across the country. We run a modded Java server, hold regular events, and operate under a full constitutional government — the World Congress, the Administrative Branch, and the World Court.</p>
+      <p>The Minecraft Club of America is a <strong>leadership and learning organization</strong> that uses Minecraft as a tool to explore government, economics, supply chains, decision-making, and leadership — while using the platform to foster community and promote a deeper understanding of other cultures.</p>
+      <p>Our motto: <strong>Trade · Build · Govern · Create.</strong></p>
       <p>The MCA welcomes <strong>everyone</strong>. No matter who you are, we'd love to have you. Our Discord is the main hub for server access, events, and announcements. If you want to be whitelisted and participate, that's the place to start.</p>
       <p>We're governed by a <strong>Constitution ratified May 13, 2025</strong> — complete with elections, a legislature, a judicial system, and an anti-cheat law passed in 2026.</p>
 
       <!-- ═══════════════════════════════════════════════════════════
            ABOUT SECTION IMAGE
-           A single wide banner photo below the about text.
-           Good for a group screenshot or server panorama.
            To use: uncomment and set src + alt.
            To remove: comment back out — no gap left behind.
       ════════════════════════════════════════════════════════════ -->
@@ -65,27 +62,6 @@
       -->
     </div>
 
-    <!-- ═══════════════════════════════════════════════════════════════
-         SLIDESHOW
-         An auto-advancing photo gallery that sits between sections.
-         Auto-plays every 4 seconds, pauses on hover, supports keyboard
-         arrow keys and swipe on mobile.
-
-         TO ADD IMAGES:
-           1. Put your photos in the images/ folder
-           2. Copy one of the <div class="slide"> blocks below
-           3. Set the src and alt on the <img> inside it
-           4. Optionally add a <div class="slide-caption"> with a label
-
-         TO ADD MORE SLIDES: just copy-paste another .slide block.
-         TO REMOVE A SLIDE:  delete that .slide block.
-         TO DISABLE ENTIRELY: comment out this whole section —
-                              slideshow.js will detect its absence
-                              and exit cleanly, leaving no gap.
-
-         The first slide should have class="slide active" so something
-         is visible before JS runs. All others just class="slide".
-    ════════════════════════════════════════════════════════════════ -->
     <!--
     <div class="slideshow-section">
       <div class="section-label">Gallery</div>
@@ -110,7 +86,6 @@
 
         <div class="slide">
           <img src="images/slide-4.jpg" alt="Describe this screenshot">
-
         </div>
 
         <button class="slideshow-btn prev" aria-label="Previous slide">&#8592;</button>
@@ -122,28 +97,69 @@
     -->
 
     <div class="section">
-      <div class="section-label">Quick Facts</div>
+      <div class="section-label">By the Numbers</div>
       <h2>The Club at a Glance</h2>
       <div class="info-grid">
+        <div class="info-item">
+          <div class="info-item-label">Members</div>
+          <div class="info-item-value">60+</div>
+          <div class="info-item-sub">Across Utah, with national expansion underway</div>
+        </div>
+        <div class="info-item">
+          <div class="info-item-label">Active Clubs</div>
+          <div class="info-item-value">4 Clubs</div>
+          <div class="info-item-sub">Across Utah — more on track for 2026</div>
+        </div>
         <div class="info-item">
           <div class="info-item-label">Founded</div>
           <div class="info-item-value">May 13, 2025</div>
           <div class="info-item-sub">Constitution ratified by unanimous consent</div>
         </div>
         <div class="info-item">
-          <div class="info-item-label">Server Type</div>
-          <div class="info-item-value">Java Modded</div>
-          <div class="info-item-sub">Additional servers require presidential approval</div>
-        </div>
-        <div class="info-item">
           <div class="info-item-label">Government</div>
           <div class="info-item-value">Three Branches</div>
           <div class="info-item-sub">Congress · Administrative · World Court</div>
         </div>
+      </div>
+
+      <figure class="section-image" style="margin-top:2rem;">
+        <img src="images/members-map.png" alt="60+ MCA members across Utah with 4 active clubs and national expansion in progress">
+        <figcaption>MCA clubs across Utah — with chapters on track for expansion in 2026</figcaption>
+      </figure>
+    </div>
+
+    <div class="section">
+      <div class="section-label">What Members Do</div>
+      <h2>Learning Through Simulation</h2>
+      <p>Members don't just play Minecraft — they build entire civilizations. On our servers, students form nations, draft constitutions, elect leaders, establish trade routes, and pass legislation. Everything is governed by real rules, real consequences, and real democratic processes.</p>
+      <ul class="home-feature-list">
+        <li><strong>Nations</strong> — found and govern your own country with its own laws and flag</li>
+        <li><strong>Governments</strong> — draft constitutions, hold elections, and form alliances</li>
+        <li><strong>Trade systems</strong> — manage economies, resources, and supply chains</li>
+        <li><strong>Laws</strong> — propose and pass legislation through the World Congress</li>
+        <li><strong>International alliances</strong> — diplomacy, treaties, and wars between nations</li>
+      </ul>
+
+      <figure class="section-image" style="margin-top:2rem;">
+        <img src="images/nations-simulation.png" alt="Nations, flags, and political map from the MCA server">
+        <figcaption>Player-created nations, flags, and a political map from the MCA Medieval Craft server</figcaption>
+      </figure>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Goals</div>
+      <h2>Where We're Headed</h2>
+      <p>The MCA is actively growing. By our 5th anniversary in 2026, we aim to have 8–10 clubs, 150–200 members, and chapters in at least two states. By our 10th anniversary, we're aiming for 50 clubs, 500–600 members, and a presence in at least ten states.</p>
+      <div class="info-grid" style="margin-top:1.5rem;">
         <div class="info-item">
-          <div class="info-item-label">National President</div>
-          <div class="info-item-value">William Rector</div>
-          <div class="info-item-sub">Minimum one-year term</div>
+          <div class="info-item-label">5th Anniversary — 2026</div>
+          <div class="info-item-value">8–10 Clubs</div>
+          <div class="info-item-sub">150–200 members · At least two states</div>
+        </div>
+        <div class="info-item">
+          <div class="info-item-label">10th Anniversary — 2031</div>
+          <div class="info-item-value">50 Clubs</div>
+          <div class="info-item-sub">500–600 members · At least ten states</div>
         </div>
       </div>
     </div>
