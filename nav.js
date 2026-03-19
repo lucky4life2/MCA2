@@ -29,12 +29,27 @@ const FOOTER_HTML = `
 
 const TOAST_HTML = `<div class="toast" id="toast">Address copied to clipboard</div>`;
 
+const PROGRESS_HTML = `<div class="scroll-progress" id="scroll-progress"></div>`;
+
 document.addEventListener('DOMContentLoaded', () => {
   // Inject nav
   document.body.insertAdjacentHTML('afterbegin', NAV_HTML);
 
   // Inject footer + toast
   document.body.insertAdjacentHTML('beforeend', FOOTER_HTML + TOAST_HTML);
+
+  // Inject scroll progress bar
+  document.body.insertAdjacentHTML('afterbegin', PROGRESS_HTML);
+
+  // Drive the progress bar on scroll
+  const bar = document.getElementById('scroll-progress');
+  function updateProgress() {
+    const scrollTop = window.scrollY;
+    const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+    bar.style.width = docHeight > 0 ? (scrollTop / docHeight * 100) + '%' : '0%';
+  }
+  window.addEventListener('scroll', updateProgress, { passive: true });
+  updateProgress(); // set initial state
 
   // Auto-update year in footer
   const yearEl = document.getElementById('year');

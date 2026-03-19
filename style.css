@@ -536,3 +536,37 @@ footer {
   font-weight: 700;
   color: var(--blue);
 }
+
+/* Address tip note below server cards */
+.server-address-note {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.7;
+  padding: 12px 16px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+.server-address-note strong { color: var(--blue); font-weight: 600; }
+.server-address-note code {
+  font-family: monospace;
+  font-size: 12px;
+  background: var(--bg);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  color: var(--black);
+}
+
+/* ── SCROLL PROGRESS BAR ─────────────────────────────────────── */
+.scroll-progress {
+  position: fixed;
+  top: 58px;        /* sits flush under the nav */
+  left: 0;
+  width: 0%;
+  height: 3px;
+  background: var(--green);
+  z-index: 99;
+  transition: width 0.05s linear;
+}
