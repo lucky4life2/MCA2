@@ -915,3 +915,39 @@ footer {
   .featured-banner-left  { flex-wrap: wrap; }
   .featured-banner-right { align-items: flex-start; }
 }
+
+/* ── NATIONS FLAG GRID ───────────────────────────────────────── */
+.nations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 1.25rem;
+  margin-top: 1.75rem;
+}
+
+.nation-flag-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.nation-flag-item img {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  display: block;
+}
+
+.nation-name {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--mid);
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .nations-grid { grid-template-columns: repeat(2, 1fr); }
+}
