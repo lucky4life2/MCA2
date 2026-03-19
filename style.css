@@ -824,3 +824,94 @@ footer {
 @media (max-width: 640px) {
   .article-hero { padding: 3rem 1.25rem 2.5rem; }
 }
+
+/* ── FEATURED BANNER (homepage) ─────────────────────────────── */
+.featured-banner {
+  display: block;
+  text-decoration: none;
+  background: var(--blue);
+  color: var(--white);
+  transition: background 0.15s;
+}
+
+.featured-banner:hover {
+  background: var(--blue-dark);
+}
+
+.featured-banner-inner {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 1.1rem 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+}
+
+.featured-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+}
+
+.featured-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  background: var(--green);
+  color: var(--black);
+  padding: 3px 8px;
+  border-radius: 3px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.featured-banner-title {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--white);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.featured-banner-summary {
+  display: none; /* shown on wider screens */
+}
+
+.featured-banner-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.featured-banner-meta {
+  font-size: 11px;
+  color: rgba(255,255,255,0.6);
+  white-space: nowrap;
+}
+
+.featured-banner-cta {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green);
+  white-space: nowrap;
+  letter-spacing: 0.3px;
+}
+
+@media (max-width: 640px) {
+  .featured-banner-inner {
+    padding: 1rem 1.25rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .featured-banner-left  { flex-wrap: wrap; }
+  .featured-banner-right { align-items: flex-start; }
+}

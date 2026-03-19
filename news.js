@@ -125,6 +125,13 @@ async function loadIndex() {
       })
     );
 
+    // Sort newest first by date field
+    articles.sort((a, b) => {
+      const da = a.meta.date || '0000-00-00';
+      const db = b.meta.date || '0000-00-00';
+      return db.localeCompare(da);
+    });
+
     if (articles.length === 0) {
       loadingEl.textContent = 'No articles published yet.';
       return;
@@ -206,9 +213,59 @@ async function loadArticle() {
   }
 }
 
+/* ── FEATURED BANNER (homepage) ─────────────────────────────── */
+async function loadFeaturedBanner() {
+  const banner = document.getElementById('featured-banner');
+  if (!banner) return;
+
+  try {
+    // Fetch all articles and find Featured ones, then pick the most recent
+    const all = await Promise.all(
+      ARTICLES.map(async path => {
+        const raw = await fetchArticle(path);
+        const { meta } = parseFrontmatter(raw);
+        return { path, meta };
+      })
+    );
+
+    const featured = all
+      .filter(a => (a.meta.category || '').toLowerCase() === 'featured')
+      .sort((a, b) => {
+        const da = a.meta.date || '0000-00-00';
+        const db = b.meta.date || '0000-00-00';
+        return db.localeCompare(da); // newest first
+      });
+
+    if (featured.length === 0) return;
+
+    const { path, meta } = featured[0]; // only the most recent
+    const slug = encodeURIComponent(path);
+
+    banner.innerHTML = `
+      <a class="featured-banner" href="article.html?article=${slug}">
+        <div class="featured-banner-inner">
+          <div class="featured-banner-left">
+            <span class="featured-tag">&#9733; Featured</span>
+            <div class="featured-banner-title">${meta.title || 'Untitled'}</div>
+            <div class="featured-banner-summary">${meta.summary || ''}</div>
+          </div>
+          <div class="featured-banner-right">
+            <span class="featured-banner-meta">${meta.date ? formatDate(meta.date) : ''} · By ${meta.author || 'MCA Staff'}</span>
+            <span class="featured-banner-cta">Read story →</span>
+          </div>
+        </div>
+      </a>`;
+    banner.style.display = 'block';
+
+  } catch (err) {
+    // Silently fail — banner just stays hidden
+  }
+}
+
 /* ── ROUTER — run the right function based on current page ───── */
 document.addEventListener('DOMContentLoaded', () => {
   const page = window.location.pathname.split('/').pop();
   if (page === 'news.html' || page === '')  loadIndex();
   if (page === 'article.html')             loadArticle();
+  if (page === 'index.html'  || page === '')  loadFeaturedBanner();
 });

@@ -1,7 +1,7 @@
 title: Global Dawn Is Now Live
 author: William Rector
 date: 2026-03-19
-category: Announcements
+category: Featured
 summary: The MCA's newest server, Global Dawn, is officially open. Here's everything you need to know.
 ---
 
