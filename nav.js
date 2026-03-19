@@ -12,6 +12,7 @@ const NAV_HTML = `
     <li><a href="server.html"     data-page="server">Server</a></li>
     <li><a href="leadership.html" data-page="leadership">Leadership</a></li>
     <li><a href="history.html"    data-page="history">History</a></li>
+    <li><a href="news.html"       data-page="news">News</a></li>
     <li><a href="${DISCORD_URL}" target="_blank" class="nav-discord">Discord</a></li>
   </ul>
 </nav>
