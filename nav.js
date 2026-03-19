@@ -1,12 +1,11 @@
 /* nav.js — shared nav, footer, and global utilities */
 
-const DISCORD_URL = 'https://discord.gg/YOUR_INVITE_HERE';
+const DISCORD_URL = 'https://discord.gg/hZrt28vG29';
 
 const NAV_HTML = `
 <nav>
   <a class="nav-logo" href="index.html">
-    <div class="nav-dot"></div>
-    Minecraft Club of America
+    <img src="images/widelogo.png" alt="Minecraft Club of America" class="nav-logo-img">
   </a>
   <ul class="nav-links">
     <li><a href="index.html"      data-page="index">Home</a></li>
@@ -21,8 +20,8 @@ const NAV_HTML = `
 const FOOTER_HTML = `
 <footer>
   <div class="footer-logo">
-    <div class="nav-dot"></div>
-    Minecraft Club of America
+    <img src="images/logo.png" alt="Minecraft Club of America" class="footer-logo-img">
+    <span class="footer-logo-text">Minecraft Club of America</span>
   </div>
   <span class="footer-copy">© <span id="year"></span> Minecraft Club of America · Ratified May 13, 2025</span>
 </footer>
@@ -51,10 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const joinBtn = document.getElementById('joinBtn');
   if (joinBtn) {
     joinBtn.addEventListener('click', () => {
-      // Navigate to Discord — change this URL if needed
       window.open(DISCORD_URL, '_blank');
-
-      // Visual feedback
       const original = joinBtn.textContent;
       joinBtn.textContent = "You're In!";
       joinBtn.classList.add('btn-joined');

@@ -509,3 +509,30 @@ footer {
   font-weight: 700;
 }
 .home-feature-list li strong { color: var(--black); font-weight: 600; }
+
+/* ── LOGO IMAGES ─────────────────────────────────────────────── */
+
+/* Wide logo in the nav bar */
+.nav-logo-img {
+  height: 36px;       /* fits neatly within the 58px nav height */
+  width: auto;
+  display: block;
+}
+
+/* Square logo in the footer */
+.footer-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.footer-logo-img {
+  height: 40px;
+  width: auto;
+  display: block;
+}
+.footer-logo-text {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--blue);
+}
