@@ -1,27 +1,39 @@
-/* news.js — MCA Gazette news engine
+/* news.js — MCA news engine
    ─────────────────────────────────────────────────────────────
    HOW TO PUBLISH AN ARTICLE
    1. Copy TEMPLATE.md from the news/ folder
    2. Rename it: YYYY-MM-DD-slug-here.md  (e.g. 2026-04-01-spring-update.md)
    3. Fill in the frontmatter (title, author, date, category, summary)
    4. Write your article below the --- divider
-   5. Commit and push — it's live within a minute
-
-   ARTICLE LIST
-   Add every published filename to ARTICLES below (newest first).
-   Remove TEMPLATE.md — it's just for reference, never list it here.
+   5. Upload to the news/ folder on GitHub — it appears automatically.
+      No need to edit this file at all.
    ─────────────────────────────────────────────────────────────── */
 
-const ARTICLES = [
-  'news/2026-03-19-global-dawn-launch.md',
-  // Add new articles above this line, newest first
-];
-
 /* ── CONFIG ─────────────────────────────────────────────────── */
-// If hosting on GitHub Pages, set this to your raw content base URL.
-// Example: 'https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main'
-// Leave as '' when running locally or if files are served from the same origin.
-const RAW_BASE = '';
+const GITHUB_USER = 'lucky4life2';
+const GITHUB_REPO = 'MCA2';
+const GITHUB_BRANCH = 'main';
+const NEWS_FOLDER = 'news';
+
+// GitHub API endpoint to list files in the news/ folder
+const GITHUB_API = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${NEWS_FOLDER}?ref=${GITHUB_BRANCH}`;
+
+// Raw content base URL for fetching article files
+const RAW_BASE = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}`;
+
+/* ── AUTO-DISCOVER ARTICLES ─────────────────────────────────── */
+async function getArticleList() {
+  const res = await fetch(GITHUB_API, {
+    headers: { 'Accept': 'application/vnd.github+json' }
+  });
+  if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
+  const files = await res.json();
+
+  // Return paths for all .md files except TEMPLATE.md
+  return files
+    .filter(f => f.name.endsWith('.md') && f.name !== 'TEMPLATE.md')
+    .map(f => `${NEWS_FOLDER}/${f.name}`);
+}
 
 /* ── MARKDOWN PARSER ────────────────────────────────────────── */
 function parseMarkdown(md) {
@@ -95,7 +107,7 @@ function parseFrontmatter(raw) {
 
 /* ── FETCH HELPER ───────────────────────────────────────────── */
 async function fetchArticle(path) {
-  const url = RAW_BASE ? `${RAW_BASE}/${path}` : path;
+  const url = `${RAW_BASE}/${path}`;
   const res = await fetch(url + '?nocache=' + Date.now());
   if (!res.ok) throw new Error(`Could not load ${path} (${res.status})`);
   return res.text();
@@ -117,8 +129,9 @@ async function loadIndex() {
   if (!indexEl) return;
 
   try {
+    const articlePaths = await getArticleList();
     const articles = await Promise.all(
-      ARTICLES.map(async path => {
+      articlePaths.map(async path => {
         const raw = await fetchArticle(path);
         const { meta } = parseFrontmatter(raw);
         return { path, meta };
@@ -220,8 +233,9 @@ async function loadFeaturedBanner() {
 
   try {
     // Fetch all articles and find Featured ones, then pick the most recent
+    const articlePaths = await getArticleList();
     const all = await Promise.all(
-      ARTICLES.map(async path => {
+      articlePaths.map(async path => {
         const raw = await fetchArticle(path);
         const { meta } = parseFrontmatter(raw);
         return { path, meta };
