@@ -29,10 +29,10 @@ async function getArticleList() {
   if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
   const files = await res.json();
 
-  // Return paths for all .md files except TEMPLATE.md
+  // Return objects with path and raw download URL from GitHub API
   return files
     .filter(f => f.name.endsWith('.md') && f.name !== 'TEMPLATE.md')
-    .map(f => `${NEWS_FOLDER}/${f.name}`);
+    .map(f => ({ path: `${NEWS_FOLDER}/${f.name}`, url: f.download_url }));
 }
 
 /* ── MARKDOWN PARSER ────────────────────────────────────────── */
@@ -106,8 +106,11 @@ function parseFrontmatter(raw) {
 }
 
 /* ── FETCH HELPER ───────────────────────────────────────────── */
-async function fetchArticle(path) {
-  const url = `${RAW_BASE}/${path}`;
+async function fetchArticle(pathOrObj) {
+  const path = typeof pathOrObj === 'object' ? pathOrObj.path : pathOrObj;
+  const url  = typeof pathOrObj === 'object' && pathOrObj.url
+    ? pathOrObj.url
+    : `${RAW_BASE}/${path}`;
   const res = await fetch(url + '?nocache=' + Date.now());
   if (!res.ok) throw new Error(`Could not load ${path} (${res.status})`);
   return res.text();
@@ -131,10 +134,10 @@ async function loadIndex() {
   try {
     const articlePaths = await getArticleList();
     const articles = await Promise.all(
-      articlePaths.map(async path => {
-        const raw = await fetchArticle(path);
+      articlePaths.map(async item => {
+        const raw = await fetchArticle(item);
         const { meta } = parseFrontmatter(raw);
-        return { path, meta };
+        return { path: item.path, meta };
       })
     );
 
@@ -235,10 +238,10 @@ async function loadFeaturedBanner() {
     // Fetch all articles and find Featured ones, then pick the most recent
     const articlePaths = await getArticleList();
     const all = await Promise.all(
-      articlePaths.map(async path => {
-        const raw = await fetchArticle(path);
+      articlePaths.map(async item => {
+        const raw = await fetchArticle(item);
         const { meta } = parseFrontmatter(raw);
-        return { path, meta };
+        return { path: item.path, meta };
       })
     );
 

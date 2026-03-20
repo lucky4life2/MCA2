@@ -17,7 +17,7 @@ There's also a news section — which is where you're reading this right now.
 
 ## The MCA News and Beyond
 
-The news section is built to host multiple publications written by MCA members. If you're interested in writing for the site, reach out in the **#general** channel on Discord. 
+The news section is built to host multiple publications written by MCA members. If you're interested in writing for the site, reach out in the **#suggestions** channel on Discord. 
 
 ## What's Next
 
