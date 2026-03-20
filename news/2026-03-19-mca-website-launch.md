@@ -1,5 +1,5 @@
 title: The MCA Has a Website — And It's Pretty Good
-author: William Rector
+author: Kyden Blake
 date: 2026-03-19
 category: Featured
 summary: After months of development, the official Minecraft Club of America website is live — featuring server status, leadership information, our full history, and a news section you're currently reading.
