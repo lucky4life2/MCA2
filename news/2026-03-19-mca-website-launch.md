@@ -1,5 +1,5 @@
 title: The MCA Has a Website — And It's Pretty Good
-author: Kyden Blake
+author: William Rector
 date: 2026-03-19
 category: Featured
 summary: After months of development, the official Minecraft Club of America website is live — featuring server status, leadership information, our full history, and a news section you're currently reading.
@@ -21,11 +21,13 @@ The **Leadership page** lays out the full government structure: the Administrati
 
 The **History page** covers the full journey from December 2021 all the way to Global Dawn — every server, every era, every key figure who helped build what the MCA is today.
 
-And of course, there's the **News section** — which you're currently reading. Multiple MCA publications will be able to post here. If you're interested in contributing, see the pinned guidelines in the public discord.
+And of course, there's the **News section** — which you're currently reading. Multiple MCA publications will be able to post here. If you're interested in contributing, see the pinned guidelines in the #news-professionals channel.
 
 ## A New Era
 
 The website is more than just a nice-looking page. It's a signal that the MCA is growing into something real — an organization with a constitution, a government, a history, and now a public face.
+
+[pullquote]We started as a handful of kids on a Minecraft server in Minot, North Dakota. Now we have a national organization, 60+ members, and a website. — William Rector, National President[/pullquote]
 
 We're expanding. More clubs are on track for 2026. The goals are big, and we're building the infrastructure to reach them.
 

@@ -23,13 +23,20 @@
     <div class="section">
 
       <div class="news-search-wrap">
-        <input
-          type="search"
-          id="news-search"
-          class="news-search"
-          placeholder="Search articles, authors, categories…"
-          autocomplete="off"
-        >
+        <div class="news-search-inner">
+          <span class="news-search-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+          </span>
+          <input
+            type="search"
+            id="news-search"
+            class="news-search"
+            placeholder="Search articles, authors, categories…"
+            autocomplete="off"
+          >
+        </div>
         <span class="news-search-count" id="news-search-count"></span>
       </div>
 
