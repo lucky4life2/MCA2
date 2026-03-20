@@ -21,9 +21,22 @@
 
   <div class="content">
     <div class="section">
+
+      <div class="news-search-wrap">
+        <input
+          type="search"
+          id="news-search"
+          class="news-search"
+          placeholder="Search articles, authors, categories…"
+          autocomplete="off"
+        >
+        <span class="news-search-count" id="news-search-count"></span>
+      </div>
+
       <div id="news-loading" class="news-loading">Loading articles…</div>
       <div id="news-error"   class="news-error"   style="display:none;"></div>
       <div id="news-index"   class="news-index"   style="display:none;"></div>
+      <div id="news-empty"   class="news-empty"   style="display:none;">No articles match your search.</div>
     </div>
   </div>
 

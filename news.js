@@ -170,6 +170,39 @@ async function loadIndex() {
     loadingEl.style.display = 'none';
     indexEl.style.display   = 'block';
 
+    // Wire up search bar
+    const searchInput  = document.getElementById('news-search');
+    const searchCount  = document.getElementById('news-search-count');
+    const emptyEl      = document.getElementById('news-empty');
+    const cards        = indexEl.querySelectorAll('.news-card');
+
+    if (searchInput) {
+      searchInput.addEventListener('input', () => {
+        const q = searchInput.value.trim().toLowerCase();
+        let visible = 0;
+
+        cards.forEach(card => {
+          // Search across title, summary, author, category
+          const text = card.textContent.toLowerCase();
+          const show = !q || text.includes(q);
+          card.style.display = show ? '' : 'none';
+          if (show) visible++;
+        });
+
+        // Update count label
+        if (q && searchCount) {
+          searchCount.textContent = visible === 1
+            ? '1 result'
+            : `${visible} results`;
+        } else if (searchCount) {
+          searchCount.textContent = '';
+        }
+
+        // Show empty state if nothing matches
+        if (emptyEl) emptyEl.style.display = (visible === 0 && q) ? 'block' : 'none';
+      });
+    }
+
   } catch (err) {
     loadingEl.style.display = 'none';
     errorEl.style.display   = 'block';
