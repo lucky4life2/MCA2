@@ -7,7 +7,10 @@ const NAV_HTML = `
   <a class="nav-logo" href="index.html">
     <img src="images/widelogo.png" alt="Minecraft Club of America" class="nav-logo-img">
   </a>
-  <ul class="nav-links">
+  <button class="nav-hamburger" id="nav-hamburger" aria-label="Toggle menu">
+    <span></span><span></span><span></span>
+  </button>
+  <ul class="nav-links" id="nav-links">
     <li><a href="index.html"      data-page="index">Home</a></li>
     <li><a href="server.html"     data-page="server">Server</a></li>
     <li><a href="leadership.html" data-page="leadership">Leadership</a></li>
@@ -61,6 +64,30 @@ document.addEventListener('DOMContentLoaded', () => {
   const page = current.replace('.html', '') || 'index';
   const activeLink = document.querySelector(`.nav-links a[data-page="${page}"]`);
   if (activeLink) activeLink.classList.add('active');
+
+  // Hamburger menu toggle
+  const hamburger = document.getElementById('nav-hamburger');
+  const navLinks  = document.getElementById('nav-links');
+  if (hamburger && navLinks) {
+    hamburger.addEventListener('click', () => {
+      hamburger.classList.toggle('open');
+      navLinks.classList.toggle('open');
+    });
+    // Close menu when a link is clicked
+    navLinks.querySelectorAll('a').forEach(a => {
+      a.addEventListener('click', () => {
+        hamburger.classList.remove('open');
+        navLinks.classList.remove('open');
+      });
+    });
+    // Close menu when clicking outside
+    document.addEventListener('click', e => {
+      if (!hamburger.contains(e.target) && !navLinks.contains(e.target)) {
+        hamburger.classList.remove('open');
+        navLinks.classList.remove('open');
+      }
+    });
+  }
 
   // Join button interaction (index.html)
   const joinBtn = document.getElementById('joinBtn');
