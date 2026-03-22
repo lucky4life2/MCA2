@@ -1283,3 +1283,12 @@ footer {
   max-width: 820px;
   margin: 0 auto;
 }
+
+/* ── VERSION NUMBER ──────────────────────────────────────────── */
+.footer-version {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--border);
+  letter-spacing: 1px;
+}
