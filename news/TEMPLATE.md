@@ -24,7 +24,7 @@ Regular paragraph text looks like this. Just type normally.
 
 ## Images
 
-To include an image, upload it to the news/ folder and use this shortcode:
+To include an image, upload it to the news/images/ folder on GitHub and use this shortcode:
 
 [image: your-filename.jpg | Optional caption text here]
 

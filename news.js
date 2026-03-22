@@ -40,8 +40,9 @@ function parseMarkdown(md) {
   // Custom shortcodes first (before standard Markdown)
   md = md
     // [image: filename.jpg | caption] or [image: filename.jpg]
+    // Images should be uploaded to the news/images/ folder on GitHub
     .replace(/\[image:\s*([^\]|]+?)(?:\s*\|\s*([^\]]*))?\]/g, (_, src, caption) => {
-      const img = `<figure class="article-image"><img src="news/${src.trim()}" alt="${(caption||'').trim()}">`;
+      const img = `<figure class="article-image"><img src="news/images/${src.trim()}" alt="${(caption||'').trim()}">`;
       return caption
         ? img + `<figcaption>${caption.trim()}</figcaption></figure>`
         : img + '</figure>';
