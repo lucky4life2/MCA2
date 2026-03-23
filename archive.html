@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Archive — Minecraft Club of America</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/x-icon" href="images/icon.ico">
+</head>
+<body>
+
+<!-- nav + footer injected by nav.js -->
+
+<div class="page-wrap">
+
+  <div class="hero">
+    <div class="hero-eyebrow">Historical Records</div>
+    <h1>Document<br><em>Archive</em></h1>
+    <p class="hero-sub">Official documents, laws, treaties, and founding records from the MCA and its member nations — preserved with full translations and historical context.</p>
+  </div>
+
+  <div class="content">
+    <div class="section">
+
+      <div class="archive-search-wrap">
+        <div class="news-search-inner">
+          <span class="news-search-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+          </span>
+          <input
+            type="search"
+            id="archive-search"
+            class="news-search"
+            placeholder="Search documents, categories, authors…"
+            autocomplete="off"
+          >
+        </div>
+        <span class="news-search-count" id="archive-search-count"></span>
+      </div>
+
+      <div id="archive-filter" class="archive-filter"></div>
+
+      <div id="archive-loading" class="news-loading">Loading documents…</div>
+      <div id="archive-error"   class="news-error"   style="display:none;"></div>
+      <div id="archive-index"   class="archive-index" style="display:none;"></div>
+      <div id="archive-empty"   class="news-empty"   style="display:none;">No documents match your search.</div>
+    </div>
+  </div>
+
+</div>
+
+<script src="nav.js"></script>
+<script src="archive.js"></script>
+</body>
+</html>

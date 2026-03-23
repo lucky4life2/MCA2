@@ -16,6 +16,7 @@ const NAV_HTML = `
     <li><a href="leadership.html" data-page="leadership">Leadership</a></li>
     <li><a href="history.html"    data-page="history">History</a></li>
     <li><a href="news.html"       data-page="news">News</a></li>
+    <li><a href="archive.html"    data-page="archive">Archive</a></li>
     <li><a href="${DISCORD_URL}" target="_blank" class="nav-discord">Discord</a></li>
   </ul>
 </nav>
@@ -42,6 +43,7 @@ const FOOTER_HTML = `
         <a href="leadership.html">Leadership</a>
         <a href="history.html">History</a>
         <a href="news.html">News</a>
+        <a href="archive.html">Archive</a>
       </div>
 
       <div class="footer-col">
@@ -65,7 +67,7 @@ const FOOTER_HTML = `
   <div class="footer-disclaimer">
     Not affiliated with, endorsed by, or associated with Mojang Studios or Microsoft.
     Minecraft is a trademark of Mojang Studios.
-    <span class="footer-version">v2.3.42</span>
+    <span class="footer-version">v2.3.45</span>
   </div>
 </footer>
 `;

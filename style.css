@@ -1292,3 +1292,233 @@ footer {
   color: var(--border);
   letter-spacing: 1px;
 }
+
+/* ── ARCHIVE SYSTEM ──────────────────────────────────────────── */
+
+/* Filter buttons */
+.archive-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 2rem;
+}
+
+.archive-filter-btn {
+  font-family: 'Open Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  padding: 6px 16px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.archive-filter-btn:hover { border-color: var(--blue); color: var(--blue); }
+.archive-filter-btn.active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: var(--white);
+}
+
+/* Search wrap reuse */
+.archive-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 1.25rem;
+  max-width: 540px;
+}
+
+/* Category sections */
+.archive-category { margin-bottom: 3rem; }
+
+.archive-category-header {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--blue);
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 1.25rem;
+}
+
+.archive-category-docs {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Archive cards */
+.archive-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+  padding: 1.25rem 0;
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  transition: background 0.15s;
+  cursor: pointer;
+}
+
+.archive-card:last-child { border-bottom: none; }
+.archive-card:hover .archive-card-title { color: var(--blue); }
+
+.archive-card-thumb {
+  width: 72px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+  display: block;
+}
+
+.archive-card-thumb-placeholder {
+  width: 72px;
+  height: 90px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+}
+
+.archive-card-body { flex: 1; min-width: 0; }
+
+.archive-card-category {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--white);
+  background: var(--blue);
+  padding: 2px 8px;
+  border-radius: 3px;
+  display: inline-block;
+  margin-bottom: 6px;
+}
+
+.archive-card-title {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--black);
+  line-height: 1.25;
+  margin-bottom: 4px;
+  transition: color 0.15s;
+}
+
+.archive-card-summary {
+  font-size: 13px;
+  color: var(--mid);
+  line-height: 1.6;
+  margin-bottom: 6px;
+}
+
+.archive-card-meta {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.3px;
+}
+
+/* Document reader — side by side layout */
+.document-content {
+  padding-top: 3rem;
+  padding-bottom: 4rem;
+}
+
+.document-layout {
+  display: block;
+}
+
+.document-has-image {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3rem;
+  align-items: start;
+}
+
+.document-scan-label,
+.document-text-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 0.75rem;
+}
+
+.document-scan img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  position: sticky;
+  top: 80px;  /* stays visible while you scroll the explanation */
+}
+
+@media (max-width: 768px) {
+  .document-has-image {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  .document-scan img { position: static; }
+  .archive-card-thumb,
+  .archive-card-thumb-placeholder { width: 52px; height: 66px; }
+}
+
+/* ── ARCHIVE PDF HANDLING ────────────────────────────────────── */
+.archive-card-thumb-pdf {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--blue);
+  background: rgba(24,72,158,0.06);
+  border-color: var(--blue) !important;
+}
+
+.document-pdf-wrap {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2rem;
+  background: var(--white);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  position: sticky;
+  top: 80px;
+}
+
+.document-pdf-icon { font-size: 48px; }
+
+.document-pdf-name {
+  font-size: 13px;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.document-pdf-btn {
+  display: inline-block;
+  background: var(--blue);
+  color: var(--white);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 24px;
+  border-radius: 4px;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+
+.document-pdf-btn:hover { background: var(--blue-dark); }
