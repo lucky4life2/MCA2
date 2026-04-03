@@ -297,21 +297,31 @@ async function loadFeaturedBanner() {
     const dismissed = localStorage.getItem(dismissedKey);
     if (dismissed === path) return; // same article, keep hidden
 
+    // Build the banner as a wrapper div, with the link and dismiss button as siblings
     banner.innerHTML = `
-      <a class="featured-banner" href="article.html?article=${slug}">
-        <div class="featured-banner-inner">
-          <div class="featured-banner-left">
-            <span class="featured-tag">&#9733; Featured</span>
-            <div class="featured-banner-title">${meta.title || 'Untitled'}</div>
-            <div class="featured-banner-summary">${meta.summary || ''}</div>
+      <div class="featured-banner-wrap">
+        <a class="featured-banner" href="article.html?article=${slug}">
+          <div class="featured-banner-inner">
+            <div class="featured-banner-left">
+              <span class="featured-tag">&#9733; Featured</span>
+              <div class="featured-banner-title">${meta.title || 'Untitled'}</div>
+              <div class="featured-banner-summary">${meta.summary || ''}</div>
+            </div>
+            <div class="featured-banner-right">
+              <span class="featured-banner-meta">${meta.date ? formatDate(meta.date) : ''} · By ${meta.author || 'MCA Staff'}</span>
+              <span class="featured-banner-cta">Read story →</span>
+            </div>
           </div>
-          <div class="featured-banner-right">
-            <span class="featured-banner-meta">${meta.date ? formatDate(meta.date) : ''} · By ${meta.author || 'MCA Staff'}</span>
-            <span class="featured-banner-cta">Read story →</span>
-          </div>
-        </div>
-      </a>`;
+        </a>
+        <button class="featured-banner-dismiss" aria-label="Dismiss">&#x2715;</button>
+      </div>`;
     banner.style.display = 'block';
+
+    // Wire up dismiss button — it's outside the <a> so no navigation conflict
+    banner.querySelector('.featured-banner-dismiss').addEventListener('click', () => {
+      localStorage.setItem(dismissedKey, path);
+      banner.style.display = 'none';
+    });
 
   } catch (err) {
     // Silently fail — banner just stays hidden

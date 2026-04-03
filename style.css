@@ -1543,3 +1543,14 @@ footer {
 
 /* Make the banner wrapper relative so dismiss button can be positioned */
 #featured-banner { position: relative; }
+
+/* ── FEATURED BANNER WRAP FIX ───────────────────────────────── */
+.featured-banner-wrap {
+  position: relative;
+  display: block;
+  background: var(--blue);
+}
+.featured-banner-wrap .featured-banner {
+  display: block;
+  padding-right: 44px; /* room for the X button */
+}
