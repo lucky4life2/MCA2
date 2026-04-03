@@ -1522,3 +1522,24 @@ footer {
 }
 
 .document-pdf-btn:hover { background: var(--blue-dark); }
+
+/* ── FEATURED BANNER DISMISS BUTTON ─────────────────────────── */
+.featured-banner-dismiss {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.5);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 6px 8px;
+  line-height: 1;
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+.featured-banner-dismiss:hover { color: white; }
+
+/* Make the banner wrapper relative so dismiss button can be positioned */
+#featured-banner { position: relative; }

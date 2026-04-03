@@ -292,6 +292,11 @@ async function loadFeaturedBanner() {
     const { path, meta } = featured[0]; // only the most recent
     const slug = encodeURIComponent(path);
 
+    // Check if user already dismissed this featured article
+    const dismissedKey = 'mca_dismissed_featured';
+    const dismissed = localStorage.getItem(dismissedKey);
+    if (dismissed === path) return; // same article, keep hidden
+
     banner.innerHTML = `
       <a class="featured-banner" href="article.html?article=${slug}">
         <div class="featured-banner-inner">
