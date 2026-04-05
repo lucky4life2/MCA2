@@ -88,6 +88,8 @@ function parseMarkdown(md) {
 
 /* ── FRONTMATTER PARSER ─────────────────────────────────────── */
 function parseFrontmatter(raw) {
+  // Normalize Windows line endings so \n---\n is always found
+  raw = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   // Strip optional leading --- delimiter (e.g. ---\ntitle: ...)
   if (raw.startsWith('---\n')) raw = raw.slice(4);
 
