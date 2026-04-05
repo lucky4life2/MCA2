@@ -46,21 +46,31 @@ async function fetchDocument(item) {
 
 /* ── FRONTMATTER PARSER ─────────────────────────────────────── */
 function parseArchiveFrontmatter(raw) {
-  // Normalize Windows line endings so \n---\n is always found
+  // Normalize all line endings
   raw = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  // Strip optional leading --- delimiter (e.g. ---\ntitle: ...)
-  if (raw.startsWith('---\n')) raw = raw.slice(4);
 
-  const divider = raw.indexOf('\n---\n');
-  if (divider === -1) return { meta: {}, body: raw };
-  const metaBlock = raw.slice(0, divider);
-  const body      = raw.slice(divider + 5);
-  const meta      = {};
-  metaBlock.split('\n').forEach(line => {
+  const meta  = {};
+  const lines = raw.split('\n');
+  let bodyStart = 0;
+  let dividerCount = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.trim() === '---') {
+      dividerCount++;
+      if (dividerCount === 1 && i === 0) continue; // opening ---
+      bodyStart = i + 1;
+      break;
+    }
     const colon = line.indexOf(':');
-    if (colon === -1) return;
-    meta[line.slice(0, colon).trim()] = line.slice(colon + 1).trim();
-  });
+    if (colon > 0) {
+      const key   = line.slice(0, colon).trim();
+      const value = line.slice(colon + 1).trim();
+      if (key && !key.includes(' ')) meta[key] = value;
+    }
+  }
+
+  const body = lines.slice(bodyStart).join('\n');
   return { meta, body };
 }
 
