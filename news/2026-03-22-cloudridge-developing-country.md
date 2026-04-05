@@ -1,6 +1,6 @@
 title: Coudridge: A growing but stable country
 author: Kyden Blake - Cloudridge Publishing Corp.
-date: 2026-3-22
+date: 2026-03-22
 category: Article
 summary: Learn more about Cloudridge, A developing country whose name nobody can seem to get right.
 ---
