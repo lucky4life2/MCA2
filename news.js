@@ -88,6 +88,9 @@ function parseMarkdown(md) {
 
 /* ── FRONTMATTER PARSER ─────────────────────────────────────── */
 function parseFrontmatter(raw) {
+  // Strip optional leading --- delimiter (e.g. ---\ntitle: ...)
+  if (raw.startsWith('---\n')) raw = raw.slice(4);
+
   const divider = raw.indexOf('\n---\n');
   if (divider === -1) return { meta: {}, body: raw };
 
@@ -142,11 +145,11 @@ async function loadIndex() {
       })
     );
 
-    // Sort newest first by date field
+    // Sort newest first by date field, fall back to filename
     articles.sort((a, b) => {
-      const da = a.meta.date || '0000-00-00';
-      const db = b.meta.date || '0000-00-00';
-      return db.localeCompare(da);
+      const da = (a.meta.date || '').trim() || a.path.split('/').pop() || '0000-00-00';
+      const db = (b.meta.date || '').trim() || b.path.split('/').pop() || '0000-00-00';
+      return (db < da ? -1 : db > da ? 1 : 0);
     });
 
     if (articles.length === 0) {
@@ -284,7 +287,7 @@ async function loadFeaturedBanner() {
       .sort((a, b) => {
         const da = a.meta.date || '0000-00-00';
         const db = b.meta.date || '0000-00-00';
-        return db.localeCompare(da); // newest first
+        return (db < da ? -1 : db > da ? 1 : 0); // newest first
       });
 
     if (featured.length === 0) return;

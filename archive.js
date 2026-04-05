@@ -46,6 +46,9 @@ async function fetchDocument(item) {
 
 /* ── FRONTMATTER PARSER ─────────────────────────────────────── */
 function parseArchiveFrontmatter(raw) {
+  // Strip optional leading --- delimiter (e.g. ---\ntitle: ...)
+  if (raw.startsWith('---\n')) raw = raw.slice(4);
+
   const divider = raw.indexOf('\n---\n');
   if (divider === -1) return { meta: {}, body: raw };
   const metaBlock = raw.slice(0, divider);
