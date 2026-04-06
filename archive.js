@@ -47,7 +47,7 @@ async function fetchDocument(item) {
 /* ── FRONTMATTER PARSER ─────────────────────────────────────── */
 function parseArchiveFrontmatter(raw) {
   // Normalize all line endings
-  raw = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  raw = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trimStart();
 
   const meta  = {};
   const lines = raw.split('\n');
