@@ -1,47 +1,64 @@
 title: Your Headline Here
 author: Your Name
 date: YYYY-MM-DD
-category: Announcements
+category: Article
 summary: A one or two sentence summary that appears on the news index page.
 ---
 
-Your article content starts here. Write in plain text — the formatting guide below shows everything you can use.
+Your article body starts here. Delete everything below this line before publishing — it's just a reference guide.
 
-## This is a Subheading
+---
 
-Regular paragraph text looks like this. Just type normally.
+## Subheadings
 
-**This text will be bold.** *This text will be italic.*
+Use ## for section headings inside your article.
+
+## Text Formatting
+
+**Bold text** and *italic text* work like this.
 
 ## Lists
 
-- Bullet point one
-- Bullet point two
-- Bullet point three
+- Bullet point
+- Another bullet point
 
-1. Numbered item one
-2. Numbered item two
+1. Numbered item
+2. Another numbered item
 
 ## Images
 
-To include an image, upload it to the news/images/ folder on GitHub and use this shortcode:
+Upload your image to the news/images/ folder on GitHub, then reference it like this:
 
-[image: your-filename.jpg | Optional caption text here]
+[image: your-filename.png | Caption text here]
+
+The caption is optional — you can leave it out:
+
+[image: your-filename.png]
 
 ## Pull Quotes
-
-To make a large stylized pull quote, use:
 
 [pullquote]The quote text goes here. — Attribution[/pullquote]
 
 ## Links
 
-[Link text here](https://example.com)
+[Link text](https://example.com)
 
 ## Dividers
 
-Use three dashes on their own line to add a horizontal divider:
+Three dashes on their own line makes a horizontal rule:
 
 ---
 
-That's everything you need. Delete this guide before publishing.
+## Categories
+
+Use one of these in the category field:
+- Article
+- Announcements
+- Featured  (shows a banner on the homepage — use sparingly)
+
+## Filename
+
+Name your file: YYYY-MM-DD-short-title.md
+Example: 2026-04-10-new-server-rules.md
+
+Dates must be zero-padded: 2026-04-05, not 2026-4-5.
