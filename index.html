@@ -104,24 +104,24 @@
       <h2>The Club at a Glance</h2>
       <div class="info-grid">
         <div class="info-item">
-          <div class="info-item-label">Members</div>
-          <div class="info-item-value">60+</div>
-          <div class="info-item-sub">Across Utah, with national expansion underway</div>
+          <div class="info-item-label" id="stat1-label">Members</div>
+          <div class="info-item-value" id="stat1-value">60+</div>
+          <div class="info-item-sub" id="stat1-sub">Across Utah, with national expansion underway</div>
         </div>
         <div class="info-item">
-          <div class="info-item-label">Active Clubs</div>
-          <div class="info-item-value">4 Clubs</div>
-          <div class="info-item-sub">Across Utah — more on track for 2026</div>
+          <div class="info-item-label" id="stat2-label">Active Clubs</div>
+          <div class="info-item-value" id="stat2-value">4 Clubs</div>
+          <div class="info-item-sub" id="stat2-sub">Across Utah — more on track for 2026</div>
         </div>
         <div class="info-item">
-          <div class="info-item-label">Founded</div>
-          <div class="info-item-value">May 13, 2025</div>
-          <div class="info-item-sub">Constitution ratified by unanimous consent</div>
+          <div class="info-item-label" id="stat3-label">Founded</div>
+          <div class="info-item-value" id="stat3-value">May 13, 2025</div>
+          <div class="info-item-sub" id="stat3-sub">Constitution ratified by unanimous consent</div>
         </div>
         <div class="info-item">
-          <div class="info-item-label">Government</div>
-          <div class="info-item-value">Three Branches</div>
-          <div class="info-item-sub">Congress · Administrative · World Court</div>
+          <div class="info-item-label" id="stat4-label">Government</div>
+          <div class="info-item-value" id="stat4-value">Three Branches</div>
+          <div class="info-item-sub" id="stat4-sub">Congress · Administrative · World Court</div>
         </div>
       </div>
 
@@ -210,5 +210,31 @@
 <script src="nav.js"></script>
 <script src="news.js"></script>
 <script src="slideshow.js"></script>
+<script>
+/* ── STATS LOADER ───────────────────────────────────────────── */
+(async function loadStats() {
+  const RAW = 'https://raw.githubusercontent.com/lucky4life2/MCA2/main/stats.md';
+  try {
+    const res = await fetch(RAW + '?nocache=' + Date.now());
+    if (!res.ok) return;
+    const text = await res.text();
+    const stats = {};
+    text.split('\n').forEach(line => {
+      if (line.startsWith('#') || !line.trim()) return;
+      const colon = line.indexOf(':');
+      if (colon === -1) return;
+      const key   = line.slice(0, colon).trim();
+      const value = line.slice(colon + 1).trim();
+      if (key && value) stats[key] = value;
+    });
+    ['stat1','stat2','stat3','stat4'].forEach(s => {
+      ['label','value','sub'].forEach(part => {
+        const el = document.getElementById(`${s}-${part}`);
+        if (el && stats[`${s}_${part}`]) el.textContent = stats[`${s}_${part}`];
+      });
+    });
+  } catch(e) { /* silently fall back to hardcoded values */ }
+})();
+</script>
 </body>
 </html>
