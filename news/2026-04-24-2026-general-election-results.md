@@ -1,7 +1,7 @@
 title: 2026 MCA General Election Results
 author: Office of the National President
 date: 2026-04-24
-category: Announcements
+category: Featured
 summary: The 2026 MCA General Election has concluded. William Rector and Kyden Blake will serve as National President and National Vice President, with results confirmed at Syracuse and West Point as well.
 ---
 
