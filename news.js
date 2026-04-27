@@ -88,19 +88,16 @@ function parseMarkdown(md) {
 
 /* ── FRONTMATTER PARSER ─────────────────────────────────────── */
 function parseFrontmatter(raw) {
-  // Normalize all line endings
   raw = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trimStart();
-
   const meta  = {};
   const lines = raw.split('\n');
   let bodyStart = 0;
   let dividerCount = 0;
-
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (line.trim() === '---') {
       dividerCount++;
-      if (dividerCount === 1 && i === 0) continue; // opening ---
+      if (dividerCount === 1 && i === 0) continue;
       bodyStart = i + 1;
       break;
     }
@@ -111,9 +108,7 @@ function parseFrontmatter(raw) {
       if (key && !key.includes(' ')) meta[key] = value;
     }
   }
-
-  const body = lines.slice(bodyStart).join('\n');
-  return { meta, body };
+  return { meta, body: lines.slice(bodyStart).join('\n') };
 }
 
 /* ── FETCH HELPER ───────────────────────────────────────────── */
@@ -152,10 +147,10 @@ async function loadIndex() {
       })
     );
 
-    // Sort newest first by date field, fall back to filename
+    // Sort newest first by date field
     articles.sort((a, b) => {
-      const da = (a.meta.date || '').trim() || a.path.split('/').pop() || '0000-00-00';
-      const db = (b.meta.date || '').trim() || b.path.split('/').pop() || '0000-00-00';
+      const da = a.meta.date || '0000-00-00';
+      const db = b.meta.date || '0000-00-00';
       return (db < da ? -1 : db > da ? 1 : 0);
     });
 

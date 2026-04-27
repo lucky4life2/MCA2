@@ -33,7 +33,7 @@
     <h1>Welcome to the<br><em>Minecraft Club</em><br>of America.</h1>
     <p class="hero-sub">A leadership and learning organization that uses Minecraft as a tool to explore government, economics, geography, and civics — while fostering community across the nation.</p>
     <div class="hero-ctas">
-      <a href="https://discord.gg/hZrt28vG29" target="_blank" class="btn-discord">
+      <a href="#" id="hero-discord-btn" target="_blank" class="btn-discord">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
           <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.002.022.015.043.03.057a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/>
         </svg>
@@ -211,29 +211,31 @@
 <script src="news.js"></script>
 <script src="slideshow.js"></script>
 <script>
-/* ── STATS LOADER ───────────────────────────────────────────── */
-(async function loadStats() {
-  const RAW = 'https://raw.githubusercontent.com/lucky4life2/MCA2/main/stats.md';
+/* ── CONFIG LOADER (stats + discord) ───────────────────────── */
+(async function loadConfig() {
+  const RAW = 'https://raw.githubusercontent.com/lucky4life2/MCA2/main/config.md';
   try {
     const res = await fetch(RAW + '?nocache=' + Date.now());
     if (!res.ok) return;
-    const text = await res.text();
-    const stats = {};
-    text.split('\n').forEach(line => {
+    const cfg = {};
+    res.ok && (await res.text()).split('\n').forEach(line => {
       if (line.startsWith('#') || !line.trim()) return;
-      const colon = line.indexOf(':');
-      if (colon === -1) return;
-      const key   = line.slice(0, colon).trim();
-      const value = line.slice(colon + 1).trim();
-      if (key && value) stats[key] = value;
+      const c = line.indexOf(':');
+      if (c > 0) cfg[line.slice(0,c).trim()] = line.slice(c+1).trim();
     });
+    // Stats
     ['stat1','stat2','stat3','stat4'].forEach(s => {
-      ['label','value','sub'].forEach(part => {
-        const el = document.getElementById(`${s}-${part}`);
-        if (el && stats[`${s}_${part}`]) el.textContent = stats[`${s}_${part}`];
+      ['label','value','sub'].forEach(p => {
+        const el = document.getElementById(`${s}-${p}`);
+        if (el && cfg[`${s}_${p}`]) el.textContent = cfg[`${s}_${p}`];
       });
     });
-  } catch(e) { /* silently fall back to hardcoded values */ }
+    // Discord button
+    if (cfg.discord_url) {
+      const btn = document.getElementById('hero-discord-btn');
+      if (btn) btn.href = cfg.discord_url;
+    }
+  } catch(e) {}
 })();
 </script>
 </body>

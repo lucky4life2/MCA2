@@ -1,64 +1,47 @@
 title: Your Headline Here
 author: Your Name
 date: YYYY-MM-DD
-category: Article
+category: Announcements
 summary: A one or two sentence summary that appears on the news index page.
 ---
 
-Your article body starts here. Delete everything below this line before publishing — it's just a reference guide.
+Your article content starts here. Write in plain text — the formatting guide below shows everything you can use.
 
----
+## This is a Subheading
 
-## Subheadings
+Regular paragraph text looks like this. Just type normally.
 
-Use ## for section headings inside your article.
-
-## Text Formatting
-
-**Bold text** and *italic text* work like this.
+**This text will be bold.** *This text will be italic.*
 
 ## Lists
 
-- Bullet point
-- Another bullet point
+- Bullet point one
+- Bullet point two
+- Bullet point three
 
-1. Numbered item
-2. Another numbered item
+1. Numbered item one
+2. Numbered item two
 
 ## Images
 
-Upload your image to the news/images/ folder on GitHub, then reference it like this:
+To include an image, upload it to the news/images/ folder on GitHub and use this shortcode:
 
-[image: your-filename.png | Caption text here]
-
-The caption is optional — you can leave it out:
-
-[image: your-filename.png]
+[image: your-filename.jpg | Optional caption text here]
 
 ## Pull Quotes
+
+To make a large stylized pull quote, use:
 
 [pullquote]The quote text goes here. — Attribution[/pullquote]
 
 ## Links
 
-[Link text](https://example.com)
+[Link text here](https://example.com)
 
 ## Dividers
 
-Three dashes on their own line makes a horizontal rule:
+Use three dashes on their own line to add a horizontal divider:
 
 ---
 
-## Categories
-
-Use one of these in the category field:
-- Article
-- Announcements
-- Featured  (shows a banner on the homepage — use sparingly)
-
-## Filename
-
-Name your file: YYYY-MM-DD-short-title.md
-Example: 2026-04-10-new-server-rules.md
-
-Dates must be zero-padded: 2026-04-05, not 2026-4-5.
+That's everything you need. Delete this guide before publishing.

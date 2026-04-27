@@ -1,6 +1,7 @@
-# MCA Stats
-# Edit the values below and commit to GitHub — the homepage updates automatically.
-# Format: label | value | subtitle
+# MCA Site Config
+# Edit and commit — site updates automatically.
+
+discord_url: https://discord.gg/BruwxHZuYr
 
 stat1_label: Members
 stat1_value: 60+
