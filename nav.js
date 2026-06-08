@@ -226,6 +226,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Inject nav
   document.body.insertAdjacentHTML('afterbegin', NAV_HTML());
 
+  // Init nav auth (must run after nav is in DOM)
+  initNavAuth();
+
   // Inject footer + toast
   document.body.insertAdjacentHTML('beforeend', FOOTER_HTML() + TOAST_HTML);
 
@@ -344,10 +347,7 @@ function copyEmail(el) {
 }
 
 // ── Nav auth + cart ───────────────────────────────────────────
-// Runs after DOMContentLoaded so the nav is already injected.
-// Dynamically imports supabase to avoid breaking non-shop pages
-// if the module ever fails to load.
-(async function initNavAuth() {
+async function initNavAuth() {
   const accountEl  = document.getElementById('nav-account');
   const cartBtn    = document.getElementById('nav-cart-btn');
   const cartCount  = document.getElementById('nav-cart-count');
@@ -458,4 +458,4 @@ function copyEmail(el) {
   } catch(e) {
     setSignedOut();
   }
-})();
+}
