@@ -188,11 +188,6 @@
 <script src="nav.js"></script>
 <div class="page-wrap">
 
-  <div class="member-preview-bar" id="member-preview-bar">
-    <div class="member-preview-label">Previewing as Member</div>
-    <button class="btn-back-admin" id="btn-back-admin">← Back to Admin View</button>
-  </div>
-
   <div class="shop-loading" id="shop-loading">
     <div class="shop-loading-spinner"></div>
     <span>Loading shop...</span>
@@ -211,12 +206,7 @@
         <div class="shop-admin-label">Admin Mode</div>
       </div>
       <div class="shop-admin-actions">
-        <button class="btn-view-as-member" id="btn-view-as-member">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-          View as Member
-        </button>
-        <button class="btn-add-product" id="btn-add-product">+ Add Product</button>
-        <button class="btn-signout" id="btn-signout">Sign Out</button>
+        <a href="admin.html#shop" class="btn-view-as-member">Manage Products →</a>
       </div>
     </div>
 
@@ -264,114 +254,12 @@
   </div>
 </div>
 
-<!-- Admin add/edit product modal -->
-<div class="modal-overlay" id="product-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title" id="modal-title">Add Product</div>
-      <button class="modal-close" id="modal-close">✕</button>
-    </div>
-    <div class="modal-body">
-      <input type="hidden" id="modal-product-id">
 
-      <div class="form-section-label" style="border-top:none;margin-top:0;padding-top:0;">Basic Info</div>
-      <div class="form-group">
-        <label class="form-label" for="modal-name">Product Name</label>
-        <input type="text" id="modal-name" class="form-input" placeholder="e.g. MCA Logo T-Shirt">
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="modal-desc">Description</label>
-        <textarea id="modal-desc" class="form-textarea" placeholder="Full product description..."></textarea>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label" for="modal-price">Price (USD)</label>
-          <input type="number" id="modal-price" class="form-input" placeholder="0.00" step="0.01" min="0">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="modal-inventory">Inventory</label>
-          <input type="number" id="modal-inventory" class="form-input" placeholder="0" min="0">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label" for="modal-category">Category</label>
-          <input type="text" id="modal-category" class="form-input" placeholder="e.g. Apparel, 3D Print">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="modal-active">Status</label>
-          <select id="modal-active" class="form-select">
-            <option value="true">Active</option>
-            <option value="false">Inactive</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="form-section-label">Images</div>
-      <div class="form-group">
-        <label class="form-label" for="modal-image">Primary Image URL</label>
-        <input type="text" id="modal-image" class="form-input" placeholder="https://...">
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="modal-image2">Secondary Image URL (optional)</label>
-        <input type="text" id="modal-image2" class="form-input" placeholder="https://...">
-      </div>
-
-      <div class="form-section-label">Specifications</div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label" for="modal-weight">Weight</label>
-          <input type="text" id="modal-weight" class="form-input" placeholder="e.g. 200g">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="modal-dimensions">Dimensions</label>
-          <input type="text" id="modal-dimensions" class="form-input" placeholder="e.g. 10 x 5 x 2 cm">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label" for="modal-material">Material</label>
-          <input type="text" id="modal-material" class="form-input" placeholder="e.g. 100% Cotton">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="modal-sizes">Available Sizes</label>
-          <input type="text" id="modal-sizes" class="form-input" placeholder="e.g. S, M, L, XL">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label" for="modal-colors">Colors</label>
-          <input type="text" id="modal-colors" class="form-input" placeholder="e.g. Black, White">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="modal-sku">SKU</label>
-          <input type="text" id="modal-sku" class="form-input" placeholder="e.g. MCA-001">
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="modal-notes">Admin Notes (internal)</label>
-        <input type="text" id="modal-notes" class="form-input" placeholder="Not shown to members">
-      </div>
-
-      <div class="form-section-label">Cart Settings</div>
-      <div class="form-check-wrap">
-        <input type="checkbox" id="modal-cart-enabled" checked>
-        <label class="form-check-label" for="modal-cart-enabled">Allow "Add to Cart" for this product</label>
-      </div>
-
-    </div>
-    <div class="modal-save-error" id="modal-save-error"></div>
-    <div class="modal-footer">
-      <button class="btn-modal-cancel" id="modal-cancel">Cancel</button>
-      <button class="btn-modal-save" id="modal-save">Save Product</button>
-    </div>
-  </div>
-</div>
 
 <script type="module">
   import { supabase, isAdmin, signOut } from './supabase.js';
 
-  let _isAdmin = false, _isLoggedIn = false, _userId = null, _memberPreview = false, _initialized = false;
+  let _isAdmin = false, _isLoggedIn = false, _userId = null, _initialized = false;
 
   // ── Cart
   function cartKey() { return 'mca_cart_' + _userId; }
@@ -447,7 +335,7 @@
   const elDetailOverlay = document.getElementById('detail-overlay');
   const elDetailInner   = document.getElementById('detail-modal-inner');
   function openDetail(p) {
-    const showCart = p.cart_enabled !== false && !(_isAdmin && !_memberPreview);
+    const showCart = p.cart_enabled !== false;
     const specs = [
       p.weight      && { label: 'Weight',     value: p.weight },
       p.dimensions  && { label: 'Dimensions', value: p.dimensions },
@@ -498,18 +386,12 @@
   const elLoading    = document.getElementById('shop-loading');
   const elShop       = document.getElementById('shop-wrap');
   const elAdminBar   = document.getElementById('shop-admin-bar');
-  const elPreviewBar = document.getElementById('member-preview-bar');
   const elGrid       = document.getElementById('product-grid');
   const elCount      = document.getElementById('product-count');
-  const elModal      = document.getElementById('product-modal');
-  const elModalTitle = document.getElementById('modal-title');
 
   function applyState() {
-    const showAdmin = _isAdmin && !_memberPreview;
-    elAdminBar.classList.toggle('visible', showAdmin);
-    elPreviewBar.classList.toggle('active', _isAdmin && _memberPreview);
-    document.body.classList.toggle('admin-mode', showAdmin);
-    document.body.classList.toggle('member-preview', _memberPreview);
+    elAdminBar.classList.toggle('visible', _isAdmin);
+    document.body.classList.toggle('admin-mode', _isAdmin);
   }
 
   async function init(user, accessToken) {
@@ -526,7 +408,7 @@
       _initialized = true;
       await init(session?.user || null, session?.access_token || null);
     } else if (event === 'SIGNED_OUT') {
-      _initialized = false; _isAdmin = false; _isLoggedIn = false; _userId = null; _memberPreview = false;
+      _initialized = false; _isAdmin = false; _isLoggedIn = false; _userId = null;
       elLoading.style.display = 'none'; elShop.style.display = 'block';
       applyState(); loadProducts(); updateFloatCart();
     }
@@ -542,10 +424,6 @@
     }
   }
 
-  document.getElementById('btn-view-as-member').addEventListener('click', () => { _memberPreview = true; applyState(); loadProducts(); });
-  document.getElementById('btn-back-admin').addEventListener('click',     () => { _memberPreview = false; applyState(); loadProducts(); });
-  document.getElementById('btn-signout').addEventListener('click', async () => await signOut());
-
   // ── Load products
   // Store products in memory for detail modal
   let _products = [];
@@ -560,8 +438,7 @@
     _products = data || [];
     const visible = _isAdmin ? _products : _products.filter(p => p.active);
     elCount.textContent = visible.length === 1 ? '1 product' : `${visible.length} products`;
-    if (!visible.length) { elGrid.innerHTML = `<div class="product-empty"><div class="product-empty-icon">📦</div><p>${_isAdmin ? 'No products yet.' : 'No products available yet.'}</p></div>`; return; }
-    const showAdmin = _isAdmin && !_memberPreview;
+    if (!visible.length) { elGrid.innerHTML = `<div class="product-empty"><div class="product-empty-icon">📦</div><p>No products available yet.</p></div>`; return; }
     elGrid.innerHTML = visible.map(p => {
       const cartAllowed = p.cart_enabled !== false;
       let cartBtn = '';
@@ -584,81 +461,12 @@
             <div class="product-card-stock ${p.inventory===0?'out':p.inventory<5?'low':''}">${p.inventory===0?'Out of stock':`${p.inventory} in stock`}</div>
           </div>
           ${cartBtn}
-          ${showAdmin ? `<div class="product-card-actions" style="display:flex;">
-            <button class="btn-card-edit" onclick="event.stopPropagation();openEdit('${p.id}')">Edit</button>
-            <button class="btn-card-delete" onclick="event.stopPropagation();deleteProduct('${p.id}')">Delete</button>
-          </div>` : ''}
+
         </div>
       </div>`;
     }).join('');
   }
 
-  // ── Admin modal
-  function openModal(product = null) {
-    document.getElementById('modal-product-id').value  = product?.id || '';
-    document.getElementById('modal-name').value        = product?.name || '';
-    document.getElementById('modal-desc').value        = product?.description || '';
-    document.getElementById('modal-price').value       = product?.price || '';
-    document.getElementById('modal-inventory').value   = product?.inventory ?? '';
-    document.getElementById('modal-category').value    = product?.category || '';
-    document.getElementById('modal-active').value      = product ? String(product.active) : 'true';
-    document.getElementById('modal-image').value       = product?.image_url || '';
-    document.getElementById('modal-image2').value      = product?.image_url2 || '';
-    document.getElementById('modal-weight').value      = product?.weight || '';
-    document.getElementById('modal-dimensions').value  = product?.dimensions || '';
-    document.getElementById('modal-material').value    = product?.material || '';
-    document.getElementById('modal-sizes').value       = product?.sizes || '';
-    document.getElementById('modal-colors').value      = product?.colors || '';
-    document.getElementById('modal-sku').value         = product?.sku || '';
-    document.getElementById('modal-notes').value       = product?.admin_notes || '';
-    document.getElementById('modal-cart-enabled').checked = product ? (product.cart_enabled !== false) : true;
-    document.getElementById('modal-save-error').style.display = 'none';
-    elModalTitle.textContent = product ? 'Edit Product' : 'Add Product';
-    elModal.classList.add('open');
-  }
-  function closeModal() { elModal.classList.remove('open'); }
-  document.getElementById('btn-add-product').addEventListener('click', () => openModal());
-  document.getElementById('modal-close').addEventListener('click', closeModal);
-  document.getElementById('modal-cancel').addEventListener('click', closeModal);
-  elModal.addEventListener('click', e => { if (e.target === elModal) closeModal(); });
-
-  document.getElementById('modal-save').addEventListener('click', async () => {
-    const id        = document.getElementById('modal-product-id').value;
-    const name      = document.getElementById('modal-name').value.trim();
-    const desc      = document.getElementById('modal-desc').value.trim();
-    const price     = parseFloat(document.getElementById('modal-price').value);
-    const inventory = parseInt(document.getElementById('modal-inventory').value, 10);
-    const category  = document.getElementById('modal-category').value.trim();
-    const active    = document.getElementById('modal-active').value === 'true';
-    const image_url = document.getElementById('modal-image').value.trim();
-    const image_url2   = document.getElementById('modal-image2').value.trim();
-    const weight       = document.getElementById('modal-weight').value.trim();
-    const dimensions   = document.getElementById('modal-dimensions').value.trim();
-    const material     = document.getElementById('modal-material').value.trim();
-    const sizes        = document.getElementById('modal-sizes').value.trim();
-    const colors       = document.getElementById('modal-colors').value.trim();
-    const sku          = document.getElementById('modal-sku').value.trim();
-    const admin_notes  = document.getElementById('modal-notes').value.trim();
-    const cart_enabled = document.getElementById('modal-cart-enabled').checked;
-    const errEl = document.getElementById('modal-save-error');
-    if (!name || isNaN(price) || isNaN(inventory)) { errEl.textContent = 'Name, price, and inventory are required.'; errEl.style.display = 'block'; return; }
-    const payload = { name, description:desc||null, price, inventory, category:category||null, active, image_url:image_url||null, image_url2:image_url2||null, weight:weight||null, dimensions:dimensions||null, material:material||null, sizes:sizes||null, colors:colors||null, sku:sku||null, admin_notes:admin_notes||null, cart_enabled };
-    const { error } = id
-      ? await supabase.from('products').update(payload).eq('id', id)
-      : await supabase.from('products').insert(payload);
-    if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
-    closeModal(); loadProducts();
-  });
-
-  window.openEdit = async (id) => {
-    const { data } = await supabase.from('products').select('*').eq('id', id).single();
-    if (data) openModal(data);
-  };
-  window.deleteProduct = async (id) => {
-    if (!confirm('Delete this product? This cannot be undone.')) return;
-    await supabase.from('products').delete().eq('id', id);
-    loadProducts();
-  };
 </script>
 </body>
 </html>

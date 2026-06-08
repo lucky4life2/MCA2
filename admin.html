@@ -121,6 +121,7 @@
       <button class="admin-tab active" data-tab="overview">Overview</button>
       <button class="admin-tab" data-tab="members">Members</button>
       <button class="admin-tab" data-tab="minecraft">Minecraft</button>
+      <button class="admin-tab" data-tab="shop">Shop</button>
     </div>
 
     <!-- Overview -->
@@ -208,6 +209,122 @@
       </div>
     </div>
 
+    <!-- Shop tab -->
+    <div class="admin-panel" id="tab-shop">
+      <div class="admin-section">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Products</div>
+          <button class="btn btn-primary" id="btn-add-product" style="font-size:12px;padding:7px 16px;">+ Add Product</button>
+        </div>
+        <div class="admin-section-body" style="padding:0;">
+          <div id="shop-product-list" style="min-height:80px;">
+            <div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">Loading products...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Product add/edit modal -->
+<div class="modal-overlay" id="product-modal" style="display:none;position:fixed;inset:0;background:rgba(10,15,30,.5);z-index:400;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:var(--white);border-radius:8px;border:1px solid var(--border);width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(10,15,30,.2);">
+    <div style="padding:1.5rem 1.5rem 0;display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-family:'Times New Roman',serif;font-size:1.3rem;color:var(--blue);font-weight:normal;" id="pm-title">Add Product</div>
+      <button id="pm-close" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:20px;line-height:1;padding:4px;">✕</button>
+    </div>
+    <div style="padding:1.5rem;">
+      <input type="hidden" id="pm-id">
+
+      <div class="form-label" style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);border-top:none;margin-top:0;padding-top:0;margin-bottom:1rem;">Basic Info</div>
+      <div class="form-group">
+        <label class="form-label" for="pm-name">Product Name</label>
+        <input type="text" id="pm-name" class="form-input" placeholder="e.g. MCA Logo T-Shirt">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="pm-desc">Description</label>
+        <textarea id="pm-desc" class="form-input" rows="3" placeholder="Full product description..." style="resize:vertical;"></textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label" for="pm-price">Price (USD)</label>
+          <input type="number" id="pm-price" class="form-input" placeholder="0.00" step="0.01" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pm-inventory">Inventory</label>
+          <input type="number" id="pm-inventory" class="form-input" placeholder="0" min="0">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label" for="pm-category">Category</label>
+          <input type="text" id="pm-category" class="form-input" placeholder="e.g. Apparel, 3D Print">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pm-active">Status</label>
+          <select id="pm-active" class="form-input" style="cursor:pointer;">
+            <option value="true">Active</option>
+            <option value="false">Inactive</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-label" style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);border-top:1px solid var(--border);margin-top:0.5rem;padding-top:1rem;margin-bottom:1rem;">Images</div>
+      <div class="form-group">
+        <label class="form-label" for="pm-image">Primary Image URL</label>
+        <input type="text" id="pm-image" class="form-input" placeholder="https://...">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="pm-image2">Secondary Image URL (optional)</label>
+        <input type="text" id="pm-image2" class="form-input" placeholder="https://...">
+      </div>
+
+      <div class="form-label" style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);border-top:1px solid var(--border);margin-top:0.5rem;padding-top:1rem;margin-bottom:1rem;">Specifications</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label" for="pm-weight">Weight</label>
+          <input type="text" id="pm-weight" class="form-input" placeholder="e.g. 200g">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pm-dimensions">Dimensions</label>
+          <input type="text" id="pm-dimensions" class="form-input" placeholder="e.g. 10 x 5 x 2 cm">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label" for="pm-material">Material</label>
+          <input type="text" id="pm-material" class="form-input" placeholder="e.g. 100% Cotton">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pm-sizes">Available Sizes</label>
+          <input type="text" id="pm-sizes" class="form-input" placeholder="e.g. S, M, L, XL">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label" for="pm-colors">Colors</label>
+          <input type="text" id="pm-colors" class="form-input" placeholder="e.g. Black, White">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pm-sku">SKU</label>
+          <input type="text" id="pm-sku" class="form-input" placeholder="e.g. MCA-001">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="pm-notes">Admin Notes (internal)</label>
+        <input type="text" id="pm-notes" class="form-input" placeholder="Not shown to members">
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:0.5rem;">
+        <input type="checkbox" id="pm-cart-enabled" checked>
+        <label style="font-size:13px;color:var(--mid);cursor:pointer;" for="pm-cart-enabled">Allow "Add to Cart" for this product</label>
+      </div>
+    </div>
+    <div id="pm-error" style="font-size:13px;color:#c0392b;padding:0 1.5rem 0.5rem;display:none;"></div>
+    <div style="padding:0 1.5rem 1.5rem;display:flex;gap:10px;justify-content:flex-end;">
+      <button id="pm-cancel" style="background:transparent;color:var(--muted);font-size:13px;font-weight:600;padding:9px 18px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">Cancel</button>
+      <button id="pm-save" style="background:var(--blue);color:#fff;font-size:13px;font-weight:600;padding:9px 18px;border:none;border-radius:4px;cursor:pointer;">Save Product</button>
+    </div>
   </div>
 </div>
 
@@ -388,6 +505,115 @@ document.getElementById('btn-ping-plugin').addEventListener('click', () => {
   checkPluginBridge();
 });
 
+// ── Shop / Products ───────────────────────────────────────────
+let _products = [];
+
+async function loadAdminProducts() {
+  const list = document.getElementById('shop-product-list');
+  const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+  if (error) { list.innerHTML = `<div style="padding:1.5rem;color:#c0392b;font-size:13px;">Error: ${error.message}</div>`; return; }
+  _products = data || [];
+  if (!_products.length) {
+    list.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">No products yet. Click "+ Add Product" to create one.</div>`;
+    return;
+  }
+  list.innerHTML = _products.map(p => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);gap:12px;">
+      <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+        ${p.image_url
+          ? `<img src="${p.image_url}" alt="${p.name}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;flex-shrink:0;">`
+          : `<div style="width:40px;height:40px;background:var(--bg);border:1px solid var(--border);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--border);font-size:18px;">📦</div>`
+        }
+        <div style="min-width:0;">
+          <div style="font-weight:600;font-size:14px;color:var(--black);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name}</div>
+          <div style="font-size:12px;color:var(--muted);">$${Number(p.price).toFixed(2)} · ${p.inventory} in stock · <span style="color:${p.active ? '#2d7d2f' : '#c0392b'}">${p.active ? 'Active' : 'Inactive'}</span></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-shrink:0;">
+        <button class="btn btn-outline" style="font-size:11px;padding:5px 12px;" onclick="adminEditProduct('${p.id}')">Edit</button>
+        <button class="btn btn-danger" style="font-size:11px;padding:5px 12px;" onclick="adminDeleteProduct('${p.id}')">Delete</button>
+      </div>
+    </div>`).join('');
+}
+
+function openProductModal(product = null) {
+  document.getElementById('pm-id').value          = product?.id || '';
+  document.getElementById('pm-name').value        = product?.name || '';
+  document.getElementById('pm-desc').value        = product?.description || '';
+  document.getElementById('pm-price').value       = product?.price || '';
+  document.getElementById('pm-inventory').value   = product?.inventory ?? '';
+  document.getElementById('pm-category').value    = product?.category || '';
+  document.getElementById('pm-active').value      = product ? String(product.active) : 'true';
+  document.getElementById('pm-image').value       = product?.image_url || '';
+  document.getElementById('pm-image2').value      = product?.image_url2 || '';
+  document.getElementById('pm-weight').value      = product?.weight || '';
+  document.getElementById('pm-dimensions').value  = product?.dimensions || '';
+  document.getElementById('pm-material').value    = product?.material || '';
+  document.getElementById('pm-sizes').value       = product?.sizes || '';
+  document.getElementById('pm-colors').value      = product?.colors || '';
+  document.getElementById('pm-sku').value         = product?.sku || '';
+  document.getElementById('pm-notes').value       = product?.admin_notes || '';
+  document.getElementById('pm-cart-enabled').checked = product ? (product.cart_enabled !== false) : true;
+  document.getElementById('pm-error').style.display = 'none';
+  document.getElementById('pm-title').textContent = product ? 'Edit Product' : 'Add Product';
+  const modal = document.getElementById('product-modal');
+  modal.style.display = 'flex';
+}
+
+function closeProductModal() {
+  document.getElementById('product-modal').style.display = 'none';
+}
+
+document.getElementById('btn-add-product').addEventListener('click', () => openProductModal());
+document.getElementById('pm-close').addEventListener('click', closeProductModal);
+document.getElementById('pm-cancel').addEventListener('click', closeProductModal);
+document.getElementById('product-modal').addEventListener('click', e => { if (e.target === document.getElementById('product-modal')) closeProductModal(); });
+
+document.getElementById('pm-save').addEventListener('click', async () => {
+  const id        = document.getElementById('pm-id').value;
+  const name      = document.getElementById('pm-name').value.trim();
+  const price     = parseFloat(document.getElementById('pm-price').value);
+  const inventory = parseInt(document.getElementById('pm-inventory').value, 10);
+  const errEl     = document.getElementById('pm-error');
+  if (!name || isNaN(price) || isNaN(inventory)) {
+    errEl.textContent = 'Name, price, and inventory are required.';
+    errEl.style.display = 'block'; return;
+  }
+  const payload = {
+    name,
+    description:  document.getElementById('pm-desc').value.trim() || null,
+    price, inventory,
+    category:     document.getElementById('pm-category').value.trim() || null,
+    active:       document.getElementById('pm-active').value === 'true',
+    image_url:    document.getElementById('pm-image').value.trim() || null,
+    image_url2:   document.getElementById('pm-image2').value.trim() || null,
+    weight:       document.getElementById('pm-weight').value.trim() || null,
+    dimensions:   document.getElementById('pm-dimensions').value.trim() || null,
+    material:     document.getElementById('pm-material').value.trim() || null,
+    sizes:        document.getElementById('pm-sizes').value.trim() || null,
+    colors:       document.getElementById('pm-colors').value.trim() || null,
+    sku:          document.getElementById('pm-sku').value.trim() || null,
+    admin_notes:  document.getElementById('pm-notes').value.trim() || null,
+    cart_enabled: document.getElementById('pm-cart-enabled').checked,
+  };
+  const { error } = id
+    ? await supabase.from('products').update(payload).eq('id', id)
+    : await supabase.from('products').insert(payload);
+  if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+  closeProductModal();
+  loadAdminProducts();
+});
+
+window.adminEditProduct = async (id) => {
+  const { data } = await supabase.from('products').select('*').eq('id', id).single();
+  if (data) openProductModal(data);
+};
+window.adminDeleteProduct = async (id) => {
+  if (!confirm('Delete this product? This cannot be undone.')) return;
+  await supabase.from('products').delete().eq('id', id);
+  loadAdminProducts();
+};
+
 // ── Tabs ──────────────────────────────────────────────────────
 document.querySelectorAll('.admin-tab').forEach(tab => {
   tab.addEventListener('click', () => {
@@ -395,8 +621,16 @@ document.querySelectorAll('.admin-tab').forEach(tab => {
     document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
     tab.classList.add('active');
     document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'shop') loadAdminProducts();
   });
 });
+
+// Open correct tab from URL hash (e.g. admin.html#shop)
+const _hashTab = window.location.hash.replace('#', '');
+if (_hashTab) {
+  const _hashBtn = document.querySelector(`.admin-tab[data-tab="${_hashTab}"]`);
+  if (_hashBtn) _hashBtn.click();
+}
 
 init();
 </script>

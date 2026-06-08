@@ -9,24 +9,24 @@
 
 // Discord URL — loaded from config.md on GitHub, falls back to hardcoded value
 let DISCORD_URL = 'https://discord.gg/hZrt28vG29';
+let _configResolve;
+const _configReady = new Promise(r => { _configResolve = r; });
 
 (async function loadConfig() {
   const RAW = 'https://raw.githubusercontent.com/lucky4life2/MCA2/main/config.md';
   try {
     const res = await fetch(RAW + '?nocache=' + Date.now());
-    if (!res.ok) return;
-    const cfg = {};
-    (await res.text()).split('\n').forEach(line => {
-      if (line.startsWith('#') || !line.trim()) return;
-      const c = line.indexOf(':');
-      if (c > 0) cfg[line.slice(0,c).trim()] = line.slice(c+1).trim();
-    });
-    if (cfg.discord_url) {
-      DISCORD_URL = cfg.discord_url;
-      // Update any discord links already in the DOM
-      document.querySelectorAll('a[data-discord]').forEach(a => a.href = DISCORD_URL);
+    if (res.ok) {
+      const cfg = {};
+      (await res.text()).split('\n').forEach(line => {
+        if (line.startsWith('#') || !line.trim()) return;
+        const c = line.indexOf(':');
+        if (c > 0) cfg[line.slice(0,c).trim()] = line.slice(c+1).trim();
+      });
+      if (cfg.discord_url) DISCORD_URL = cfg.discord_url;
     }
   } catch(e) {}
+  _configResolve();
 })();
 
 /* ── SITE LOCK ──────────────────────────────────────────────── */
@@ -218,7 +218,11 @@ const TOAST_HTML = `<div class="toast" id="toast">Address copied to clipboard</d
 
 const PROGRESS_HTML = `<div class="scroll-progress" id="scroll-progress"></div>`;
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  // Wait for config (discord URL etc) before injecting nav so links are correct.
+  // Cap the wait at 1.5s so a slow GitHub fetch doesn't delay the whole page.
+  await Promise.race([_configReady, new Promise(r => setTimeout(r, 1500))]);
+
   // Inject nav
   document.body.insertAdjacentHTML('afterbegin', NAV_HTML);
 
