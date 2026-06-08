@@ -138,6 +138,33 @@
         </div>
       </div>
 
+      <div class="admin-section" id="site-lock-section">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Site Lock</div>
+          <span id="lock-status-badge" class="badge badge-unlinked">Loading...</span>
+        </div>
+        <div style="padding:1.25rem 1.5rem;">
+          <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:1.25rem;">
+            When enabled, the site is hidden from non-admins and replaced with a maintenance screen. Admins can still access all pages normally.
+          </p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1rem;">
+            <div>
+              <label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Reason</label>
+              <input type="text" id="lock-reason" class="search-input" placeholder="e.g. Under Maintenance" style="width:100%;box-sizing:border-box;">
+            </div>
+            <div>
+              <label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Expected Return</label>
+              <input type="text" id="lock-return" class="search-input" placeholder="e.g. Tuesday, June 10th" style="width:100%;box-sizing:border-box;">
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <button class="btn btn-danger" id="btn-lock-enable" style="font-size:12px;padding:7px 16px;">🔒 Lock Site</button>
+            <button class="btn btn-success" id="btn-lock-disable" style="font-size:12px;padding:7px 16px;">🔓 Unlock Site</button>
+            <span id="lock-save-status" style="font-size:12px;color:var(--muted);"></span>
+          </div>
+        </div>
+      </div>
+
       <div class="admin-section">
         <div class="admin-section-header">
           <div class="admin-section-title">Minecraft Plugin Bridge</div>
@@ -357,7 +384,62 @@ async function loadAll() {
   renderStats();
   renderMembers(_allMembers);
   renderMinecraftLists();
+  loadLockState();
 }
+
+// ── Site Lock ─────────────────────────────────────────────────
+async function loadLockState() {
+  const badge = document.getElementById('lock-status-badge');
+  try {
+    const { data, error } = await supabase.from('settings').select('value').eq('key', 'site_lock').single();
+    let cfg = {};
+    if (data?.value) {
+      try { cfg = JSON.parse(data.value); } catch(e) {}
+    }
+    applyLockUI(cfg.locked === true, cfg.reason || '', cfg.return_time || '');
+  } catch(e) {
+    badge.textContent = 'Error'; badge.className = 'badge badge-pending';
+  }
+}
+
+function applyLockUI(isLocked, reason, returnTime) {
+  const badge = document.getElementById('lock-status-badge');
+  document.getElementById('lock-reason').value = reason;
+  document.getElementById('lock-return').value = returnTime;
+  if (isLocked) {
+    badge.textContent = 'Locked'; badge.className = 'badge badge-pending';
+    document.getElementById('btn-lock-enable').style.display = 'none';
+    document.getElementById('btn-lock-disable').style.display = '';
+  } else {
+    badge.textContent = 'Unlocked'; badge.className = 'badge badge-verified';
+    document.getElementById('btn-lock-enable').style.display = '';
+    document.getElementById('btn-lock-disable').style.display = 'none';
+  }
+}
+
+async function saveLockState(locked) {
+  const statusEl = document.getElementById('lock-save-status');
+  const reason    = document.getElementById('lock-reason').value.trim();
+  const returnTime = document.getElementById('lock-return').value.trim();
+  const value = JSON.stringify({ locked, reason, return_time: returnTime });
+  statusEl.textContent = 'Saving...';
+  const { error } = await supabase.from('settings').upsert({ key: 'site_lock', value }, { onConflict: 'key' });
+  if (error) {
+    statusEl.textContent = 'Error: ' + error.message;
+    setTimeout(() => { statusEl.textContent = ''; }, 4000);
+  } else {
+    applyLockUI(locked, reason, returnTime);
+    statusEl.textContent = locked ? '✓ Site locked' : '✓ Site unlocked';
+    setTimeout(() => { statusEl.textContent = ''; }, 3000);
+  }
+}
+
+document.getElementById('btn-lock-enable').addEventListener('click', () => {
+  if (confirm('Lock the site? Non-admin visitors will see the maintenance screen.')) saveLockState(true);
+});
+document.getElementById('btn-lock-disable').addEventListener('click', () => {
+  saveLockState(false);
+});
 
 // ── Stats ─────────────────────────────────────────────────────
 function renderStats() {

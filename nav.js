@@ -30,12 +30,12 @@ const _configReady = new Promise(r => { _configResolve = r; });
 })();
 
 /* ── SITE LOCK ──────────────────────────────────────────────── */
-const PREVIEW_KEY = 'I-pG1idLnWhIjId9i1TLAumZkBQjVcvc';
-const LOCK_RAW    = 'https://raw.githubusercontent.com/lucky4life2/MCA2/main/locked.md';
+const PREVIEW_KEY     = 'I-pG1idLnWhIjId9i1TLAumZkBQjVcvc';
+const SUPABASE_URL    = 'https://hjaywokvgdzhvsoygctc.supabase.co';
+const SUPABASE_ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDIwODYwNDQsImV4cCI6MjA1NzY2MjA0NH0.NNL7J3MbXBiQHCIGdBWECP1T52R5AWIO0JxRalWBJWI';
 
-// Clear any old sessionStorage preview keys, then hide until lock check completes
+// Hide page until lock check completes (unless preview key present)
 (function() {
-  sessionStorage.removeItem('mca_preview');
   const params = new URLSearchParams(window.location.search);
   if (params.get('preview') !== PREVIEW_KEY) {
     document.documentElement.style.visibility = 'hidden';
@@ -43,26 +43,74 @@ const LOCK_RAW    = 'https://raw.githubusercontent.com/lucky4life2/MCA2/main/loc
 })();
 
 (async function checkLock() {
-  // If preview key is in the URL, reveal immediately and skip
+  // If preview key is in the URL, reveal immediately and skip lock check
   const params = new URLSearchParams(window.location.search);
   if (params.get('preview') === PREVIEW_KEY) {
     document.documentElement.style.visibility = '';
     return;
   }
 
+  // Admin pages are never locked — admins need access to turn the lock off
+  const currentPage = window.location.pathname.split('/').pop() || 'index.html';
+  if (currentPage === 'admin.html' || currentPage === 'login.html') {
+    document.documentElement.style.visibility = '';
+    return;
+  }
+
   try {
-    const res = await fetch(LOCK_RAW + '?nocache=' + Date.now());
+    // Check lock state from Supabase settings table
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/settings?key=eq.site_lock&select=value`,
+      {
+        headers: {
+          'apikey': SUPABASE_ANON,
+          'Authorization': `Bearer ${SUPABASE_ANON}`,
+        }
+      }
+    );
+
     if (!res.ok) { document.documentElement.style.visibility = ''; return; }
-    const cfg = {};
-    (await res.text()).split('\n').forEach(line => {
-      if (line.startsWith('#') || !line.trim()) return;
-      const c = line.indexOf(':');
-      if (c > 0) cfg[line.slice(0,c).trim()] = line.slice(c+1).trim();
-    });
-    if (cfg.locked !== 'true') {
+
+    const rows = await res.json();
+    if (!rows.length) { document.documentElement.style.visibility = ''; return; }
+
+    let cfg = {};
+    try { cfg = JSON.parse(rows[0].value); } catch(e) { cfg = {}; }
+
+    if (cfg.locked !== true) {
       document.documentElement.style.visibility = '';
       return;
     }
+
+    // Check if the current user is an admin — admins bypass the lock
+    try {
+      // Get session from localStorage (Supabase stores it there)
+      const storageKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+      if (storageKey) {
+        const session = JSON.parse(localStorage.getItem(storageKey));
+        const token = session?.access_token;
+        if (token) {
+          const profileRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/profiles?select=role`,
+            {
+              headers: {
+                'apikey': SUPABASE_ANON,
+                'Authorization': `Bearer ${token}`,
+              }
+            }
+          );
+          if (profileRes.ok) {
+            const profiles = await profileRes.json();
+            const role = profiles?.[0]?.role;
+            if (role === 'admin' || role === 'super_admin') {
+              document.documentElement.style.visibility = '';
+              return;
+            }
+          }
+        }
+      }
+    } catch(e) {}
+
     // Show lock screen
     document.addEventListener('DOMContentLoaded', () => showLockScreen(cfg));
     if (document.readyState !== 'loading') showLockScreen(cfg);
