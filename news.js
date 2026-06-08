@@ -9,7 +9,7 @@
       No need to edit this file at all.
    ─────────────────────────────────────────────────────────────── */
 
-/* ── CONFIG ─────────────────────────────────────────────────── */
+/* ── CONFIG ──────────────────────────────-───────────────────── */
 const GITHUB_USER = 'lucky4life2';
 const GITHUB_REPO = 'MCA2';
 const GITHUB_BRANCH = 'main';
