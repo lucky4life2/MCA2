@@ -25,8 +25,16 @@ const ARCH_RAW  = `https://raw.githubusercontent.com/${ARCH_GITHUB_USER}/${ARCH_
 
 /* ── AUTO-DISCOVER DOCUMENTS ────────────────────────────────── */
 async function getDocumentList() {
+  const CACHE_KEY = 'mca_archive_tree';
+  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+  try {
+    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+    if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.files;
+  } catch(e) {}
+
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
+  const timeout = setTimeout(() => controller.abort(), 10000);
   let res;
   try {
     res = await fetch(ARCH_API, {
@@ -36,15 +44,15 @@ async function getDocumentList() {
   } finally {
     clearTimeout(timeout);
   }
-  if (res.status === 403 || res.status === 429) {
-    throw new Error(`GitHub API rate limit reached. Please try again in a few minutes. (${res.status})`);
-  }
   if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
   const data = await res.json();
 
-  return (data.tree || [])
+  const files = (data.tree || [])
     .filter(f => f.type === 'blob' && f.path.startsWith(ARCH_FOLDER + '/') && f.path.endsWith('.md') && !f.path.endsWith('TEMPLATE.md') && !f.path.includes('/'))
     .map(f => ({ path: f.path, url: `${ARCH_RAW}/${f.path}` }));
+
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), files })); } catch(e) {}
+  return files;
 }
 
 /* ── FETCH HELPER ───────────────────────────────────────────── */

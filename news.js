@@ -23,8 +23,17 @@ const RAW_BASE = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO
 
 /* ── AUTO-DISCOVER ARTICLES ─────────────────────────────────── */
 async function getArticleList() {
+  const CACHE_KEY = 'mca_news_tree';
+  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+  // Return cached tree if fresh
+  try {
+    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+    if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.files;
+  } catch(e) {}
+
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
+  const timeout = setTimeout(() => controller.abort(), 10000);
   let res;
   try {
     res = await fetch(GITHUB_API, {
@@ -34,15 +43,15 @@ async function getArticleList() {
   } finally {
     clearTimeout(timeout);
   }
-  if (res.status === 403 || res.status === 429) {
-    throw new Error(`GitHub API rate limit reached. Please try again in a few minutes. (${res.status})`);
-  }
   if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
   const data = await res.json();
 
-  return (data.tree || [])
+  const files = (data.tree || [])
     .filter(f => f.type === 'blob' && f.path.startsWith(NEWS_FOLDER + '/') && f.path.endsWith('.md') && !f.path.endsWith('TEMPLATE.md'))
     .map(f => ({ path: f.path, url: `${RAW_BASE}/${f.path}` }));
+
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), files })); } catch(e) {}
+  return files;
 }
 
 /* ── MARKDOWN PARSER ────────────────────────────────────────── */
@@ -130,7 +139,7 @@ async function fetchArticle(pathOrObj) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
-    const res = await fetch(url + '?nocache=' + Date.now(), { signal: controller.signal });
+    const res = await fetch(url, { signal: controller.signal });
     if (!res.ok) throw new Error(`Could not load ${path} (${res.status})`);
     return res.text();
   } finally {
