@@ -16,23 +16,16 @@ const _configReady = new Promise(r => { _configResolve = r; });
   const RAW = 'https://raw.githubusercontent.com/lucky4life2/MCA2/main/config.md';
   try {
     const res = await fetch(RAW + '?nocache=' + Date.now());
-    console.log('[nav config] fetch status:', res.status);
     if (res.ok) {
-      const text = await res.text();
-      console.log('[nav config] raw text:', text.slice(0, 200));
       const cfg = {};
-      text.split('\n').forEach(line => {
+      (await res.text()).split('\n').forEach(line => {
         if (line.startsWith('#') || !line.trim()) return;
         const c = line.indexOf(':');
         if (c > 0) cfg[line.slice(0,c).trim()] = line.slice(c+1).trim();
       });
-      console.log('[nav config] parsed:', cfg);
-      if (cfg.discord_url) {
-        console.log('[nav config] setting DISCORD_URL to:', cfg.discord_url);
-        DISCORD_URL = cfg.discord_url;
-      }
+      if (cfg.discord_url) DISCORD_URL = cfg.discord_url;
     }
-  } catch(e) { console.error('[nav config] error:', e); }
+  } catch(e) {}
   _configResolve();
 })();
 
@@ -131,7 +124,7 @@ function showLockScreen(cfg) {
 }
 
 
-const NAV_HTML = `
+const NAV_HTML = () => `
 <nav>
   <a class="nav-logo" href="index.html">
     <img src="images/widelogo.png" alt="Minecraft Club of America" class="nav-logo-img">
@@ -170,7 +163,7 @@ const NAV_HTML = `
 </nav>
 `;
 
-const FOOTER_HTML = `
+const FOOTER_HTML = () => `
 <footer>
   <div class="footer-inner">
 
@@ -231,10 +224,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   await Promise.race([_configReady, new Promise(r => setTimeout(r, 1500))]);
 
   // Inject nav
-  document.body.insertAdjacentHTML('afterbegin', NAV_HTML);
+  document.body.insertAdjacentHTML('afterbegin', NAV_HTML());
 
   // Inject footer + toast
-  document.body.insertAdjacentHTML('beforeend', FOOTER_HTML + TOAST_HTML);
+  document.body.insertAdjacentHTML('beforeend', FOOTER_HTML() + TOAST_HTML);
 
   // Inject scroll progress bar
   document.body.insertAdjacentHTML('afterbegin', PROGRESS_HTML);
