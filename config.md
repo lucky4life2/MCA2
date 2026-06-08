@@ -1,7 +1,7 @@
 # MCA Site Config
 # Edit and commit — site updates automatically.
 
-discord_url: https://discord.gg/BruwxHZuYr
+discord_url: https://discord.gg/MSWkUtaZXN
 
 stat1_label: Members
 stat1_value: 60+
