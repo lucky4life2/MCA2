@@ -216,20 +216,57 @@ const elMain         = document.getElementById('account-main');
 let _user = null;
 let _profile = null;
 let _verifyCode = null;
+let _isRecoverySession = false;
 
 // ── Init ─────────────────────────────────────────────────────
 async function init() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user) {
-    // Redirect to login with return URL
     window.location.replace('login.html?return=account.html');
     return;
   }
   _user = session.user;
+
+  // Detect password-recovery flow (user clicked reset link in email)
+  if (session.user.recovery_sent_at || window.location.hash.includes('type=recovery')) {
+    _isRecoverySession = true;
+  }
+  // Also listen for the recovery event from Supabase
+  supabase.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') {
+      _isRecoverySession = true;
+      // Scroll to / highlight the password section
+      const el = document.getElementById('section-password');
+      if (el) {
+        el.style.display = '';
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.style.outline = '2px solid var(--blue)';
+        el.style.borderRadius = '6px';
+        setTimeout(() => el.style.outline = '', 2500);
+      }
+    }
+  });
+
   await loadProfile();
   renderPage();
   elLoading.style.display = 'none';
   elMain.style.display = 'block';
+
+  // If this is a recovery session, scroll to password section automatically
+  if (_isRecoverySession) {
+    setTimeout(() => {
+      const el = document.getElementById('section-password');
+      if (el) {
+        el.style.display = '';
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Add a helpful banner
+        const banner = document.createElement('div');
+        banner.style.cssText = 'background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:12px 16px;font-size:13px;color:#1e40af;margin-bottom:1rem;';
+        banner.textContent = 'Enter your new password below to complete the reset.';
+        el.querySelector('.account-section-body')?.prepend(banner);
+      }
+    }, 300);
+  }
 }
 
 async function loadProfile() {
@@ -258,16 +295,17 @@ function renderPage() {
   // Minecraft
   renderMinecraft();
 
-  // Password section — hide if Discord-only (no email)
-  const hasEmail = !!_user.email;
-  document.getElementById('section-password').style.display = hasEmail ? '' : 'none';
+  // Password section — show if user has an email identity, OR if this is a recovery session
+  const identitiesForPw = _user.identities || [];
+  const hasEmailIdentity = identitiesForPw.some(i => i.provider === 'email') || _isRecoverySession;
+  document.getElementById('section-password').style.display = hasEmailIdentity ? '' : 'none';
 }
 
 function renderConnectedAccounts() {
   const el = document.getElementById('connected-accounts-body');
   const identities = _user.identities || [];
   const hasDiscord = identities.some(i => i.provider === 'discord') || !!_profile.discord_id;
-  const hasEmail   = !!_user.email;
+  const hasEmail   = identities.some(i => i.provider === 'email');
   // Only allow unlink if user has more than one login method
   const canUnlinkDiscord = hasDiscord && hasEmail;
   const canUnlinkEmail   = hasEmail && hasDiscord;
@@ -399,6 +437,20 @@ function renderMinecraft() {
     const errEl = document.getElementById('mc-error');
     errEl.style.display = 'none';
     if (!username) { errEl.textContent = 'Enter your Minecraft username.'; errEl.style.display = 'block'; return; }
+
+    // Check if this username is already linked to another account
+    const { data: existing } = await supabase
+      .from('profiles')
+      .select('id')
+      .ilike('minecraft_username', username)
+      .neq('id', _user.id)
+      .maybeSingle();
+    if (existing) {
+      errEl.textContent = `"${username}" is already linked to another account. If this is your username, contact an admin.`;
+      errEl.style.display = 'block';
+      return;
+    }
+
     const { error } = await supabase.from('profiles').update({ minecraft_username: username }).eq('id', _user.id);
     if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
     _profile.minecraft_username = username;
