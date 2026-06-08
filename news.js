@@ -23,9 +23,17 @@ const RAW_BASE = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO
 
 /* ── AUTO-DISCOVER ARTICLES ─────────────────────────────────── */
 async function getArticleList() {
-  const res = await fetch(GITHUB_API, {
-    headers: { 'Accept': 'application/vnd.github+json' }
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  let res;
+  try {
+    res = await fetch(GITHUB_API, {
+      headers: { 'Accept': 'application/vnd.github+json' },
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
   if (res.status === 403 || res.status === 429) {
     throw new Error(`GitHub API rate limit reached. Please try again in a few minutes. (${res.status})`);
   }

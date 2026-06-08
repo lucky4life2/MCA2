@@ -134,13 +134,6 @@ const NAV_HTML = () => `
       <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
     </button>
-    <button class="nav-cart-btn" id="nav-cart-btn" aria-label="Cart" style="display:none;">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
-      <span class="nav-cart-count" id="nav-cart-count" style="display:none;">0</span>
-    </button>
-    <div class="nav-account" id="nav-account">
-      <!-- Injected by nav auth init -->
-    </div>
     <button class="nav-hamburger" id="nav-hamburger" aria-label="Toggle menu">
       <span></span><span></span><span></span>
     </button>
@@ -159,6 +152,13 @@ const NAV_HTML = () => `
     <li><a href="nations.html"    data-page="nations">Nations</a></li>
     <li><a href="news.html"       data-page="news">News</a></li>
     <li><a href="${DISCORD_URL}" data-discord target="_blank" class="nav-discord">Discord</a></li>
+    <li class="nav-cart-item" id="nav-cart-item" style="display:none;">
+      <button class="nav-cart-btn" id="nav-cart-btn" aria-label="Cart">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+        <span class="nav-cart-count" id="nav-cart-count" style="display:none;">0</span>
+      </button>
+    </li>
+    <li class="nav-account-item"><div class="nav-account" id="nav-account"></div></li>
   </ul>
 </nav>
 `;
@@ -350,6 +350,7 @@ function copyEmail(el) {
 async function initNavAuth() {
   const accountEl  = document.getElementById('nav-account');
   const cartBtn    = document.getElementById('nav-cart-btn');
+  const cartItem   = document.getElementById('nav-cart-item');
   const cartCount  = document.getElementById('nav-cart-count');
   if (!accountEl) return;
 
@@ -359,7 +360,7 @@ async function initNavAuth() {
       const raw   = localStorage.getItem('mca_cart_' + userId);
       const items = raw ? JSON.parse(raw) : [];
       const total = items.reduce((s, i) => s + (i.qty || 1), 0);
-      cartBtn.style.display = '';
+      if (cartItem) cartItem.style.display = '';
       if (total > 0) {
         cartCount.textContent    = total > 99 ? '99+' : total;
         cartCount.style.display  = '';
@@ -383,7 +384,7 @@ async function initNavAuth() {
           <a class="nav-account-dropdown-item" href="login.html?tab=signup">Create Account</a>
         </div>
       </div>`;
-    if (cartBtn) cartBtn.style.display = 'none';
+    if (cartItem) cartItem.style.display = 'none';
 
     document.getElementById('nav-account-user-btn').addEventListener('click', e => {
       e.stopPropagation();

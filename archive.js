@@ -25,9 +25,17 @@ const ARCH_RAW  = `https://raw.githubusercontent.com/${ARCH_GITHUB_USER}/${ARCH_
 
 /* ── AUTO-DISCOVER DOCUMENTS ────────────────────────────────── */
 async function getDocumentList() {
-  const res = await fetch(ARCH_API, {
-    headers: { 'Accept': 'application/vnd.github+json' }
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  let res;
+  try {
+    res = await fetch(ARCH_API, {
+      headers: { 'Accept': 'application/vnd.github+json' },
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
   if (res.status === 403 || res.status === 429) {
     throw new Error(`GitHub API rate limit reached. Please try again in a few minutes. (${res.status})`);
   }
