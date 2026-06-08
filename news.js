@@ -127,9 +127,15 @@ async function fetchArticle(pathOrObj) {
   const url  = typeof pathOrObj === 'object' && pathOrObj.url
     ? pathOrObj.url
     : `${RAW_BASE}/${path}`;
-  const res = await fetch(url + '?nocache=' + Date.now());
-  if (!res.ok) throw new Error(`Could not load ${path} (${res.status})`);
-  return res.text();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(url + '?nocache=' + Date.now(), { signal: controller.signal });
+    if (!res.ok) throw new Error(`Could not load ${path} (${res.status})`);
+    return res.text();
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /* ── DATE FORMATTER ─────────────────────────────────────────── */
@@ -149,13 +155,14 @@ async function loadIndex() {
 
   try {
     const articlePaths = await getArticleList();
-    const articles = await Promise.all(
+    const results = await Promise.allSettled(
       articlePaths.map(async item => {
         const raw = await fetchArticle(item);
         const { meta } = parseFrontmatter(raw);
         return { path: item.path, meta };
       })
     );
+    const articles = results.filter(r => r.status === 'fulfilled').map(r => r.value);
 
     // Sort newest first by date field
     articles.sort((a, b) => {

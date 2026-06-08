@@ -50,9 +50,15 @@ async function getDocumentList() {
 /* ── FETCH HELPER ───────────────────────────────────────────── */
 async function fetchDocument(item) {
   const url = item.url || `${ARCH_RAW}/${item.path}`;
-  const res = await fetch(url + '?nocache=' + Date.now());
-  if (!res.ok) throw new Error(`Could not load ${item.path} (${res.status})`);
-  return res.text();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(url + '?nocache=' + Date.now(), { signal: controller.signal });
+    if (!res.ok) throw new Error(`Could not load ${item.path} (${res.status})`);
+    return res.text();
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /* ── FRONTMATTER PARSER ─────────────────────────────────────── */
@@ -130,13 +136,14 @@ async function loadArchiveIndex() {
 
   try {
     const docPaths = await getDocumentList();
-    const docs = await Promise.all(
+    const results = await Promise.allSettled(
       docPaths.map(async item => {
         const raw = await fetchDocument(item);
         const { meta } = parseArchiveFrontmatter(raw);
         return { path: item.path, meta };
       })
     );
+    const docs = results.filter(r => r.status === 'fulfilled').map(r => r.value);
 
     // Sort by date descending
     docs.sort((a, b) => {
