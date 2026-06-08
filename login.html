@@ -262,7 +262,7 @@
   // ── Redirect destination ──────────────────────────────────────
   // If the user was sent here from another page, return them there after login.
   const params   = new URLSearchParams(window.location.search);
-  const returnTo = params.get('return') || 'shop.html';
+  const returnTo = params.get('return') || 'account.html';
 
   // If already signed in, skip the login page entirely
   const { data: { session } } = await supabase.auth.getSession();

@@ -374,8 +374,17 @@ function copyEmail(el) {
     if (cartBtn) cartBtn.style.display = 'none';
   }
 
-  function setSignedIn(user) {
+  async function setSignedIn(user) {
     const label = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Account';
+
+    // Fetch profile to check admin role
+    let isAdmin = false;
+    try {
+      const mod = await import('./supabase.js');
+      const { data } = await mod.supabase.from('profiles').select('role').eq('id', user.id).single();
+      isAdmin = data?.role === 'admin';
+    } catch(e) {}
+
     accountEl.innerHTML = `
       <div class="nav-account-wrap" id="nav-account-wrap">
         <button class="nav-account-btn nav-account-user" id="nav-account-user-btn">
@@ -383,7 +392,9 @@ function copyEmail(el) {
           ${label}
         </button>
         <div class="nav-account-dropdown" id="nav-account-dropdown">
+          <a class="nav-account-dropdown-item" href="shop.html">Shop</a>
           <a class="nav-account-dropdown-item" href="account.html">My Account</a>
+          ${isAdmin ? `<a class="nav-account-dropdown-item" href="admin.html">Admin</a>` : ''}
           <button class="nav-account-dropdown-item" id="nav-signout-btn">Sign Out</button>
         </div>
       </div>`;
@@ -409,13 +420,13 @@ function copyEmail(el) {
     const mod = await import('./supabase.js');
     const { data: { user } } = await mod.supabase.auth.getUser();
     if (user) {
-      setSignedIn(user);
+      await setSignedIn(user);
     } else {
       setSignedOut();
     }
-    mod.supabase.auth.onAuthStateChange((event, session) => {
+    mod.supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-        if (session?.user) setSignedIn(session.user);
+        if (session?.user) await setSignedIn(session.user);
         else setSignedOut();
       } else if (event === 'SIGNED_OUT') {
         setSignedOut();
