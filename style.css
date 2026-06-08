@@ -171,6 +171,8 @@ nav {
   text-decoration: none;
 }
 .nav-account-dropdown-item:hover { background: var(--bg); color: var(--black); }
+#nav-signout-btn { color: #c0392b; }
+#nav-signout-btn:hover { background: #fdf2f2; color: #a93226; }
 
 /* Cart button in nav */
 .nav-cart-btn {
