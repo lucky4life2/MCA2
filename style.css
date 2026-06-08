@@ -93,6 +93,8 @@ nav {
   border-radius: 4px; font-weight: 600 !important; transition: background 0.15s !important;
 }
 .nav-discord:hover { background: #4752c4 !important; color: white !important; border-bottom-color: transparent !important; }
+.nav-theme-item { display: flex; align-items: center; margin-left: 8px; }
+.nav-account-item { display: flex; align-items: center; margin-left: 4px; }
 
 /* ── NAV DROPDOWN ── */
 .nav-has-dropdown { position: relative; }
