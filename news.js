@@ -15,8 +15,8 @@ const GITHUB_REPO = 'MCA2';
 const GITHUB_BRANCH = 'main';
 const NEWS_FOLDER = 'news';
 
-// GitHub API endpoint to list files in the news/ folder
-const GITHUB_API = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/git/trees/${GITHUB_BRANCH}?recursive=1`;
+// GitHub API endpoint to list files in the news/ folder (Contents API — no truncation)
+const GITHUB_API = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${NEWS_FOLDER}?ref=${GITHUB_BRANCH}`;
 
 // Raw content base URL for fetching article files
 const RAW_BASE = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}`;
@@ -46,8 +46,8 @@ async function getArticleList() {
   if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
   const data = await res.json();
 
-  const files = (data.tree || [])
-    .filter(f => f.type === 'blob' && f.path.startsWith(NEWS_FOLDER + '/') && f.path.endsWith('.md') && !f.path.endsWith('TEMPLATE.md'))
+  const files = (Array.isArray(data) ? data : [])
+    .filter(f => f.type === 'file' && f.name.endsWith('.md') && f.name !== 'TEMPLATE.md')
     .map(f => ({ path: f.path, url: `${RAW_BASE}/${f.path}` }));
 
   try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), files })); } catch(e) {}
@@ -181,7 +181,9 @@ async function loadIndex() {
     });
 
     if (articles.length === 0) {
-      loadingEl.textContent = 'No articles published yet.';
+      loadingEl.style.display = 'none';
+      errorEl.style.display   = 'block';
+      errorEl.textContent     = 'No articles published yet.';
       return;
     }
 
