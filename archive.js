@@ -20,7 +20,7 @@ const ARCH_GITHUB_REPO   = 'MCA2';
 const ARCH_GITHUB_BRANCH = 'main';
 const ARCH_FOLDER        = 'archive';
 
-const ARCH_API  = `https://api.github.com/repos/${ARCH_GITHUB_USER}/${ARCH_GITHUB_REPO}/contents/${ARCH_FOLDER}?ref=${ARCH_GITHUB_BRANCH}`;
+const ARCH_API  = `https://api.github.com/repos/${ARCH_GITHUB_USER}/${ARCH_GITHUB_REPO}/git/trees/${ARCH_GITHUB_BRANCH}?recursive=1`;
 const ARCH_RAW  = `https://raw.githubusercontent.com/${ARCH_GITHUB_USER}/${ARCH_GITHUB_REPO}/${ARCH_GITHUB_BRANCH}`;
 
 /* ── AUTO-DISCOVER DOCUMENTS ────────────────────────────────── */
@@ -40,11 +40,11 @@ async function getDocumentList() {
     throw new Error(`GitHub API rate limit reached. Please try again in a few minutes. (${res.status})`);
   }
   if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
-  const files = await res.json();
+  const data = await res.json();
 
-  return files
-    .filter(f => f.name.endsWith('.md') && f.name !== 'TEMPLATE.md')
-    .map(f => ({ path: `${ARCH_FOLDER}/${f.name}`, url: f.download_url }));
+  return (data.tree || [])
+    .filter(f => f.type === 'blob' && f.path.startsWith(ARCH_FOLDER + '/') && f.path.endsWith('.md') && !f.path.endsWith('TEMPLATE.md') && !f.path.includes('/'))
+    .map(f => ({ path: f.path, url: `${ARCH_RAW}/${f.path}` }));
 }
 
 /* ── FETCH HELPER ───────────────────────────────────────────── */

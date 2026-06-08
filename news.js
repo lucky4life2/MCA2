@@ -16,7 +16,7 @@ const GITHUB_BRANCH = 'main';
 const NEWS_FOLDER = 'news';
 
 // GitHub API endpoint to list files in the news/ folder
-const GITHUB_API = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${NEWS_FOLDER}?ref=${GITHUB_BRANCH}`;
+const GITHUB_API = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/git/trees/${GITHUB_BRANCH}?recursive=1`;
 
 // Raw content base URL for fetching article files
 const RAW_BASE = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}`;
@@ -38,12 +38,11 @@ async function getArticleList() {
     throw new Error(`GitHub API rate limit reached. Please try again in a few minutes. (${res.status})`);
   }
   if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
-  const files = await res.json();
+  const data = await res.json();
 
-  // Return objects with path and raw download URL from GitHub API
-  return files
-    .filter(f => f.name.endsWith('.md') && f.name !== 'TEMPLATE.md')
-    .map(f => ({ path: `${NEWS_FOLDER}/${f.name}`, url: f.download_url }));
+  return (data.tree || [])
+    .filter(f => f.type === 'blob' && f.path.startsWith(NEWS_FOLDER + '/') && f.path.endsWith('.md') && !f.path.endsWith('TEMPLATE.md'))
+    .map(f => ({ path: f.path, url: `${RAW_BASE}/${f.path}` }));
 }
 
 /* ── MARKDOWN PARSER ────────────────────────────────────────── */
