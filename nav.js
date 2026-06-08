@@ -370,8 +370,28 @@ function copyEmail(el) {
   }
 
   function setSignedOut() {
-    accountEl.innerHTML = `<a class="nav-account-btn" href="login.html?return=${encodeURIComponent(window.location.pathname.split('/').pop() || 'index.html')}">Sign In</a>`;
+    const returnPage = encodeURIComponent(window.location.pathname.split('/').pop() || 'index.html');
+    accountEl.innerHTML = `
+      <div class="nav-account-wrap" id="nav-account-wrap">
+        <button class="nav-account-btn nav-account-user" id="nav-account-user-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Account
+        </button>
+        <div class="nav-account-dropdown" id="nav-account-dropdown">
+          <a class="nav-account-dropdown-item" href="shop.html">Shop</a>
+          <a class="nav-account-dropdown-item" href="login.html?return=${returnPage}">Sign In</a>
+          <a class="nav-account-dropdown-item" href="login.html?tab=signup">Create Account</a>
+        </div>
+      </div>`;
     if (cartBtn) cartBtn.style.display = 'none';
+
+    document.getElementById('nav-account-user-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      document.getElementById('nav-account-dropdown').classList.toggle('open');
+    });
+    document.addEventListener('click', () => {
+      document.getElementById('nav-account-dropdown')?.classList.remove('open');
+    });
   }
 
   async function setSignedIn(user) {
