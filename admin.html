@@ -337,6 +337,17 @@
         </div>
       </div>
 
+      <!-- Leadership -->
+      <div class="admin-section">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Leadership</div>
+          <button class="btn btn-primary" id="btn-add-leader" style="font-size:12px;padding:7px 16px;">+ Add Person</button>
+        </div>
+        <div id="leadership-admin-list" style="padding:0.5rem 0;min-height:60px;">
+          <div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">Loading...</div>
+        </div>
+      </div>
+
     </div>
 
 <!-- Product add/edit modal -->
@@ -436,6 +447,54 @@
     <div style="padding:0 1.5rem 1.5rem;display:flex;gap:10px;justify-content:flex-end;">
       <button id="pm-cancel" style="background:transparent;color:var(--muted);font-size:13px;font-weight:600;padding:9px 18px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">Cancel</button>
       <button id="pm-save" style="background:var(--blue);color:#fff;font-size:13px;font-weight:600;padding:9px 18px;border:none;border-radius:4px;cursor:pointer;">Save Product</button>
+    </div>
+  </div>
+</div>
+
+<!-- Leader add/edit modal -->
+<div class="modal-overlay" id="leader-modal" style="display:none;position:fixed;inset:0;background:rgba(10,15,30,.5);z-index:400;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:var(--white);border-radius:8px;border:1px solid var(--border);width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(10,15,30,.2);">
+    <div style="padding:1.5rem 1.5rem 0;display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-family:'Times New Roman',serif;font-size:1.3rem;color:var(--blue);font-weight:normal;" id="lm-modal-title">Add Person</div>
+      <button id="lm-close" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:20px;line-height:1;padding:4px;">✕</button>
+    </div>
+    <div style="padding:1.5rem;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <input type="hidden" id="lm-id">
+      <div style="grid-column:1/-1;">
+        <label class="form-label">Name *</label>
+        <input type="text" id="lm-name" class="form-input" placeholder="e.g. William Rector">
+      </div>
+      <div style="grid-column:1/-1;">
+        <label class="form-label">Title / Role *</label>
+        <input type="text" id="lm-title" class="form-input" placeholder="e.g. National President">
+      </div>
+      <div style="grid-column:1/-1;">
+        <label class="form-label">Subtitle (optional)</label>
+        <input type="text" id="lm-subtitle" class="form-input" placeholder="e.g. Secretary of the Treasury">
+      </div>
+      <div>
+        <label class="form-label">Branch</label>
+        <select id="lm-branch" class="form-input">
+          <option value="administrative">Administrative</option>
+          <option value="cabinet">Cabinet</option>
+          <option value="congress">Congress</option>
+          <option value="court">Court</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Sort Order</label>
+        <input type="number" id="lm-sort" class="form-input" placeholder="0" min="0">
+      </div>
+      <div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="lm-show-in-team">
+        <label style="font-size:13px;color:var(--mid);cursor:pointer;" for="lm-show-in-team">Show in National Leadership team grid</label>
+      </div>
+    </div>
+    <div id="lm-error" style="font-size:13px;color:#c0392b;padding:0 1.5rem 0.5rem;display:none;"></div>
+    <div style="padding:0 1.5rem 1.5rem;display:flex;gap:10px;justify-content:flex-end;">
+      <button id="lm-cancel" style="background:transparent;color:var(--muted);font-size:13px;font-weight:600;padding:9px 18px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">Cancel</button>
+      <button id="lm-save" style="background:var(--blue);color:#fff;font-size:13px;font-weight:600;padding:9px 18px;border:none;border-radius:4px;cursor:pointer;">Save</button>
     </div>
   </div>
 </div>
@@ -913,7 +972,7 @@ if (_hashTab) {
 
 // ── Config tab ────────────────────────────────────────────────
 async function loadConfigTab() {
-  await Promise.all([loadSiteConfig(), loadNationsAdmin()]);
+  await Promise.all([loadSiteConfig(), loadNationsAdmin(), loadLeadershipAdmin()]);
 }
 
 async function loadSiteConfig() {
@@ -1043,6 +1102,91 @@ window.deleteNation = async (id) => {
   if (!confirm('Delete this nation? This cannot be undone.')) return;
   await supabase.from('nations').delete().eq('id', id);
   await loadNationsAdmin();
+};
+
+// ── Leadership admin ──────────────────────────────────────────
+let _leadersAdmin = [];
+
+async function loadLeadershipAdmin() {
+  const el = document.getElementById('leadership-admin-list');
+  const { data, error } = await supabase.from('leadership').select('*').order('sort_order', { ascending: true });
+  if (error) { el.innerHTML = `<div style="padding:1rem;color:#c0392b;font-size:13px;">Error: ${error.message}</div>`; return; }
+  _leadersAdmin = data || [];
+  renderLeadershipAdmin();
+}
+
+const BRANCH_LABELS = { administrative: 'Administrative', cabinet: 'Cabinet', congress: 'Congress', court: 'Court', other: 'Other' };
+
+function renderLeadershipAdmin() {
+  const el = document.getElementById('leadership-admin-list');
+  if (!_leadersAdmin.length) {
+    el.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">No leaders yet.</div>`;
+    return;
+  }
+  el.innerHTML = _leadersAdmin.map(l => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 1.5rem;border-bottom:1px solid var(--border);">
+      <div>
+        <div style="font-weight:600;font-size:14px;">${l.name}</div>
+        <div style="font-size:12px;color:var(--muted);">${l.title}${l.subtitle ? ' · ' + l.subtitle : ''} · <em>${BRANCH_LABELS[l.branch] || l.branch}</em>${l.show_in_team ? ' · Team grid' : ''}</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-shrink:0;">
+        <button class="btn btn-outline" style="font-size:11px;padding:5px 12px;" onclick="openLeaderModal('${l.id}')">Edit</button>
+        <button class="btn btn-danger" style="font-size:11px;padding:5px 12px;" onclick="deleteLeader('${l.id}')">Delete</button>
+      </div>
+    </div>`).join('');
+}
+
+document.getElementById('btn-add-leader').addEventListener('click', () => openLeaderModal(null));
+
+window.openLeaderModal = (id) => {
+  const l = id ? _leadersAdmin.find(x => x.id === id) : null;
+  document.getElementById('lm-id').value            = l?.id || '';
+  document.getElementById('lm-name').value          = l?.name || '';
+  document.getElementById('lm-title').value         = l?.title || '';
+  document.getElementById('lm-subtitle').value      = l?.subtitle || '';
+  document.getElementById('lm-branch').value        = l?.branch || 'administrative';
+  document.getElementById('lm-sort').value          = l?.sort_order ?? 0;
+  document.getElementById('lm-show-in-team').checked = l?.show_in_team || false;
+  document.getElementById('lm-error').style.display = 'none';
+  document.getElementById('lm-modal-title').textContent = l ? 'Edit Person' : 'Add Person';
+  document.getElementById('leader-modal').style.display = 'flex';
+};
+
+function closeLeaderModal() { document.getElementById('leader-modal').style.display = 'none'; }
+document.getElementById('lm-close').addEventListener('click', closeLeaderModal);
+document.getElementById('lm-cancel').addEventListener('click', closeLeaderModal);
+
+document.getElementById('lm-save').addEventListener('click', async () => {
+  const name  = document.getElementById('lm-name').value.trim();
+  const title = document.getElementById('lm-title').value.trim();
+  if (!name || !title) {
+    const e = document.getElementById('lm-error');
+    e.textContent = 'Name and Title are required.'; e.style.display = 'block'; return;
+  }
+  const id = document.getElementById('lm-id').value;
+  const payload = {
+    name,
+    title,
+    subtitle:     document.getElementById('lm-subtitle').value.trim() || null,
+    branch:       document.getElementById('lm-branch').value,
+    sort_order:   parseInt(document.getElementById('lm-sort').value) || 0,
+    show_in_team: document.getElementById('lm-show-in-team').checked,
+  };
+  let error;
+  if (id) {
+    ({ error } = await supabase.from('leadership').update(payload).eq('id', id));
+  } else {
+    ({ error } = await supabase.from('leadership').insert(payload));
+  }
+  if (error) { const e = document.getElementById('lm-error'); e.textContent = error.message; e.style.display = 'block'; return; }
+  closeLeaderModal();
+  await loadLeadershipAdmin();
+});
+
+window.deleteLeader = async (id) => {
+  if (!confirm('Remove this person from leadership?')) return;
+  await supabase.from('leadership').delete().eq('id', id);
+  await loadLeadershipAdmin();
 };
 
 init();

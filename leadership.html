@@ -37,31 +37,8 @@
       <div class="section-label">The Team</div>
       <h2>National Leadership</h2>
       <p>The MCA is entirely student-run. Every officer, representative, and justice is a student — elected or appointed through the constitutional processes established at our founding.</p>
-      <div class="leadership-team-grid">
-        <div class="leadership-team-card">
-          <div class="leadership-team-name">William Rector</div>
-          <div class="leadership-team-role">National President</div>
-        </div>
-        <div class="leadership-team-card">
-          <div class="leadership-team-name">Kyden Blake</div>
-          <div class="leadership-team-role">National Vice President</div>
-        </div>
-        <div class="leadership-team-card">
-          <div class="leadership-team-name">Samuel Olsen</div>
-          <div class="leadership-team-role">Chief of Staff · Sec. Treasury</div>
-        </div>
-        <div class="leadership-team-card">
-          <div class="leadership-team-name">Spencer Pike</div>
-          <div class="leadership-team-role">Sec. Communications</div>
-        </div>
-        <div class="leadership-team-card">
-          <div class="leadership-team-name">Pierce Poland</div>
-          <div class="leadership-team-role">Sec. Creative</div>
-        </div>
-        <div class="leadership-team-card">
-          <div class="leadership-team-name">Cameron Loose</div>
-          <div class="leadership-team-role">Lead Developer</div>
-        </div>
+      <div class="leadership-team-grid" id="leadership-team-grid">
+        <div style="color:var(--muted);font-size:14px;">Loading...</div>
       </div>
     </div>
 
@@ -69,11 +46,7 @@
       <div class="branch-label">Article II</div>
       <div class="branch-title">Administrative Branch</div>
       <div class="branch-sub">Executive power · Minimum one-year term</div>
-      <table class="leader-table">
-        <tr><td>William Rector</td><td>National President</td></tr>
-        <tr><td>Kyden Blake</td><td>National Vice President</td></tr>
-        <tr><td>Club Presidents (all chapters)</td><td>Council of Presidents</td></tr>
-      </table>
+      <table class="leader-table" id="branch-administrative"><tr><td colspan="2" style="color:var(--muted);">Loading...</td></tr></table>
       <hr class="divider">
       <p style="font-size:14.5px;">The National President serves as Commander in Chief, enforces World Congress legislation, holds veto power (overridable by ⅔ vote), appoints World Court Justices with Congressional consent, and addresses the public four times per year.</p>
     </div>
@@ -82,26 +55,16 @@
       <div class="branch-label">Executive Order No. 1 · June 8, 2025</div>
       <div class="branch-title">Cabinet Departments</div>
       <div class="branch-sub">Nominated by the National President · Confirmed by a simple majority of the World Congress</div>
-      <table class="leader-table">
-        <tr><td>Samuel Olsen</td><td>Chief of Staff · Secretary of the Treasury</td></tr>
-        <tr><td>Pierce Poland</td><td>Secretary of Creative</td></tr>
-        <tr><td>Spencer Pike</td><td>Secretary of Communications</td></tr>
-        <tr><td>Cameron Loose</td><td>Lead Developer</td></tr>
-      </table>
+      <table class="leader-table" id="branch-cabinet"><tr><td colspan="2" style="color:var(--muted);">Loading...</td></tr></table>
       <hr class="divider">
       <p style="font-size:14.5px;">The Chief of Staff oversees all other departments and serves as the principal advisor to the National President. Each department must submit monthly reports and draft a Departmental Charter within 30 days of establishment.</p>
-
-
     </div>
 
     <div class="section">
       <div class="branch-label">Article I</div>
       <div class="branch-title">World Congress</div>
       <div class="branch-sub">All legislative power · Representatives serve one-month terms</div>
-      <table class="leader-table">
-        <tr><td>Lord Silky</td><td>Speaker, 2nd World Congress</td></tr>
-        <tr><td>Representatives</td><td>One per recognized nation (proportional to active population)</td></tr>
-      </table>
+      <table class="leader-table" id="branch-congress"><tr><td colspan="2" style="color:var(--muted);">Loading...</td></tr></table>
       <hr class="divider">
       <p style="font-size:14.5px;">The World Congress passes server-wide rules, regulates commerce between nations, declares war, levies taxes on in-game resources, and confirms all presidential appointments. A two-thirds vote overrides a presidential veto.</p>
       <div class="callout">
@@ -114,9 +77,7 @@
       <div class="branch-label">Article III</div>
       <div class="branch-title">World Court</div>
       <div class="branch-sub">Judicial power · One Justice per recognized nation · Two-month terms</div>
-      <table class="leader-table">
-        <tr><td>Justices</td><td>One per nation — nominated by nations, appointed by the President with Congressional consent</td></tr>
-      </table>
+      <table class="leader-table" id="branch-court"><tr><td colspan="2" style="color:var(--muted);">Loading...</td></tr></table>
       <hr class="divider">
       <p style="font-size:14.5px;">The World Court hears disputes between nations, server rule violations, constitutional interpretations, and impeachment proceedings. All members have the right to a fair trial, to present evidence, to representation by another player, and to appeal. Any player placed on Administrative Hold must receive a hearing within 72 hours.</p>
     </div>
@@ -137,5 +98,45 @@
 </div>
 
 <script src="nav.js"></script>
-</body>
-</html>
+<script>
+(async function loadLeadership() {
+  const SUPABASE_URL  = 'https://hjaywokvgdzhvsoygctc.supabase.co';
+  const SUPABASE_ANON = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
+
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/leadership?select=*&order=sort_order.asc`,
+      { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } }
+    );
+    if (!res.ok) throw new Error('fetch failed');
+    const people = await res.json();
+
+    // Team grid — show_in_team === true
+    const teamGrid = document.getElementById('leadership-team-grid');
+    const teamPeople = people.filter(p => p.show_in_team);
+    teamGrid.innerHTML = teamPeople.length
+      ? teamPeople.map(p => `
+          <div class="leadership-team-card">
+            <div class="leadership-team-name">${p.name}</div>
+            <div class="leadership-team-role">${p.title}</div>
+            ${p.subtitle ? `<div style="font-size:12px;color:var(--muted);margin-top:2px;">${p.subtitle}</div>` : ''}
+          </div>`).join('')
+      : '<div style="color:var(--muted);font-size:14px;">No team members listed.</div>';
+
+    // Branch tables
+    ['administrative','cabinet','congress','court'].forEach(branch => {
+      const table = document.getElementById(`branch-${branch}`);
+      if (!table) return;
+      const rows = people.filter(p => p.branch === branch);
+      table.innerHTML = rows.length
+        ? rows.map(p => `<tr><td>${p.name}</td><td>${p.title}${p.subtitle ? ' · ' + p.subtitle : ''}</td></tr>`).join('')
+        : '<tr><td colspan="2" style="color:var(--muted);">No members listed.</td></tr>';
+    });
+  } catch(e) {
+    ['leadership-team-grid','branch-administrative','branch-cabinet','branch-congress','branch-court'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = '<tr><td colspan="2" style="color:var(--muted);">Could not load data.</td></tr>';
+    });
+  }
+})();
+</script>
