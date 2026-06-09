@@ -187,7 +187,7 @@
           <div class="login-divider"><span class="login-divider-text">or</span></div>
           <div class="login-form-group">
             <label class="login-form-label" for="signin-email">Email</label>
-            <input type="email" id="signin-email" class="login-form-input" placeholder="you@example.com" autocomplete="email">
+            <input type="text" id="signin-email" class="login-form-input" placeholder="Email or username" autocomplete="username">
           </div>
           <div class="login-form-group">
             <label class="login-form-label" for="signin-password">Password</label>
@@ -316,16 +316,46 @@
 
   // ── Email sign in ─────────────────────────────────────────────
   document.getElementById('btn-email-signin').addEventListener('click', async () => {
-    const email    = document.getElementById('signin-email').value.trim();
-    const password = document.getElementById('signin-password').value;
-    const errEl    = document.getElementById('signin-error');
+    let identifier = document.getElementById('signin-email').value.trim();
+    const password  = document.getElementById('signin-password').value;
+    const errEl     = document.getElementById('signin-error');
     errEl.style.display = 'none';
-    if (!email || !password) {
-      errEl.textContent = 'Please enter your email and password.';
+    if (!identifier) {
+      errEl.textContent = 'Please enter your email or username.';
+      errEl.style.display = 'block'; return;
+    }
+    // If it doesn't look like an email, treat it as a username and look up the email
+    if (!identifier.includes('@')) {
+      // Try profiles.email first, fall back to RPC lookup via auth.users
+      let resolved = null;
+
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('email, id')
+        .ilike('username', identifier)
+        .limit(1);
+
+      if (profiles?.length && profiles[0].email) {
+        resolved = profiles[0].email;
+      } else if (profiles?.length && profiles[0].id) {
+        // profiles has no email column — look up via RPC
+        const { data: rpcData } = await supabase.rpc('get_email_by_user_id', { user_id: profiles[0].id });
+        if (rpcData) resolved = rpcData;
+      }
+
+      if (!resolved) {
+        errEl.textContent   = 'No account found with that username.';
+        errEl.style.display = 'block'; return;
+      }
+      identifier = resolved;
+    }
+    errEl.style.display = 'none';
+    if (!identifier || !password) {
+      errEl.textContent = 'Please enter your email or username and password.';
       errEl.style.display = 'block'; return;
     }
     try {
-      await signInWithEmail(email, password);
+      await signInWithEmail(identifier, password);
       window.location.replace(returnTo);
     } catch(e) {
       errEl.textContent   = e.message || 'Sign in failed.';
@@ -349,7 +379,7 @@
     cardTitle.textContent = 'Reset Password';
     // Pre-fill email if already typed
     const existingEmail = document.getElementById('signin-email').value.trim();
-    if (existingEmail) document.getElementById('forgot-email').value = existingEmail;
+    if (existingEmail && existingEmail.includes('@')) document.getElementById('forgot-email').value = existingEmail;
   });
 
   document.getElementById('forgot-back').addEventListener('click', e => {
