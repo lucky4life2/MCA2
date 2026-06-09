@@ -19,13 +19,33 @@ const ARCH_GITHUB_USER   = 'lucky4life2';
 const ARCH_GITHUB_REPO   = 'MCA2';
 const ARCH_GITHUB_BRANCH = 'main';
 const ARCH_FOLDER        = 'archive';
+const ARCH_IMAGE_FOLDER  = `${ARCH_FOLDER}/images`;
 
 const ARCH_API  = `https://api.github.com/repos/${ARCH_GITHUB_USER}/${ARCH_GITHUB_REPO}/git/trees/${ARCH_GITHUB_BRANCH}?recursive=1`;
 const ARCH_RAW  = `https://raw.githubusercontent.com/${ARCH_GITHUB_USER}/${ARCH_GITHUB_REPO}/${ARCH_GITHUB_BRANCH}`;
 
+function getArchiveAssetPath(file) {
+  const value = (file || '').trim().replace(/\\/g, '/').replace(/^\.?\//, '');
+  if (!value) return '';
+  if (/^(https?:|data:|blob:)/i.test(value)) return value;
+  if (value.startsWith(`${ARCH_IMAGE_FOLDER}/`)) return value;
+  if (value.startsWith('images/')) return `${ARCH_FOLDER}/${value}`;
+  if (value.startsWith(`${ARCH_FOLDER}/`)) return value;
+  return `${ARCH_IMAGE_FOLDER}/${value}`;
+}
+
+function getArchiveAssetName(file) {
+  const clean = (file || '').split(/[?#]/)[0].replace(/\\/g, '/');
+  return clean.split('/').pop() || clean;
+}
+
+function isArchivePdf(file) {
+  return (file || '').split(/[?#]/)[0].toLowerCase().endsWith('.pdf');
+}
+
 /* ── AUTO-DISCOVER DOCUMENTS ────────────────────────────────── */
 async function getDocumentList() {
-  const CACHE_KEY = 'mca_archive_tree';
+  const CACHE_KEY = 'mca_archive_tree_v2';
   const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
   try {
@@ -48,7 +68,15 @@ async function getDocumentList() {
   const data = await res.json();
 
   const files = (data.tree || [])
-    .filter(f => f.type === 'blob' && f.path.startsWith(ARCH_FOLDER + '/') && f.path.endsWith('.md') && !f.path.endsWith('TEMPLATE.md') && !f.path.includes('/'))
+    .filter(f => {
+      const path = f.path || '';
+      const relativePath = path.slice(ARCH_FOLDER.length + 1);
+      return f.type === 'blob'
+        && path.startsWith(ARCH_FOLDER + '/')
+        && path.endsWith('.md')
+        && !path.endsWith('TEMPLATE.md')
+        && !relativePath.includes('/');
+    })
     .map(f => ({ path: f.path, url: `${ARCH_RAW}/${f.path}` }));
 
   try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), files })); } catch(e) {}
@@ -197,12 +225,13 @@ async function loadArchiveIndex() {
         <div class="archive-category-docs">
           ${catDocs.map(({ path, meta }) => {
             const slug = encodeURIComponent(path);
-            const isPDF = meta.image && meta.image.toLowerCase().endsWith('.pdf');
+            const assetPath = getArchiveAssetPath(meta.image);
+            const isPDF = isArchivePdf(meta.image);
             const thumb = !meta.image
               ? `<div class="archive-card-thumb archive-card-thumb-placeholder">📄</div>`
               : isPDF
               ? `<div class="archive-card-thumb archive-card-thumb-placeholder archive-card-thumb-pdf">PDF</div>`
-              : `<img src="archive/images/${meta.image}" alt="${meta.title || ''}" class="archive-card-thumb">`;
+              : `<img src="${assetPath}" alt="${meta.title || ''}" class="archive-card-thumb">`;
             return `
               <a class="archive-card" href="document.html?doc=${slug}">
                 ${thumb}
@@ -303,19 +332,21 @@ async function loadDocumentReader() {
         <div class="document-layout ${hasImage ? 'document-has-image' : ''}">
 
             ${hasImage ? (() => {
-            const isPDF = meta.image.toLowerCase().endsWith('.pdf');
+            const assetPath = getArchiveAssetPath(meta.image);
+            const assetName = getArchiveAssetName(meta.image);
+            const isPDF = isArchivePdf(meta.image);
             return isPDF
               ? `<div class="document-scan">
                   <div class="document-scan-label">Original Document</div>
                   <div class="document-pdf-wrap">
                     <div class="document-pdf-icon">📄</div>
-                    <div class="document-pdf-name">${meta.image}</div>
-                    <a href="archive/images/${meta.image}" target="_blank" rel="noopener" class="document-pdf-btn">View PDF →</a>
+                    <div class="document-pdf-name">${assetName}</div>
+                    <a href="${assetPath}" target="_blank" rel="noopener" class="document-pdf-btn">View PDF →</a>
                   </div>
                 </div>`
               : `<div class="document-scan">
                   <div class="document-scan-label">Original Document</div>
-                  <img src="archive/images/${meta.image}" alt="Original ${meta.title || 'document'}">
+                  <img src="${assetPath}" alt="Original ${meta.title || 'document'}">
                 </div>`;
           })() : ''}
 
