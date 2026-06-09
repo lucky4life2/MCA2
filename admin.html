@@ -122,6 +122,7 @@
       <button class="admin-tab" data-tab="members">Members</button>
       <button class="admin-tab" data-tab="minecraft">Minecraft</button>
       <button class="admin-tab" data-tab="shop">Shop</button>
+      <button class="admin-tab" data-tab="config">Config</button>
     </div>
 
     <!-- Overview -->
@@ -252,8 +253,87 @@
       </div>
     </div>
 
-  </div>
-</div>
+    <!-- Config tab -->
+    <div class="admin-panel" id="tab-config">
+
+      <!-- Site Config -->
+      <div class="admin-section">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Site Config</div>
+          <span id="cfg-save-badge" class="badge badge-unlinked" style="display:none;">Saved</span>
+        </div>
+        <div style="padding:1.25rem 1.5rem;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div style="grid-column:1/-1;">
+            <label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Discord Invite URL</label>
+            <input type="text" id="cfg-discord-url" class="search-input" placeholder="https://discord.gg/..." style="width:100%;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 1 Label</label>
+            <input type="text" id="cfg-stat1-label" class="search-input" placeholder="Members" style="width:100%;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 1 Value</label>
+            <input type="text" id="cfg-stat1-value" class="search-input" placeholder="60+" style="width:100%;box-sizing:border-box;">
+          </div>
+          <div style="grid-column:1/-1;">
+            <label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 1 Subtitle</label>
+            <input type="text" id="cfg-stat1-sub" class="search-input" placeholder="Across Utah..." style="width:100%;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 2 Label</label>
+            <input type="text" id="cfg-stat2-label" class="search-input" style="width:100%;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 2 Value</label>
+            <input type="text" id="cfg-stat2-value" class="search-input" style="width:100%;box-sizing:border-box;">
+          </div>
+          <div style="grid-column:1/-1;">
+            <label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 2 Subtitle</label>
+            <input type="text" id="cfg-stat2-sub" class="search-input" style="width:100%;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 3 Label</label>
+            <input type="text" id="cfg-stat3-label" class="search-input" style="width:100%;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 3 Value</label>
+            <input type="text" id="cfg-stat3-value" class="search-input" style="width:100%;box-sizing:border-box;">
+          </div>
+          <div style="grid-column:1/-1;">
+            <label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 3 Subtitle</label>
+            <input type="text" id="cfg-stat3-sub" class="search-input" style="width:100%;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 4 Label</label>
+            <input type="text" id="cfg-stat4-label" class="search-input" style="width:100%;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 4 Value</label>
+            <input type="text" id="cfg-stat4-value" class="search-input" style="width:100%;box-sizing:border-box;">
+          </div>
+          <div style="grid-column:1/-1;">
+            <label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 4 Subtitle</label>
+            <input type="text" id="cfg-stat4-sub" class="search-input" style="width:100%;box-sizing:border-box;">
+          </div>
+        </div>
+        <div style="padding:0 1.5rem 1.25rem;display:flex;gap:10px;align-items:center;">
+          <button class="btn btn-primary" id="btn-save-config" style="font-size:12px;padding:7px 16px;">Save Config</button>
+          <span id="cfg-status" style="font-size:12px;color:var(--muted);"></span>
+        </div>
+      </div>
+
+      <!-- Nations -->
+      <div class="admin-section">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Nations</div>
+          <button class="btn btn-primary" id="btn-add-nation" style="font-size:12px;padding:7px 16px;">+ Add Nation</button>
+        </div>
+        <div id="nations-admin-list" style="padding:0.5rem 0;min-height:60px;">
+          <div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">Loading nations...</div>
+        </div>
+      </div>
+
+    </div>
 
 <!-- Product add/edit modal -->
 <div class="modal-overlay" id="product-modal" style="display:none;position:fixed;inset:0;background:rgba(10,15,30,.5);z-index:400;align-items:center;justify-content:center;padding:1rem;">
@@ -352,6 +432,64 @@
     <div style="padding:0 1.5rem 1.5rem;display:flex;gap:10px;justify-content:flex-end;">
       <button id="pm-cancel" style="background:transparent;color:var(--muted);font-size:13px;font-weight:600;padding:9px 18px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">Cancel</button>
       <button id="pm-save" style="background:var(--blue);color:#fff;font-size:13px;font-weight:600;padding:9px 18px;border:none;border-radius:4px;cursor:pointer;">Save Product</button>
+    </div>
+  </div>
+</div>
+
+<!-- Nation add/edit modal -->
+<div class="modal-overlay" id="nation-modal" style="display:none;position:fixed;inset:0;background:rgba(10,15,30,.5);z-index:400;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:var(--white);border-radius:8px;border:1px solid var(--border);width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(10,15,30,.2);">
+    <div style="padding:1.5rem 1.5rem 0;display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-family:'Times New Roman',serif;font-size:1.3rem;color:var(--blue);font-weight:normal;" id="nm-title">Add Nation</div>
+      <button id="nm-close" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:20px;line-height:1;padding:4px;">✕</button>
+    </div>
+    <div style="padding:1.5rem;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <input type="hidden" id="nm-id">
+      <div style="grid-column:1/-1;">
+        <label class="form-label">Nation Name *</label>
+        <input type="text" id="nm-name" class="form-input" placeholder="e.g. The Republic of Ireland">
+      </div>
+      <div>
+        <label class="form-label">Leader(s)</label>
+        <input type="text" id="nm-leader" class="form-input" placeholder="e.g. RusticSheet2330">
+      </div>
+      <div>
+        <label class="form-label">Capital</label>
+        <input type="text" id="nm-capital" class="form-input" placeholder="e.g. County Rector">
+      </div>
+      <div>
+        <label class="form-label">Government</label>
+        <input type="text" id="nm-government" class="form-input" placeholder="e.g. Republic">
+      </div>
+      <div>
+        <label class="form-label">Founded (YYYY-MM-DD)</label>
+        <input type="text" id="nm-founded" class="form-input" placeholder="e.g. 2025-08-01">
+      </div>
+      <div>
+        <label class="form-label">Population</label>
+        <input type="text" id="nm-population" class="form-input" placeholder="e.g. 7">
+      </div>
+      <div>
+        <label class="form-label">Territory</label>
+        <input type="text" id="nm-territory" class="form-input" placeholder="e.g. Scotland">
+      </div>
+      <div>
+        <label class="form-label">Status</label>
+        <input type="text" id="nm-status" class="form-input" placeholder="e.g. Active">
+      </div>
+      <div>
+        <label class="form-label">Flag filename</label>
+        <input type="text" id="nm-flag" class="form-input" placeholder="e.g. flag-Iceridge.png">
+      </div>
+      <div style="grid-column:1/-1;">
+        <label class="form-label">Description (optional)</label>
+        <textarea id="nm-body" class="form-input" rows="3" placeholder="Additional info about the nation..." style="resize:vertical;"></textarea>
+      </div>
+    </div>
+    <div id="nm-error" style="font-size:13px;color:#c0392b;padding:0 1.5rem 0.5rem;display:none;"></div>
+    <div style="padding:0 1.5rem 1.5rem;display:flex;gap:10px;justify-content:flex-end;">
+      <button id="nm-cancel" style="background:transparent;color:var(--muted);font-size:13px;font-weight:600;padding:9px 18px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">Cancel</button>
+      <button id="nm-save" style="background:var(--blue);color:#fff;font-size:13px;font-weight:600;padding:9px 18px;border:none;border-radius:4px;cursor:pointer;">Save Nation</button>
     </div>
   </div>
 </div>
@@ -758,6 +896,7 @@ document.querySelectorAll('.admin-tab').forEach(tab => {
     tab.classList.add('active');
     document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
     if (tab.dataset.tab === 'shop') loadAdminProducts();
+    if (tab.dataset.tab === 'config') loadConfigTab();
   });
 });
 
@@ -767,6 +906,140 @@ if (_hashTab) {
   const _hashBtn = document.querySelector(`.admin-tab[data-tab="${_hashTab}"]`);
   if (_hashBtn) _hashBtn.click();
 }
+
+// ── Config tab ────────────────────────────────────────────────
+async function loadConfigTab() {
+  await Promise.all([loadSiteConfig(), loadNationsAdmin()]);
+}
+
+async function loadSiteConfig() {
+  const { data } = await supabase.from('settings').select('value').eq('key', 'site_config').single();
+  let cfg = {};
+  if (data?.value) { try { cfg = JSON.parse(data.value); } catch(e) {} }
+  document.getElementById('cfg-discord-url').value = cfg.discord_url || '';
+  document.getElementById('cfg-stat1-label').value = cfg.stat1_label || '';
+  document.getElementById('cfg-stat1-value').value = cfg.stat1_value || '';
+  document.getElementById('cfg-stat1-sub').value   = cfg.stat1_sub   || '';
+  document.getElementById('cfg-stat2-label').value = cfg.stat2_label || '';
+  document.getElementById('cfg-stat2-value').value = cfg.stat2_value || '';
+  document.getElementById('cfg-stat2-sub').value   = cfg.stat2_sub   || '';
+  document.getElementById('cfg-stat3-label').value = cfg.stat3_label || '';
+  document.getElementById('cfg-stat3-value').value = cfg.stat3_value || '';
+  document.getElementById('cfg-stat3-sub').value   = cfg.stat3_sub   || '';
+  document.getElementById('cfg-stat4-label').value = cfg.stat4_label || '';
+  document.getElementById('cfg-stat4-value').value = cfg.stat4_value || '';
+  document.getElementById('cfg-stat4-sub').value   = cfg.stat4_sub   || '';
+}
+
+document.getElementById('btn-save-config').addEventListener('click', async () => {
+  const statusEl = document.getElementById('cfg-status');
+  statusEl.textContent = 'Saving...';
+  const cfg = {
+    discord_url:  document.getElementById('cfg-discord-url').value.trim(),
+    stat1_label:  document.getElementById('cfg-stat1-label').value.trim(),
+    stat1_value:  document.getElementById('cfg-stat1-value').value.trim(),
+    stat1_sub:    document.getElementById('cfg-stat1-sub').value.trim(),
+    stat2_label:  document.getElementById('cfg-stat2-label').value.trim(),
+    stat2_value:  document.getElementById('cfg-stat2-value').value.trim(),
+    stat2_sub:    document.getElementById('cfg-stat2-sub').value.trim(),
+    stat3_label:  document.getElementById('cfg-stat3-label').value.trim(),
+    stat3_value:  document.getElementById('cfg-stat3-value').value.trim(),
+    stat3_sub:    document.getElementById('cfg-stat3-sub').value.trim(),
+    stat4_label:  document.getElementById('cfg-stat4-label').value.trim(),
+    stat4_value:  document.getElementById('cfg-stat4-value').value.trim(),
+    stat4_sub:    document.getElementById('cfg-stat4-sub').value.trim(),
+  };
+  const { error } = await supabase.from('settings').upsert({ key: 'site_config', value: JSON.stringify(cfg) }, { onConflict: 'key' });
+  if (error) { statusEl.textContent = 'Error: ' + error.message; }
+  else { statusEl.textContent = '✓ Saved'; setTimeout(() => { statusEl.textContent = ''; }, 3000); }
+});
+
+// ── Nations admin ─────────────────────────────────────────────
+let _nationsAdmin = [];
+
+async function loadNationsAdmin() {
+  const el = document.getElementById('nations-admin-list');
+  const { data, error } = await supabase.from('nations').select('*').order('sort_order', { ascending: true });
+  if (error) { el.innerHTML = `<div style="padding:1rem;color:#c0392b;font-size:13px;">Error: ${error.message}</div>`; return; }
+  _nationsAdmin = data || [];
+  renderNationsAdmin();
+}
+
+function renderNationsAdmin() {
+  const el = document.getElementById('nations-admin-list');
+  if (!_nationsAdmin.length) {
+    el.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">No nations yet.</div>`;
+    return;
+  }
+  el.innerHTML = _nationsAdmin.map(n => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 1.5rem;border-bottom:1px solid var(--border);">
+      <div>
+        <div style="font-weight:600;font-size:14px;">${n.name}</div>
+        <div style="font-size:12px;color:var(--muted);">${[n.government, n.leader ? 'Led by ' + n.leader : '', n.founded].filter(Boolean).join(' · ')}</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-shrink:0;">
+        <button class="btn btn-outline" style="font-size:11px;padding:5px 12px;" onclick="openNationModal('${n.id}')">Edit</button>
+        <button class="btn btn-danger" style="font-size:11px;padding:5px 12px;" onclick="deleteNation('${n.id}')">Delete</button>
+      </div>
+    </div>`).join('');
+}
+
+document.getElementById('btn-add-nation').addEventListener('click', () => openNationModal(null));
+
+window.openNationModal = (id) => {
+  const n = id ? _nationsAdmin.find(x => x.id === id) : null;
+  document.getElementById('nm-id').value         = n?.id || '';
+  document.getElementById('nm-name').value       = n?.name || '';
+  document.getElementById('nm-leader').value     = n?.leader || '';
+  document.getElementById('nm-capital').value    = n?.capital || '';
+  document.getElementById('nm-government').value = n?.government || '';
+  document.getElementById('nm-founded').value    = n?.founded || '';
+  document.getElementById('nm-population').value = n?.population || '';
+  document.getElementById('nm-territory').value  = n?.territory || '';
+  document.getElementById('nm-status').value     = n?.status || '';
+  document.getElementById('nm-flag').value       = n?.flag || '';
+  document.getElementById('nm-body').value       = n?.body || '';
+  document.getElementById('nm-error').style.display = 'none';
+  document.getElementById('nm-title').textContent = n ? 'Edit Nation' : 'Add Nation';
+  document.getElementById('nation-modal').style.display = 'flex';
+};
+
+function closeNationModal() { document.getElementById('nation-modal').style.display = 'none'; }
+document.getElementById('nm-close').addEventListener('click', closeNationModal);
+document.getElementById('nm-cancel').addEventListener('click', closeNationModal);
+
+document.getElementById('nm-save').addEventListener('click', async () => {
+  const name = document.getElementById('nm-name').value.trim();
+  if (!name) { const e = document.getElementById('nm-error'); e.textContent = 'Nation name is required.'; e.style.display = 'block'; return; }
+  const id = document.getElementById('nm-id').value;
+  const payload = {
+    name,
+    leader:     document.getElementById('nm-leader').value.trim()     || null,
+    capital:    document.getElementById('nm-capital').value.trim()    || null,
+    government: document.getElementById('nm-government').value.trim() || null,
+    founded:    document.getElementById('nm-founded').value.trim()    || null,
+    population: document.getElementById('nm-population').value.trim() || null,
+    territory:  document.getElementById('nm-territory').value.trim()  || null,
+    status:     document.getElementById('nm-status').value.trim()     || null,
+    flag:       document.getElementById('nm-flag').value.trim()       || null,
+    body:       document.getElementById('nm-body').value.trim()       || null,
+  };
+  let error;
+  if (id) {
+    ({ error } = await supabase.from('nations').update(payload).eq('id', id));
+  } else {
+    ({ error } = await supabase.from('nations').insert(payload));
+  }
+  if (error) { const e = document.getElementById('nm-error'); e.textContent = error.message; e.style.display = 'block'; return; }
+  closeNationModal();
+  await loadNationsAdmin();
+});
+
+window.deleteNation = async (id) => {
+  if (!confirm('Delete this nation? This cannot be undone.')) return;
+  await supabase.from('nations').delete().eq('id', id);
+  await loadNationsAdmin();
+};
 
 init();
 </script>

@@ -1,55 +1,7 @@
-/* nations.js — loads and renders nations from nations.md on GitHub */
+/* nations.js — loads and renders nations from Supabase */
 
-const NATIONS_GITHUB_USER   = 'lucky4life2';
-const NATIONS_GITHUB_REPO   = 'MCA2';
-const NATIONS_GITHUB_BRANCH = 'main';
-const NATIONS_RAW = `https://raw.githubusercontent.com/${NATIONS_GITHUB_USER}/${NATIONS_GITHUB_REPO}/${NATIONS_GITHUB_BRANCH}/nations.md`;
-
-/* ── PARSER ─────────────────────────────────────────────────── */
-function parseNations(raw) {
-  raw = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const nations = [];
-  const blocks  = raw.split(/\n(?=##\s)/);
-
-  blocks.forEach(block => {
-    block = block.trim();
-    if (!block.startsWith('##')) return;
-
-    const lines    = block.split('\n');
-    const name     = lines[0].replace(/^##\s*/, '').trim();
-    const nation   = { name, fields: [], body: '' };
-    let bodyLines  = [];
-    let inBody     = false;
-
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i];
-      if (!inBody) {
-        const colon = line.indexOf(':');
-        if (colon > 0 && !line.startsWith('-') && !line.startsWith('#')) {
-          const key   = line.slice(0, colon).trim();
-          const value = line.slice(colon + 1).trim();
-          if (key === 'flag')        { nation.flag = value; continue; }
-          if (key === 'leader')      { nation.leader = value; continue; }
-          if (key === 'capital')     { nation.capital = value; continue; }
-          if (key === 'government')  { nation.government = value; continue; }
-          if (key === 'founded')     { nation.founded = value; continue; }
-          if (key === 'population')  { nation.population = value; continue; }
-          if (key === 'territory')   { nation.territory = value; continue; }
-          if (key === 'status')      { nation.status = value; continue; }
-          // Any other key: value pairs show as info fields
-          nation.fields.push({ key, value });
-        } else {
-          inBody = true;
-        }
-      }
-      if (inBody) bodyLines.push(line);
-    }
-    nation.body = bodyLines.join('\n').trim();
-    nations.push(nation);
-  });
-
-  return nations;
-}
+const SUPABASE_URL_N  = 'https://hjaywokvgdzhvsoygctc.supabase.co';
+const SUPABASE_ANON_N = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
 
 /* ── MARKDOWN RENDERER (simple) ─────────────────────────────── */
 function renderMd(text) {
@@ -157,10 +109,25 @@ function applyFlagDetailClass(img) {
   if (!grid) return;
 
   try {
-    const res = await fetch(NATIONS_RAW + '?nocache=' + Date.now());
+    const res = await fetch(
+      `${SUPABASE_URL_N}/rest/v1/nations?select=*&order=sort_order.asc`,
+      { headers: { 'apikey': SUPABASE_ANON_N, 'Authorization': `Bearer ${SUPABASE_ANON_N}` } }
+    );
     if (!res.ok) throw new Error('fetch failed');
-    const raw  = await res.text();
-    _nations   = parseNations(raw);
+    const rows = await res.json();
+    _nations = rows.map(r => ({
+      name:       r.name,
+      leader:     r.leader     || '',
+      capital:    r.capital    || '',
+      government: r.government || '',
+      founded:    r.founded    || '',
+      population: r.population || '',
+      territory:  r.territory  || '',
+      status:     r.status     || '',
+      flag:       r.flag       || '',
+      body:       r.body       || '',
+      fields:     [],
+    }));
     renderGrid(_nations);
   } catch(e) {
     grid.innerHTML = '<p style="grid-column:1/-1;color:var(--mid);font-size:14px;">Could not load nations. Check back soon.</p>';

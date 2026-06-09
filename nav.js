@@ -7,23 +7,26 @@
 
 
 
-// Discord URL — loaded from config.md on GitHub, falls back to hardcoded value
+// Discord URL and site config — loaded from Supabase settings, falls back to hardcoded value
 let DISCORD_URL = 'https://discord.gg/hZrt28vG29';
+let SITE_CONFIG = {};
 let _configResolve;
 const _configReady = new Promise(r => { _configResolve = r; });
 
 (async function loadConfig() {
-  const RAW = 'https://raw.githubusercontent.com/lucky4life2/MCA2/main/config.md';
+  const SUPABASE_URL_CFG  = 'https://hjaywokvgdzhvsoygctc.supabase.co';
+  const SUPABASE_ANON_CFG = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
   try {
-    const res = await fetch(RAW + '?nocache=' + Date.now());
+    const res = await fetch(
+      `${SUPABASE_URL_CFG}/rest/v1/settings?key=eq.site_config&select=value`,
+      { headers: { 'apikey': SUPABASE_ANON_CFG, 'Authorization': `Bearer ${SUPABASE_ANON_CFG}` } }
+    );
     if (res.ok) {
-      const cfg = {};
-      (await res.text()).split('\n').forEach(line => {
-        if (line.startsWith('#') || !line.trim()) return;
-        const c = line.indexOf(':');
-        if (c > 0) cfg[line.slice(0,c).trim()] = line.slice(c+1).trim();
-      });
-      if (cfg.discord_url) DISCORD_URL = cfg.discord_url;
+      const rows = await res.json();
+      if (rows.length) {
+        try { SITE_CONFIG = JSON.parse(rows[0].value); } catch(e) {}
+        if (SITE_CONFIG.discord_url) DISCORD_URL = SITE_CONFIG.discord_url;
+      }
     }
   } catch(e) {}
   _configResolve();
