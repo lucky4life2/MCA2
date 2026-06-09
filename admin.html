@@ -201,6 +201,7 @@
                 <th>Name</th>
                 <th>Email</th>
                 <th>Role</th>
+                <th>Account</th>
                 <th>MC Status</th>
                 <th>Actions</th>
               </tr>
@@ -378,9 +379,21 @@ async function init() {
   checkPluginBridge();
 }
 
+let _authUsers = {}; // keyed by user id
+
 async function loadAll() {
   const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
   _allMembers = data || [];
+
+  // Fetch auth user info (email_confirmed, providers) via RPC
+  try {
+    const { data: authData } = await supabase.rpc('get_auth_users_info');
+    if (authData) {
+      _authUsers = {};
+      authData.forEach(u => { _authUsers[u.id] = u; });
+    }
+  } catch(e) { console.warn('Could not load auth user info:', e.message); }
+
   renderStats();
   renderMembers(_allMembers);
   renderMinecraftLists();
@@ -454,7 +467,7 @@ function renderMembers(members) {
   document.getElementById('member-count-badge').textContent = members.length;
   const tbody = document.getElementById('members-tbody');
   if (!members.length) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--muted);">No members found.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--muted);">No members found.</td></tr>`;
     return;
   }
   tbody.innerHTML = members.map(m => {
@@ -478,19 +491,46 @@ function renderMembers(members) {
                <option value="member" ${m.role === 'member' ? 'selected' : ''}>Member</option>
                <option value="admin"  ${m.role === 'admin'  ? 'selected' : ''}>Admin</option>
              </select>`;
+
+    // Account verification badges
+    const auth = _authUsers[m.id] || {};
+    const emailVerified = auth.email_confirmed_at;
+    const hasDiscord = (auth.providers || []).includes('discord');
+    const emailBadge = emailVerified
+      ? `<span class="badge badge-verified" title="Email verified ${new Date(emailVerified).toLocaleDateString()}">✉ Verified</span>`
+      : `<span class="badge badge-pending" title="Email not verified">✉ Unverified</span>`;
+    const discordBadge = hasDiscord
+      ? `<span class="badge badge-verified" style="background:#5865F2;color:#fff;" title="Discord linked">Discord</span>`
+      : `<span class="badge badge-unlinked" title="No Discord">No Discord</span>`;
+
+    const revokeEmailBtn = emailVerified
+      ? `<button class="btn btn-danger" style="font-size:11px;padding:4px 10px;" onclick="revokeEmail('${m.id}')">Revoke Email</button>`
+      : '';
+    const revokeDiscordBtn = hasDiscord
+      ? `<button class="btn btn-danger" style="font-size:11px;padding:4px 10px;" onclick="revokeDiscord('${m.id}')">Revoke Discord</button>`
+      : '';
+
     return `<tr>
       <td><div class="member-name">${name}</div>${m.username && m.display_name ? `<div class="member-email">@${m.username}</div>` : ''}</td>
       <td><div class="member-email">${m.email || '—'}</div></td>
       <td>${roleCell}</td>
+      <td style="white-space:nowrap;">
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          ${emailBadge}
+          ${discordBadge}
+        </div>
+      </td>
       <td>${mcBadge}</td>
       <td>
-        <div class="btn-actions">
+        <div class="btn-actions" style="flex-wrap:wrap;gap:4px;">
           ${m.minecraft_username && !m.minecraft_verified
             ? `<button class="btn btn-success" onclick="approveMC('${m.id}')">Approve MC</button>`
             : ''}
           ${m.minecraft_verified
-            ? `<button class="btn btn-danger" onclick="revokeMC('${m.id}')">Revoke</button>`
+            ? `<button class="btn btn-danger" onclick="revokeMC('${m.id}')">Revoke MC</button>`
             : ''}
+          ${revokeEmailBtn}
+          ${revokeDiscordBtn}
         </div>
       </td>
     </tr>`;
@@ -537,6 +577,20 @@ function verifyCard(m, isVerified) {
     </div>
   </div>`;
 }
+
+window.revokeEmail = async (id) => {
+  if (!confirm('Revoke email verification for this user? They will need to verify again.')) return;
+  const { error } = await supabase.rpc('revoke_email_verification', { user_id: id });
+  if (error) { alert('Error: ' + error.message); return; }
+  await loadAll();
+};
+
+window.revokeDiscord = async (id) => {
+  if (!confirm('Unlink Discord from this account?')) return;
+  const { error } = await supabase.rpc('revoke_discord_identity', { user_id: id });
+  if (error) { alert('Error: ' + error.message); return; }
+  await loadAll();
+};
 
 window.approveMC = async (id) => {
   await supabase.from('profiles').update({ minecraft_verified: true }).eq('id', id);
