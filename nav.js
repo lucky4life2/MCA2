@@ -490,7 +490,7 @@ async function initNavAuth() {
       setSignedOut();
     }
     mod.supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
         if (session?.user) await setSignedIn(session.user);
         else setSignedOut();
       } else if (event === 'SIGNED_OUT') {
