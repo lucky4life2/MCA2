@@ -408,6 +408,17 @@
 
   elLoading.style.display = 'flex'; elShop.style.display = 'none';
 
+  // Hard fallback — if nothing has initialised after 6s, force the shop visible
+  setTimeout(() => {
+    if (elLoading.style.display !== 'none') {
+      _initialized = true;
+      elLoading.style.display = 'none';
+      elShop.style.display = 'block';
+      loadProducts();
+      updateFloatCart();
+    }
+  }, 6000);
+
   supabase.auth.onAuthStateChange(async (event, session) => {
     if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && !_initialized) {
       _initialized = true;
