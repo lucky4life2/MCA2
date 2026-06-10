@@ -262,6 +262,15 @@
   let _isAdmin = false, _isLoggedIn = false, _userId = null, _initialized = false;
   let _products = [];
 
+  // Helper: race any supabase call against a timeout so DNS/network issues
+  // don't leave the page hanging forever.
+  function withTimeout(promise, ms = 8000) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out — having trouble reaching the server.')), ms))
+    ]);
+  }
+
   // ── Cart
   function cartKey() { return 'mca_cart_' + _userId; }
   function getCart() { if (!_userId) return []; try { return JSON.parse(localStorage.getItem(cartKey())) || []; } catch(e) { return []; } }
@@ -403,7 +412,7 @@
     // Resolve admin status in background, then re-apply state
     if (_isLoggedIn) {
       try {
-        const { data } = await supabase.from('profiles').select('role').eq('id', _userId).single();
+        const { data } = await withTimeout(supabase.from('profiles').select('role').eq('id', _userId).single(), 6000);
         const role = data?.role;
         _isAdmin = role === 'admin' || role === 'super_admin' || role === 'owner';
       } catch(e) { _isAdmin = false; }
@@ -444,10 +453,17 @@
   // Fallback: INITIAL_SESSION may have fired before this listener registered
   // (nav.js initialises the Supabase client first). Init manually if needed.
   if (!_initialized) {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!_initialized) {
-      _initialized = true;
-      await init(session?.user || null, session?.access_token || null);
+    try {
+      const { data: { session } } = await withTimeout(supabase.auth.getSession(), 6000);
+      if (!_initialized) {
+        _initialized = true;
+        await init(session?.user || null, session?.access_token || null);
+      }
+    } catch(e) {
+      if (!_initialized) {
+        _initialized = true;
+        await init(null, null);
+      }
     }
   }
 
@@ -459,7 +475,13 @@
     if (p) openDetail(p);
   };
   async function loadProducts() {
-    const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+    let data, error;
+    try {
+      ({ data, error } = await withTimeout(supabase.from('products').select('*').order('created_at', { ascending: false }), 8000));
+    } catch(e) {
+      elGrid.innerHTML = `<div class="product-empty"><div class="product-empty-icon">⚠️</div><p>${e.message || 'Failed to load products.'}</p><button class="btn-add-to-cart" style="margin-top:12px;max-width:160px;" onclick="loadProducts()">Retry</button></div>`;
+      return;
+    }
     if (error) { elGrid.innerHTML = `<div class="product-empty"><p>Error: ${error.message}</p></div>`; return; }
     _products = data || [];
     const visible = _isAdmin ? _products : _products.filter(p => p.active);
@@ -492,6 +514,7 @@
       </div>`;
     }).join('');
   }
+  window.loadProducts = loadProducts;
 
 </script>
 </body>

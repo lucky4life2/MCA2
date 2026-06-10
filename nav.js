@@ -475,14 +475,24 @@ async function initNavAuth() {
     });
   }
 
+  let mod;
   try {
-    const mod = await import('./supabase.js');
-    const { data: { user } } = await mod.supabase.auth.getUser();
+    mod = await import('./supabase.js');
+    const { data: { user } } = await Promise.race([
+      mod.supabase.auth.getUser(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('auth timeout')), 6000))
+    ]);
     if (user) {
       await setSignedIn(user);
     } else {
       setSignedOut();
     }
+  } catch(e) {
+    setSignedOut();
+  }
+
+  try {
+    if (!mod) mod = await import('./supabase.js');
     mod.supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
         if (session?.user) await setSignedIn(session.user);
@@ -491,8 +501,5 @@ async function initNavAuth() {
         setSignedOut();
       }
     });
-
-  } catch(e) {
-    setSignedOut();
-  }
+  } catch(e) {}
 }
