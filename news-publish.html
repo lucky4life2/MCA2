@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>News Publishing — MCA</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/x-icon" href="images/icon.ico">
+  <style>
+    /* ── Layout ─────────────────────────────── */
+    .np-wrap    { max-width: 960px; margin: 0 auto; padding: 3.5rem 2rem 6rem; }
+    .np-hero    { border-bottom: 1px solid var(--border); padding-bottom: 2rem; margin-bottom: 2.5rem; }
+    .np-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: var(--green); margin-bottom: .75rem; display: flex; align-items: center; gap: 10px; }
+    .np-eyebrow::after { content: ''; display: block; height: 1px; width: 40px; background: var(--green); opacity: .6; }
+    .np-hero h1 { font-family: 'Times New Roman', serif; font-size: clamp(1.75rem, 4vw, 2.5rem); font-weight: 700; color: var(--blue); line-height: 1.15; }
+    .np-hero-sub { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+    /* ── Two-panel split ────────────────────── */
+    .np-split { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    @media (max-width: 720px) { .np-split { grid-template-columns: 1fr; } }
+
+    /* ── Panel/card ────────────────────────── */
+    .np-panel { border: 1px solid var(--border); border-radius: 6px; background: var(--white); overflow: hidden; }
+    .np-panel-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .np-panel-title { font-family: 'Times New Roman', serif; font-size: 1.1rem; color: var(--blue); font-weight: normal; }
+    .np-panel-body { padding: 1.5rem; }
+
+    /* ── Form ─────────────────────────────── */
+    .form-group { margin-bottom: 1.1rem; }
+    .form-label { display: block; font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+    .form-input { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 4px; font-family: 'Open Sans', sans-serif; font-size: 13px; background: var(--white); color: var(--black); box-sizing: border-box; transition: border-color .15s; }
+    .form-input:focus { outline: none; border-color: var(--blue); }
+    select.form-input { cursor: pointer; }
+    textarea.form-input { resize: vertical; line-height: 1.6; }
+    .form-hint { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+
+    /* ── Editor area ──────────────────────── */
+    .editor-wrap { position: relative; }
+    #np-body { font-family: 'Courier New', monospace; font-size: 13px; min-height: 320px; line-height: 1.7; }
+    .editor-toolbar { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
+    .tb-btn { font-size: 11px; font-weight: 600; padding: 4px 9px; border: 1px solid var(--border); background: var(--white); color: var(--black); border-radius: 3px; cursor: pointer; transition: background .1s; font-family: monospace; }
+    .tb-btn:hover { background: var(--bg); }
+
+    /* ── Preview ──────────────────────────── */
+    #np-preview { min-height: 200px; font-size: 14px; line-height: 1.85; color: var(--black); }
+    #np-preview h1,#np-preview h2,#np-preview h3,#np-preview h4 { font-family: 'Times New Roman', serif; color: var(--blue); margin: 1.5em 0 .5em; }
+    #np-preview p { margin: 0 0 1em; }
+    #np-preview ul,#np-preview ol { padding-left: 1.5em; margin: 0 0 1em; }
+    #np-preview li { margin: .25em 0; }
+    #np-preview blockquote { border-left: 3px solid var(--green); margin: 1em 0; padding: .5em 1em; color: var(--muted); font-style: italic; }
+    #np-preview code { font-family: monospace; font-size: .9em; background: var(--bg); padding: 1px 4px; border-radius: 2px; }
+    #np-preview a { color: var(--blue); }
+    #np-preview hr { border: none; border-top: 1px solid var(--border); margin: 1.5em 0; }
+    #np-preview strong { font-weight: 700; }
+    #np-preview em { font-style: italic; }
+    #np-preview img { max-width: 100%; border-radius: 4px; display: block; margin: .75em 0; }
+
+    /* ── Article list ──────────────────────── */
+    .article-row { padding: 12px 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+    .article-row:last-child { border-bottom: none; }
+    .article-row-info { flex: 1; min-width: 0; }
+    .article-row-title { font-weight: 600; font-size: 13px; color: var(--black); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .article-row-meta  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .status-pip { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 4px; flex-shrink: 0; }
+    .status-pip.published { background: #2d7d2f; }
+    .status-pip.draft     { background: #b07d00; }
+    .status-pip.archived  { background: var(--muted); }
+
+    /* ── Buttons ───────────────────────────── */
+    .btn { font-size: 12px; font-weight: 600; padding: 8px 16px; border-radius: 4px; cursor: pointer; transition: background .15s, color .15s; border: none; white-space: nowrap; }
+    .btn-primary  { background: var(--blue); color: #fff; }
+    .btn-primary:hover  { background: var(--blue-dark); }
+    .btn-success  { background: #2d7d2f; color: #fff; }
+    .btn-success:hover  { background: #235e25; }
+    .btn-outline  { background: transparent; color: var(--blue); border: 1px solid var(--border); }
+    .btn-outline:hover  { background: var(--blue); color: #fff; }
+    .btn-ghost   { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .btn-ghost:hover   { background: var(--bg); color: var(--black); }
+    .btn-danger  { background: transparent; color: #c0392b; border: 1px solid var(--border); }
+    .btn-danger:hover  { background: #c0392b; color: #fff; }
+    .btn-sm { font-size: 10px; padding: 4px 9px; }
+    .btn-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+    /* ── States ────────────────────────────── */
+    .np-loading { display: flex; align-items: center; justify-content: center; min-height: 60vh; flex-direction: column; gap: 12px; color: var(--muted); font-size: 14px; }
+    .np-spinner { width: 26px; height: 26px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .np-denied { text-align: center; padding: 6rem 2rem; }
+    .np-denied h2 { font-family: 'Times New Roman', serif; font-size: 1.6rem; color: var(--blue); font-weight: normal; margin-bottom: .75rem; }
+    .np-denied p { font-size: 14px; color: var(--muted); max-width: 400px; margin: 0 auto; }
+
+    /* ── Toast ─────────────────────────────── */
+    #np-toast { position: fixed; bottom: 2rem; right: 2rem; background: var(--blue); color: #fff; padding: 12px 20px; border-radius: 6px; font-size: 13px; font-weight: 600; box-shadow: 0 8px 24px rgba(10,15,30,.2); transform: translateY(20px); opacity: 0; transition: all .25s; pointer-events: none; z-index: 600; max-width: 320px; }
+    #np-toast.show { transform: translateY(0); opacity: 1; }
+    #np-toast.error { background: #c0392b; }
+
+    /* ── Char counter ─────────────────────── */
+    .char-count { font-size: 10px; color: var(--muted); text-align: right; margin-top: 3px; }
+
+    /* ── Preview tabs ─────────────────────── */
+    .preview-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+    .preview-tab { padding: 8px 16px; font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; color: var(--muted); margin-bottom: -1px; transition: all .15s; }
+    .preview-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+  </style>
+</head>
+<body>
+<script src="nav.js"></script>
+
+<div id="np-loading" class="np-loading">
+  <div class="np-spinner"></div>
+  <span>Checking access...</span>
+</div>
+
+<div id="np-denied" class="np-wrap np-denied" style="display:none;">
+  <h2>Access Denied</h2>
+  <p>You need the <strong>News Team</strong> role to access the publishing dashboard. Contact an admin to get access.</p>
+  <div style="margin-top:1.5rem;"><a href="index.html" style="font-size:13px;color:var(--blue);">← Back to Home</a></div>
+</div>
+
+<div id="np-main" class="np-wrap" style="display:none;">
+
+  <!-- Hero -->
+  <div class="np-hero">
+    <div class="np-eyebrow">News Publishing</div>
+    <h1>News Dashboard</h1>
+    <p class="np-hero-sub" id="np-author-meta"></p>
+  </div>
+
+  <!-- Top row: editor + my articles -->
+  <div class="np-split" style="margin-bottom:1.5rem;">
+
+    <!-- ── Editor ────────────────────────────── -->
+    <div class="np-panel" style="grid-column:1/-1;">
+      <div class="np-panel-header">
+        <div class="np-panel-title" id="editor-heading">New Article</div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" id="btn-clear-editor">Clear</button>
+          <button class="btn btn-outline" id="btn-save-draft">Save Draft</button>
+          <button class="btn btn-success" id="btn-publish">Publish Now</button>
+        </div>
+      </div>
+      <div class="np-panel-body">
+        <input type="hidden" id="np-editing-id">
+
+        <div class="form-group">
+          <label class="form-label">Headline *</label>
+          <input type="text" id="np-title" class="form-input" placeholder="Write a clear, compelling headline…">
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group">
+            <label class="form-label">Category</label>
+            <input type="text" id="np-category" class="form-input" list="np-category-list" placeholder="e.g. Announcements">
+            <datalist id="np-category-list">
+              <option value="Announcements">
+              <option value="Events">
+              <option value="Government">
+              <option value="Community">
+              <option value="Update">
+              <option value="General">
+            </datalist>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Hero Image URL (optional)</label>
+            <input type="text" id="np-image" class="form-input" placeholder="https://…">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Summary / Excerpt</label>
+          <textarea id="np-summary" class="form-input" rows="2" placeholder="A short description shown in article listings (1–2 sentences)…"></textarea>
+          <div class="char-count" id="np-summary-count">0 / 280</div>
+        </div>
+
+        <!-- Write / Preview tabs -->
+        <div class="preview-tabs">
+          <button class="preview-tab active" id="tab-write" data-mode="write">Write</button>
+          <button class="preview-tab" id="tab-preview" data-mode="preview">Preview</button>
+        </div>
+
+        <!-- Toolbar (write mode only) -->
+        <div class="editor-toolbar" id="np-toolbar">
+          <button class="tb-btn" data-wrap="**" title="Bold">B</button>
+          <button class="tb-btn" data-wrap="*"  title="Italic"><em>I</em></button>
+          <button class="tb-btn" data-prefix="## "  title="Heading">H2</button>
+          <button class="tb-btn" data-prefix="### " title="Sub-heading">H3</button>
+          <button class="tb-btn" data-prefix="- "   title="List item">• List</button>
+          <button class="tb-btn" data-prefix="> "   title="Quote">❝ Quote</button>
+          <button class="tb-btn" data-wrap="`"      title="Code">Code</button>
+          <button class="tb-btn" data-link         title="Insert link">Link</button>
+          <button class="tb-btn" data-prefix="---" title="Divider">—</button>
+        </div>
+
+        <!-- Body textarea -->
+        <div class="editor-wrap form-group" id="np-write-area">
+          <textarea id="np-body" class="form-input" rows="16"
+            placeholder="Write your article in Markdown…
+
+## Section heading
+
+Regular paragraph text.
+
+**Bold text**, *italic text*, and [links](https://example.com).
+
+- Bullet list item
+- Another item
+
+> A blockquote for emphasis."></textarea>
+          <div class="char-count" id="np-body-count">0 chars</div>
+        </div>
+
+        <!-- Preview area -->
+        <div id="np-preview-area" style="display:none;">
+          <div id="np-preview" style="border:1px solid var(--border);border-radius:4px;padding:1.25rem;background:var(--bg);min-height:200px;"></div>
+        </div>
+
+      </div>
+    </div><!-- /editor -->
+  </div><!-- /top row -->
+
+  <!-- Bottom row: my articles + all articles -->
+  <div class="np-split">
+
+    <!-- My articles -->
+    <div class="np-panel">
+      <div class="np-panel-header">
+        <div class="np-panel-title">My Articles</div>
+        <span id="my-count" style="font-size:11px;color:var(--muted);"></span>
+      </div>
+      <div id="my-articles-list">
+        <div style="padding:1.5rem;text-align:center;color:var(--muted);font-size:13px;">Loading…</div>
+      </div>
+    </div>
+
+    <!-- All published (read-only overview) -->
+    <div class="np-panel">
+      <div class="np-panel-header">
+        <div class="np-panel-title">All Published</div>
+        <span id="all-count" style="font-size:11px;color:var(--muted);"></span>
+      </div>
+      <div id="all-articles-list">
+        <div style="padding:1.5rem;text-align:center;color:var(--muted);font-size:13px;">Loading…</div>
+      </div>
+    </div>
+
+  </div>
+
+</div><!-- /np-main -->
+
+<!-- Toast notification -->
+<div id="np-toast"></div>
+
+<script type="module">
+import { supabase } from './supabase.js';
+
+// ── Markdown renderer (mirrors news.js) ──────────────────────
+function renderMarkdown(md) {
+  if (!md) return '<em style="color:var(--muted);">Nothing to preview yet.</em>';
+  let html = md
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/^#### (.+)$/gm,'<h4>$1</h4>').replace(/^### (.+)$/gm,'<h3>$1</h3>')
+    .replace(/^## (.+)$/gm,'<h2>$1</h2>').replace(/^# (.+)$/gm,'<h1>$1</h1>')
+    .replace(/^---+$/gm,'<hr>')
+    .replace(/\*\*\*(.+?)\*\*\*/g,'<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/_(.+?)_/g,'<em>$1</em>').replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g,'<img src="$2" alt="$1">')
+    .replace(/^> (.+)$/gm,'<blockquote>$1</blockquote>');
+  html = html.replace(/(^[-*] .+\n?)+/gm, m => {
+    const items = m.trim().split('\n').map(l=>`<li>${l.replace(/^[-*] /,'')}</li>`).join('');
+    return `<ul>${items}</ul>`;
+  });
+  html = html.replace(/(^\d+\. .+\n?)+/gm, m => {
+    const items = m.trim().split('\n').map(l=>`<li>${l.replace(/^\d+\. /,'')}</li>`).join('');
+    return `<ol>${items}</ol>`;
+  });
+  html = html.split(/\n{2,}/).map(block => {
+    block = block.trim(); if (!block) return '';
+    if (/^<(h[1-6]|ul|ol|blockquote|hr|img)/.test(block)) return block;
+    return `<p>${block.replace(/\n/g,'<br>')}</p>`;
+  }).join('\n');
+  return html;
+}
+
+// ── State ────────────────────────────────────────────────────
+let _user      = null;
+let _profile   = null;
+let _myArticles  = [];
+let _allArticles = [];
+let _editingId   = null;
+
+// ── Toast ─────────────────────────────────────────────────────
+function toast(msg, isError = false) {
+  const el = document.getElementById('np-toast');
+  el.textContent = msg;
+  el.className = 'show' + (isError ? ' error' : '');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.className = ''; }, 3000);
+}
+
+// ── Init ──────────────────────────────────────────────────────
+async function init() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) { showState('denied'); return; }
+  _user = session.user;
+
+  // Check news permission
+  const { data: hasPerm } = await supabase.rpc('user_has_permission', { perm: 'can_manage_news' }).catch(() => ({ data: false }));
+  if (!hasPerm) { showState('denied'); return; }
+
+  // Get profile
+  const { data: profile } = await supabase.from('profiles').select('display_name,username').eq('id', _user.id).single();
+  _profile = profile;
+  const name = profile?.display_name || profile?.username || _user.email;
+  document.getElementById('np-author-meta').textContent = `Publishing as ${name}`;
+
+  showState('main');
+  await loadArticles();
+}
+
+function showState(which) {
+  document.getElementById('np-loading').style.display = which === 'loading' ? '' : 'none';
+  document.getElementById('np-denied').style.display  = which === 'denied'  ? '' : 'none';
+  document.getElementById('np-main').style.display    = which === 'main'    ? '' : 'none';
+}
+
+// ── Load articles ─────────────────────────────────────────────
+async function loadArticles() {
+  // My articles (all statuses)
+  const { data: mine } = await supabase
+    .from('news_articles').select('*')
+    .eq('author_id', _user.id)
+    .order('created_at', { ascending: false });
+  _myArticles = mine || [];
+
+  // All published (any author)
+  const { data: all } = await supabase
+    .from('news_articles').select('id,title,category,author_name,published_at,status')
+    .eq('status', 'published')
+    .order('published_at', { ascending: false })
+    .limit(20);
+  _allArticles = all || [];
+
+  renderMyArticles();
+  renderAllArticles();
+}
+
+// ── Render my articles ────────────────────────────────────────
+function renderMyArticles() {
+  const el = document.getElementById('my-articles-list');
+  document.getElementById('my-count').textContent = `${_myArticles.length} article${_myArticles.length !== 1 ? 's' : ''}`;
+  if (!_myArticles.length) {
+    el.innerHTML = `<div style="padding:1.5rem;text-align:center;color:var(--muted);font-size:13px;">No articles yet. Write your first one above!</div>`;
+    return;
+  }
+  el.innerHTML = _myArticles.map(a => {
+    const date = a.published_at
+      ? new Date(a.published_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+      : new Date(a.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    return `<div class="article-row">
+      <span class="status-pip ${a.status}"></span>
+      <div class="article-row-info">
+        <div class="article-row-title">${a.title}</div>
+        <div class="article-row-meta">${a.category||'General'} · ${capitalise(a.status)} · ${date}</div>
+      </div>
+      <div style="display:flex;gap:5px;flex-shrink:0;">
+        <button class="btn btn-outline btn-sm" onclick="loadIntoEditor('${a.id}')">Edit</button>
+        ${a.status !== 'published'
+          ? `<button class="btn btn-success btn-sm" onclick="quickPublish('${a.id}')">Publish</button>`
+          : `<button class="btn btn-ghost btn-sm" onclick="quickUnpublish('${a.id}')">Unpublish</button>`}
+        <button class="btn btn-danger btn-sm" onclick="deleteArticle('${a.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderAllArticles() {
+  const el = document.getElementById('all-articles-list');
+  document.getElementById('all-count').textContent = `${_allArticles.length} published`;
+  if (!_allArticles.length) {
+    el.innerHTML = `<div style="padding:1.5rem;text-align:center;color:var(--muted);font-size:13px;">No published articles yet.</div>`;
+    return;
+  }
+  el.innerHTML = _allArticles.map(a => {
+    const date = a.published_at
+      ? new Date(a.published_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+      : '';
+    const isMine = a.author_id === _user?.id;
+    return `<div class="article-row">
+      <span class="status-pip published"></span>
+      <div class="article-row-info">
+        <div class="article-row-title">${a.title}</div>
+        <div class="article-row-meta">${a.category||'General'} · ${a.author_name||'Unknown'} · ${date}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function capitalise(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// ── Editor ────────────────────────────────────────────────────
+function slugify(text) {
+  return text.toLowerCase().replace(/[^\w\s-]/g,'').replace(/\s+/g,'-').replace(/-+/g,'-').slice(0,80);
+}
+
+function clearEditor() {
+  document.getElementById('np-editing-id').value = '';
+  document.getElementById('np-title').value      = '';
+  document.getElementById('np-category').value   = '';
+  document.getElementById('np-image').value      = '';
+  document.getElementById('np-summary').value    = '';
+  document.getElementById('np-body').value       = '';
+  document.getElementById('editor-heading').textContent = 'New Article';
+  document.getElementById('np-summary-count').textContent = '0 / 280';
+  document.getElementById('np-body-count').textContent = '0 chars';
+  updatePreview();
+  _editingId = null;
+}
+
+window.loadIntoEditor = async (id) => {
+  const a = _myArticles.find(x => x.id === id);
+  if (!a) return;
+  _editingId = id;
+  document.getElementById('np-editing-id').value = id;
+  document.getElementById('np-title').value      = a.title   || '';
+  document.getElementById('np-category').value   = a.category || '';
+  document.getElementById('np-image').value      = a.image_url || '';
+  document.getElementById('np-summary').value    = a.summary  || '';
+  document.getElementById('np-body').value       = a.body     || '';
+  document.getElementById('editor-heading').textContent = 'Editing: ' + a.title;
+  updateCharCounts();
+  updatePreview();
+  // Scroll to editor
+  document.getElementById('editor-heading').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Switch to Write tab
+  setEditorMode('write');
+  toast('Article loaded into editor');
+};
+
+async function saveArticle(forcedStatus) {
+  const id      = document.getElementById('np-editing-id').value;
+  const title   = document.getElementById('np-title').value.trim();
+  const body    = document.getElementById('np-body').value.trim();
+  if (!title) { toast('Please enter a headline.', true); return; }
+
+  const status    = forcedStatus || 'draft';
+  const authorName = _profile?.display_name || _profile?.username || _user.email;
+
+  const payload = {
+    title,
+    body,
+    category:    document.getElementById('np-category').value.trim() || 'General',
+    image_url:   document.getElementById('np-image').value.trim() || null,
+    summary:     document.getElementById('np-summary').value.trim() || null,
+    status,
+    published_at: status === 'published' ? new Date().toISOString() : undefined,
+  };
+
+  let error;
+  if (id) {
+    // Update — don't overwrite author
+    ({ error } = await supabase.from('news_articles').update(payload).eq('id', id));
+  } else {
+    // Insert — set author
+    const slug = slugify(title) + '-' + Date.now().toString(36);
+    ({ error } = await supabase.from('news_articles').insert({
+      ...payload, slug, author_id: _user.id, author_name: authorName
+    }));
+  }
+
+  if (error) {
+    toast('Error: ' + error.message, true);
+    return;
+  }
+
+  toast(status === 'published' ? '✓ Article published!' : '✓ Draft saved');
+  clearEditor();
+  await loadArticles();
+}
+
+window.quickPublish = async (id) => {
+  const { error } = await supabase.from('news_articles')
+    .update({ status: 'published', published_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) { toast('Error: '+error.message, true); return; }
+  toast('✓ Published!');
+  await loadArticles();
+};
+window.quickUnpublish = async (id) => {
+  const { error } = await supabase.from('news_articles').update({ status: 'draft' }).eq('id', id);
+  if (error) { toast('Error: '+error.message, true); return; }
+  toast('Moved back to drafts');
+  await loadArticles();
+};
+window.deleteArticle = async (id) => {
+  if (!confirm('Delete this article? This cannot be undone.')) return;
+  const { error } = await supabase.from('news_articles').delete().eq('id', id);
+  if (error) { toast('Error: '+error.message, true); return; }
+  if (_editingId === id) clearEditor();
+  toast('Article deleted');
+  await loadArticles();
+};
+
+// ── Toolbar ───────────────────────────────────────────────────
+document.querySelectorAll('#np-toolbar .tb-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const textarea = document.getElementById('np-body');
+    const start = textarea.selectionStart;
+    const end   = textarea.selectionEnd;
+    const sel   = textarea.value.slice(start, end);
+
+    if (btn.dataset.wrap !== undefined) {
+      const wrap = btn.dataset.wrap;
+      const replacement = wrap + (sel || 'text') + wrap;
+      textarea.setRangeText(replacement, start, end, 'select');
+    } else if (btn.dataset.prefix !== undefined) {
+      const prefix = btn.dataset.prefix;
+      textarea.setRangeText(prefix + (sel || ''), start, end, 'end');
+    } else if (btn.hasAttribute('data-link')) {
+      const url   = prompt('URL:', 'https://');
+      if (!url) return;
+      const text  = sel || prompt('Link text:', 'link text') || 'link';
+      textarea.setRangeText(`[${text}](${url})`, start, end, 'end');
+    }
+    textarea.focus();
+    updatePreview();
+    updateCharCounts();
+  });
+});
+
+// ── Write / Preview tabs ──────────────────────────────────────
+function setEditorMode(mode) {
+  document.getElementById('tab-write').classList.toggle('active',   mode === 'write');
+  document.getElementById('tab-preview').classList.toggle('active', mode === 'preview');
+  document.getElementById('np-write-area').style.display   = mode === 'write'   ? '' : 'none';
+  document.getElementById('np-preview-area').style.display = mode === 'preview' ? '' : 'none';
+  document.getElementById('np-toolbar').style.display      = mode === 'write'   ? '' : 'none';
+  if (mode === 'preview') updatePreview();
+}
+
+document.getElementById('tab-write').addEventListener('click',   () => setEditorMode('write'));
+document.getElementById('tab-preview').addEventListener('click', () => setEditorMode('preview'));
+
+function updatePreview() {
+  const body = document.getElementById('np-body').value;
+  document.getElementById('np-preview').innerHTML = renderMarkdown(body);
+}
+
+// ── Character counters ────────────────────────────────────────
+function updateCharCounts() {
+  const summaryLen = document.getElementById('np-summary').value.length;
+  document.getElementById('np-summary-count').textContent = `${summaryLen} / 280`;
+  const bodyLen = document.getElementById('np-body').value.length;
+  document.getElementById('np-body-count').textContent = `${bodyLen} char${bodyLen !== 1 ? 's' : ''}`;
+}
+
+document.getElementById('np-summary').addEventListener('input', updateCharCounts);
+document.getElementById('np-body').addEventListener('input', () => { updatePreview(); updateCharCounts(); });
+
+// ── Button wiring ─────────────────────────────────────────────
+document.getElementById('btn-clear-editor').addEventListener('click', () => {
+  if (document.getElementById('np-title').value && !confirm('Clear the editor? Unsaved changes will be lost.')) return;
+  clearEditor();
+});
+document.getElementById('btn-save-draft').addEventListener('click', () => saveArticle('draft'));
+document.getElementById('btn-publish').addEventListener('click', () => {
+  if (!confirm('Publish this article? It will be visible to everyone on the website.')) return;
+  saveArticle('published');
+});
+
+init();
+</script>
+</body>
+</html>

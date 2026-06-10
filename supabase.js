@@ -1,8 +1,8 @@
 // ── Supabase Client ──────────────────────────────────────────
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const SUPABASE_URL  = 'https://hjaywokvgdzhvsoygctc.supabase.co';
-const SUPABASE_KEY  = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
+const SUPABASE_URL = 'https://hjaywokvgdzhvsoygctc.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -22,23 +22,96 @@ export async function getProfile(userId, accessToken) {
     : supabase;
   const { data, error } = await client
     .from('profiles')
-    .select('role')
+    .select('role, display_name, username, email')
     .eq('id', userId)
     .single();
   if (error) console.error('getProfile error:', error.message);
   return data;
 }
 
-/** Returns true if the current user has role = 'admin' or 'super_admin' */
+// ── New role/permission helpers ──────────────────────────────
+
+/**
+ * Returns the stacked roles for the current authenticated user.
+ * Each role: { role_id, name, label, color, level, is_system, permissions, granted_at }
+ */
+export async function getCurrentUserRoles() {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data, error } = await supabase.rpc('get_user_roles', { p_user_id: user.id });
+  if (error) { console.error('getCurrentUserRoles error:', error.message); return []; }
+  return data || [];
+}
+
+/**
+ * Returns a merged permissions object for the current user,
+ * combining all their roles (any true wins).
+ */
+export async function getCurrentUserPermissions() {
+  const roles = await getCurrentUserRoles();
+  const merged = {};
+  for (const role of roles) {
+    const perms = role.permissions || {};
+    for (const [key, val] of Object.entries(perms)) {
+      if (val === true) merged[key] = true;
+      else if (!(key in merged)) merged[key] = false;
+    }
+  }
+  return merged;
+}
+
+/**
+ * Returns true if the current user has the given permission flag.
+ * Uses server-side RPC for reliable enforcement.
+ */
+export async function hasPermission(perm) {
+  try {
+    const { data, error } = await supabase.rpc('user_has_permission', { perm });
+    if (error) return false;
+    return !!data;
+  } catch { return false; }
+}
+
+/**
+ * Returns true if the current user can view the admin panel.
+ * Checks for can_view_admin permission OR legacy admin/super_admin role.
+ */
 export async function isAdmin(userId, accessToken) {
+  // Try new permission system first
+  try {
+    const { data } = await supabase.rpc('user_has_permission', { perm: 'can_view_admin' });
+    if (data === true) return true;
+  } catch {}
+  // Fallback: legacy role check
   const profile = await getProfile(userId, accessToken);
   return profile?.role === 'admin' || profile?.role === 'super_admin';
 }
 
-/** Returns true if the current user has role = 'super_admin' */
-export async function isSuperAdmin(userId, accessToken) {
+/**
+ * Returns true if the current user has owner-level access.
+ * Owner is the only one who can assign Admin or create roles.
+ */
+export async function isOwner(userId, accessToken) {
+  try {
+    const { data } = await supabase.rpc('user_has_permission', { perm: 'can_assign_admin' });
+    if (data === true) return true;
+  } catch {}
+  // Fallback: legacy super_admin
   const profile = await getProfile(userId, accessToken);
   return profile?.role === 'super_admin';
+}
+
+/** @deprecated Use isOwner() instead */
+export async function isSuperAdmin(userId, accessToken) {
+  return isOwner(userId, accessToken);
+}
+
+/**
+ * Returns true if the current user has the "news" permission
+ * (can_manage_news), allowing news publishing access.
+ */
+export async function canManageNews() {
+  return hasPermission('can_manage_news');
 }
 
 /** Sign in with Discord OAuth */

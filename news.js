@@ -1,376 +1,248 @@
-/* news.js — MCA news engine
-   ─────────────────────────────────────────────────────────────
-   HOW TO PUBLISH AN ARTICLE
-   1. Copy TEMPLATE.md from the news/ folder
-   2. Rename it: YYYY-MM-DD-slug-here.md  (e.g. 2026-04-01-spring-update.md)
-   3. Fill in the frontmatter (title, author, date, category, summary)
-   4. Write your article below the --- divider
-   5. Upload to the news/ folder on GitHub — it appears automatically.
-      No need to edit this file at all.
-   ─────────────────────────────────────────────────────────────── */
+// news.js — reads articles from Supabase news_articles table
+import { supabase } from './supabase.js';
 
-/* ── CONFIG ──────────────────────────────-───────────────────── */
-const GITHUB_USER = 'lucky4life2';
-const GITHUB_REPO = 'MCA2';
-const GITHUB_BRANCH = 'main';
-const NEWS_FOLDER = 'news';
-
-// GitHub API endpoint to list files in the news/ folder (Contents API — no truncation)
-const GITHUB_API = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${NEWS_FOLDER}?ref=${GITHUB_BRANCH}`;
-
-// Raw content base URL for fetching article files
-const RAW_BASE = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}`;
-
-/* ── AUTO-DISCOVER ARTICLES ─────────────────────────────────── */
-async function getArticleList() {
-  const CACHE_KEY = 'mca_news_tree';
-  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-  // Return cached tree if fresh
-  try {
-    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
-    if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.files;
-  } catch(e) {}
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
-  let res;
-  try {
-    res = await fetch(GITHUB_API, {
-      headers: { 'Accept': 'application/vnd.github+json' },
-      signal: controller.signal
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
-  if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
-  const data = await res.json();
-
-  const files = (Array.isArray(data) ? data : [])
-    .filter(f => f.type === 'file' && f.name.endsWith('.md') && f.name !== 'TEMPLATE.md')
-    .map(f => ({ path: f.path, url: `${RAW_BASE}/${f.path}` }));
-
-  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), files })); } catch(e) {}
-  return files;
-}
-
-/* ── MARKDOWN PARSER ────────────────────────────────────────── */
-function parseMarkdown(md) {
-  // Custom shortcodes first (before standard Markdown)
-  md = md
-    // [image: filename.jpg | caption] or [image: filename.jpg]
-    // Images should be uploaded to the news/images/ folder on GitHub
-    .replace(/\[image:\s*([^\]|]+?)(?:\s*\|\s*([^\]]*))?\]/g, (_, src, caption) => {
-      const img = `<figure class="article-image"><img src="news/images/${src.trim()}" alt="${(caption||'').trim()}">`;
-      return caption
-        ? img + `<figcaption>${caption.trim()}</figcaption></figure>`
-        : img + '</figure>';
-    })
-    // [pullquote]text[/pullquote]
-    .replace(/\[pullquote\]([\s\S]*?)\[\/pullquote\]/g,
-      (_, text) => `<blockquote class="pull-quote">${text.trim()}</blockquote>`);
-
-  // Standard Markdown
-  return md
+// ── Markdown → HTML (lightweight renderer) ───────────────────
+function renderMarkdown(md) {
+  if (!md) return '';
+  let html = md
+    // Escape HTML entities first
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     // Headings
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm,  '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm,   '<h1>$1</h1>')
+    .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^### (.+)$/gm,  '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm,   '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm,    '<h1>$1</h1>')
+    // Horizontal rule
+    .replace(/^---+$/gm, '<hr>')
     // Bold + italic
     .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
     .replace(/\*\*(.+?)\*\*/g,     '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g,         '<em>$1</em>')
-    // Horizontal rule
-    .replace(/^---$/gm, '<hr class="divider">')
-    // Unordered lists
-    .replace(/(^- .+$(\n^- .+$)*)/gm, match => {
-      const items = match.split('\n').map(l => `<li>${l.replace(/^- /, '')}</li>`).join('');
-      return `<ul>${items}</ul>`;
-    })
-    // Ordered lists
-    .replace(/(^\d+\. .+$(\n^\d+\. .+$)*)/gm, match => {
-      const items = match.split('\n').map(l => `<li>${l.replace(/^\d+\. /, '')}</li>`).join('');
-      return `<ol>${items}</ol>`;
-    })
+    .replace(/_(.+?)_/g,           '<em>$1</em>')
+    // Inline code
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
     // Links
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-    // Paragraphs — wrap non-tag lines
-    .split('\n\n')
-    .map(block => {
-      block = block.trim();
-      if (!block) return '';
-      if (/^<(h[1-6]|ul|ol|hr|blockquote|figure)/.test(block)) return block;
-      return `<p>${block.replace(/\n/g, ' ')}</p>`;
-    })
-    .join('\n');
-}
+    // Images
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;border-radius:4px;">')
+    // Blockquote
+    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
 
-/* ── FRONTMATTER PARSER ─────────────────────────────────────── */
-function parseFrontmatter(raw) {
-  raw = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trimStart();
-  const meta  = {};
-  const lines = raw.split('\n');
-  let bodyStart = 0;
-  let dividerCount = 0;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (line.trim() === '---') {
-      dividerCount++;
-      if (dividerCount === 1 && i === 0) continue;
-      bodyStart = i + 1;
-      break;
-    }
-    const colon = line.indexOf(':');
-    if (colon > 0) {
-      const key   = line.slice(0, colon).trim();
-      const value = line.slice(colon + 1).trim();
-      if (key && !key.includes(' ')) meta[key] = value;
-    }
-  }
-  return { meta, body: lines.slice(bodyStart).join('\n') };
-}
-
-/* ── FETCH HELPER ───────────────────────────────────────────── */
-async function fetchArticle(pathOrObj) {
-  const path = typeof pathOrObj === 'object' ? pathOrObj.path : pathOrObj;
-  const url  = typeof pathOrObj === 'object' && pathOrObj.url
-    ? pathOrObj.url
-    : `${RAW_BASE}/${path}`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
-  try {
-    const res = await fetch(url, { signal: controller.signal });
-    if (!res.ok) throw new Error(`Could not load ${path} (${res.status})`);
-    return res.text();
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-/* ── DATE FORMATTER ─────────────────────────────────────────── */
-function formatDate(dateStr) {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('en-US', {
-    year: 'numeric', month: 'long', day: 'numeric'
+  // Unordered lists
+  html = html.replace(/(^[-*] .+\n?)+/gm, match => {
+    const items = match.trim().split('\n').map(l => `<li>${l.replace(/^[-*] /,'')}</li>`).join('');
+    return `<ul>${items}</ul>`;
   });
+  // Ordered lists
+  html = html.replace(/(^\d+\. .+\n?)+/gm, match => {
+    const items = match.trim().split('\n').map(l => `<li>${l.replace(/^\d+\. /,'')}</li>`).join('');
+    return `<ol>${items}</ol>`;
+  });
+
+  // Paragraphs — wrap double-newline separated blocks that aren't already HTML
+  html = html.split(/\n{2,}/).map(block => {
+    block = block.trim();
+    if (!block) return '';
+    if (/^<(h[1-6]|ul|ol|blockquote|hr|img)/.test(block)) return block;
+    // Single newlines within a paragraph become <br>
+    return `<p>${block.replace(/\n/g, '<br>')}</p>`;
+  }).join('\n');
+
+  return html;
 }
 
-/* ── NEWS INDEX ─────────────────────────────────────────────── */
-async function loadIndex() {
-  const loadingEl = document.getElementById('news-loading');
-  const errorEl   = document.getElementById('news-error');
-  const indexEl   = document.getElementById('news-index');
-  if (!indexEl) return;
+// ── Format date ───────────────────────────────────────────────
+function formatDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+// ── Truncate for excerpt ──────────────────────────────────────
+function truncate(str, len = 180) {
+  if (!str) return '';
+  return str.length > len ? str.slice(0, len).replace(/\s\S*$/, '') + '…' : str;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  NEWS PAGE  (news.html)
+// ════════════════════════════════════════════════════════════════
+
+export async function initNewsPage() {
+  const container = document.getElementById('news-container');
+  const featured  = document.getElementById('news-featured');
+  const grid      = document.getElementById('news-grid');
+  const loading   = document.getElementById('news-loading');
+  const empty     = document.getElementById('news-empty');
+
+  if (!container) return;
 
   try {
-    const articlePaths = await getArticleList();
-    const results = await Promise.allSettled(
-      articlePaths.map(async item => {
-        const raw = await fetchArticle(item);
-        const { meta } = parseFrontmatter(raw);
-        return { path: item.path, meta };
-      })
-    );
-    const articles = results.filter(r => r.status === 'fulfilled').map(r => r.value);
+    const { data: articles, error } = await supabase
+      .from('news_articles')
+      .select('id,title,slug,summary,body,category,author_name,published_at,image_url,status')
+      .eq('status', 'published')
+      .order('published_at', { ascending: false });
 
-    // Sort newest first by date field
-    articles.sort((a, b) => {
-      const da = a.meta.date || '0000-00-00';
-      const db = b.meta.date || '0000-00-00';
-      return (db < da ? -1 : db > da ? 1 : 0);
-    });
+    if (loading) loading.style.display = 'none';
 
-    if (articles.length === 0) {
-      loadingEl.style.display = 'none';
-      errorEl.style.display   = 'block';
-      errorEl.textContent     = 'No articles published yet.';
+    if (error) throw error;
+    if (!articles || articles.length === 0) {
+      if (empty) empty.style.display = 'block';
       return;
     }
 
-    indexEl.innerHTML = articles.map(({ path, meta }) => {
-      const slug = encodeURIComponent(path);
-      return `
-        <a class="news-card" href="article.html?article=${slug}">
-          <div class="news-card-meta">
-            <span class="news-card-category">${meta.category || 'News'}</span>
-            <span class="news-card-date">${meta.date ? formatDate(meta.date) : ''}</span>
-          </div>
-          <div class="news-card-title">${meta.title || 'Untitled'}</div>
-          <div class="news-card-summary">${meta.summary || ''}</div>
-          <div class="news-card-byline">By ${meta.author || 'MCA Staff'}</div>
-        </a>`;
-    }).join('');
+    const [top, ...rest] = articles;
 
-    loadingEl.style.display = 'none';
-    indexEl.style.display   = 'block';
-
-    // Wire up search bar
-    const searchInput  = document.getElementById('news-search');
-    const searchCount  = document.getElementById('news-search-count');
-    const emptyEl      = document.getElementById('news-empty');
-    const cards        = indexEl.querySelectorAll('.news-card');
-
-    if (searchInput) {
-      searchInput.addEventListener('input', () => {
-        const q = searchInput.value.trim().toLowerCase();
-        let visible = 0;
-
-        cards.forEach(card => {
-          // Search across title, summary, author, category
-          const text = card.textContent.toLowerCase();
-          const show = !q || text.includes(q);
-          card.style.display = show ? '' : 'none';
-          if (show) visible++;
-        });
-
-        // Update count label
-        if (q && searchCount) {
-          searchCount.textContent = visible === 1
-            ? '1 result'
-            : `${visible} results`;
-        } else if (searchCount) {
-          searchCount.textContent = '';
-        }
-
-        // Show empty state if nothing matches
-        if (emptyEl) emptyEl.style.display = (visible === 0 && q) ? 'block' : 'none';
+    // Featured article
+    if (featured) {
+      featured.innerHTML = renderFeaturedCard(top);
+      featured.style.display = '';
+      featured.querySelector('.news-card-link')?.addEventListener('click', e => {
+        e.preventDefault();
+        openArticleModal(top);
       });
     }
 
-  } catch (err) {
-    loadingEl.style.display = 'none';
-    errorEl.style.display   = 'block';
-    errorEl.textContent     = 'Could not load articles. ' + err.message;
+    // Grid
+    if (grid && rest.length) {
+      grid.innerHTML = rest.map(a => renderGridCard(a)).join('');
+      grid.querySelectorAll('.news-card-link').forEach((el, i) => {
+        el.addEventListener('click', e => { e.preventDefault(); openArticleModal(rest[i]); });
+      });
+    }
+
+  } catch(err) {
+    if (loading) loading.style.display = 'none';
+    if (container) container.innerHTML = `<p style="color:#c0392b;font-size:14px;text-align:center;">Failed to load news: ${err.message}</p>`;
   }
 }
 
-/* ── ARTICLE READER ─────────────────────────────────────────── */
-async function loadArticle() {
-  const loadingEl = document.getElementById('article-loading');
-  const errorEl   = document.getElementById('article-error');
-  const bodyEl    = document.getElementById('article-body');
-  if (!bodyEl) return;
+function renderFeaturedCard(a) {
+  const excerpt = a.summary || truncate(a.body, 220);
+  return `
+    <article class="news-featured-card">
+      ${a.image_url ? `<div class="news-featured-img" style="background-image:url('${a.image_url}');"></div>` : ''}
+      <div class="news-featured-body">
+        <div class="news-eyebrow">
+          <span class="news-category">${a.category || 'General'}</span>
+          <span class="news-date">${formatDate(a.published_at)}</span>
+        </div>
+        <h2 class="news-featured-title">${a.title}</h2>
+        <p class="news-excerpt">${excerpt}</p>
+        <a href="#" class="news-card-link news-read-more">Read Article →</a>
+      </div>
+    </article>`;
+}
 
-  const params = new URLSearchParams(window.location.search);
-  const path   = decodeURIComponent(params.get('article') || '');
+function renderGridCard(a) {
+  const excerpt = a.summary || truncate(a.body, 140);
+  return `
+    <article class="news-card">
+      ${a.image_url ? `<div class="news-card-img" style="background-image:url('${a.image_url}');"></div>` : '<div class="news-card-img news-card-img-placeholder"></div>'}
+      <div class="news-card-body">
+        <div class="news-eyebrow">
+          <span class="news-category">${a.category || 'General'}</span>
+          <span class="news-date">${formatDate(a.published_at)}</span>
+        </div>
+        <h3 class="news-card-title">${a.title}</h3>
+        <p class="news-card-excerpt">${excerpt}</p>
+        <a href="#" class="news-card-link news-read-more-sm">Read more →</a>
+      </div>
+    </article>`;
+}
 
-  if (!path) {
-    errorEl.style.display   = 'block';
-    errorEl.textContent     = 'No article specified.';
-    loadingEl.style.display = 'none';
+// ── Article modal ─────────────────────────────────────────────
+let _modalOpen = false;
+
+function openArticleModal(article) {
+  let overlay = document.getElementById('news-article-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'news-article-overlay';
+    overlay.style.cssText = `
+      position:fixed;inset:0;z-index:500;background:rgba(10,15,30,.6);
+      display:flex;align-items:flex-start;justify-content:center;
+      padding:2rem 1rem;overflow-y:auto;`;
+    document.body.appendChild(overlay);
+  }
+
+  const bodyHtml = renderMarkdown(article.body);
+  overlay.innerHTML = `
+    <div style="background:var(--white);border-radius:8px;border:1px solid var(--border);
+      width:100%;max-width:720px;overflow:hidden;box-shadow:0 20px 60px rgba(10,15,30,.25);
+      margin:auto;position:relative;">
+      ${article.image_url ? `<div style="height:280px;background:url('${article.image_url}') center/cover no-repeat;"></div>` : ''}
+      <button id="news-modal-close" style="position:absolute;top:16px;right:16px;
+        background:rgba(10,15,30,.5);color:#fff;border:none;border-radius:50%;
+        width:32px;height:32px;cursor:pointer;font-size:16px;line-height:1;
+        display:flex;align-items:center;justify-content:center;">✕</button>
+      <div style="padding:2.5rem;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:1.25rem;">
+          <span style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+            color:var(--green);background:#e8f8e8;padding:3px 8px;border-radius:3px;">${article.category||'General'}</span>
+          <span style="font-size:12px;color:var(--muted);">${formatDate(article.published_at)}</span>
+          ${article.author_name ? `<span style="font-size:12px;color:var(--muted);">By ${article.author_name}</span>` : ''}
+        </div>
+        <h1 style="font-family:'Times New Roman',serif;font-size:clamp(1.5rem,4vw,2.25rem);
+          color:var(--blue);font-weight:700;line-height:1.2;margin-bottom:1.5rem;">${article.title}</h1>
+        <div class="news-article-body" style="font-size:15px;line-height:1.8;color:var(--black);">
+          ${bodyHtml}
+        </div>
+      </div>
+    </div>`;
+
+  overlay.style.display = 'flex';
+  _modalOpen = true;
+
+  document.getElementById('news-modal-close').addEventListener('click', closeArticleModal);
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeArticleModal(); });
+  document.addEventListener('keydown', handleEsc);
+}
+
+function closeArticleModal() {
+  const overlay = document.getElementById('news-article-overlay');
+  if (overlay) overlay.style.display = 'none';
+  _modalOpen = false;
+  document.removeEventListener('keydown', handleEsc);
+}
+
+function handleEsc(e) { if (e.key === 'Escape') closeArticleModal(); }
+
+// ════════════════════════════════════════════════════════════════
+//  SINGLE ARTICLE PAGE  (?slug=...)
+// ════════════════════════════════════════════════════════════════
+
+export async function initSingleArticlePage() {
+  const container = document.getElementById('single-article-container');
+  if (!container) return;
+
+  const slug = new URLSearchParams(window.location.search).get('slug');
+  if (!slug) { container.innerHTML = '<p style="color:#c0392b;">No article specified.</p>'; return; }
+
+  const { data: article, error } = await supabase
+    .from('news_articles')
+    .select('*')
+    .eq('slug', slug)
+    .eq('status', 'published')
+    .single();
+
+  if (error || !article) {
+    container.innerHTML = '<p style="color:#c0392b;">Article not found.</p>';
     return;
   }
 
-  try {
-    const raw             = await fetchArticle(path);
-    const { meta, body }  = parseFrontmatter(raw);
-    const html            = parseMarkdown(body);
-
-    // Update page title
-    if (meta.title) document.title = `${meta.title} — MCA`;
-
-    bodyEl.innerHTML = `
-      <div class="article-hero">
-        <div class="article-hero-inner">
-          <div class="article-meta-top">
-            <span class="news-card-category">${meta.category || 'News'}</span>
-            <span class="news-card-date">${meta.date ? formatDate(meta.date) : ''}</span>
-          </div>
-          <h1 class="article-title">${meta.title || 'Untitled'}</h1>
-          ${meta.summary ? `<p class="article-summary">${meta.summary}</p>` : ''}
-          <div class="article-byline">By <strong>${meta.author || 'MCA Staff'}</strong></div>
-        </div>
-      </div>
-      <div class="article-content content">
-        <a class="article-back" href="news.html">← Back to News</a>
-        <div class="article-body">${html}</div>
-      </div>`;
-
-    loadingEl.style.display = 'none';
-    bodyEl.style.display    = 'block';
-
-  } catch (err) {
-    loadingEl.style.display = 'none';
-    errorEl.style.display   = 'block';
-    errorEl.textContent     = 'Could not load article. ' + err.message;
-  }
-}
-
-/* ── FEATURED BANNER (homepage) ─────────────────────────────── */
-async function loadFeaturedBanner() {
-  const banner = document.getElementById('featured-banner');
-  if (!banner) return;
-
-  try {
-    // Fetch all articles and find Featured ones, then pick the most recent
-    const articlePaths = await getArticleList();
-    const all = await Promise.all(
-      articlePaths.map(async item => {
-        const raw = await fetchArticle(item);
-        const { meta } = parseFrontmatter(raw);
-        return { path: item.path, meta };
-      })
-    );
-
-    const featured = all
-      .filter(a => (a.meta.category || '').toLowerCase() === 'featured')
-      .sort((a, b) => {
-        const da = a.meta.date || '0000-00-00';
-        const db = b.meta.date || '0000-00-00';
-        return (db < da ? -1 : db > da ? 1 : 0); // newest first
-      });
-
-    if (featured.length === 0) return;
-
-    const { path, meta } = featured[0]; // only the most recent
-    const slug = encodeURIComponent(path);
-
-    // Check if user already dismissed this featured article
-    const dismissedKey = 'mca_dismissed_featured';
-    const dismissed = localStorage.getItem(dismissedKey);
-    if (dismissed === path) return; // same article, keep hidden
-
-    // Build the banner as a wrapper div, with the link and dismiss button as siblings
-    banner.innerHTML = `
-      <div class="featured-banner-wrap">
-        <a class="featured-banner" href="article.html?article=${slug}">
-          <div class="featured-banner-inner">
-            <div class="featured-banner-left">
-              <span class="featured-tag">&#9733; Featured</span>
-              <div class="featured-banner-title">${meta.title || 'Untitled'}</div>
-              <div class="featured-banner-summary">${meta.summary || ''}</div>
-            </div>
-            <div class="featured-banner-right">
-              <span class="featured-banner-meta">${meta.date ? formatDate(meta.date) : ''} · By ${meta.author || 'MCA Staff'}</span>
-              <span class="featured-banner-cta">Read story →</span>
-            </div>
-          </div>
-        </a>
-        <button class="featured-banner-dismiss" aria-label="Dismiss">&#x2715;</button>
-      </div>`;
-    banner.style.display = 'block';
-
-    // Wire up dismiss button — it's outside the <a> so no navigation conflict
-    banner.querySelector('.featured-banner-dismiss').addEventListener('click', () => {
-      localStorage.setItem(dismissedKey, path);
-      banner.style.display = 'none';
-    });
-
-  } catch (err) {
-    // Silently fail — banner just stays hidden
-  }
-}
-
-/* ── ROUTER — run the right function based on current page ───── */
-function initNews() {
-  const page = window.location.pathname.split('/').pop();
-  if (page === 'news.html' || page === '')  loadIndex();
-  if (page === 'article.html')             loadArticle();
-  if (page === 'index.html'  || page === '')  loadFeaturedBanner();
-}
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initNews);
-} else {
-  initNews();
+  document.title = `${article.title} — MCA News`;
+  container.innerHTML = `
+    ${article.image_url ? `<div style="height:320px;background:url('${article.image_url}') center/cover no-repeat;border-radius:6px;margin-bottom:2rem;"></div>` : ''}
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:1rem;flex-wrap:wrap;">
+      <span style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--green);">${article.category||'General'}</span>
+      <span style="font-size:13px;color:var(--muted);">${formatDate(article.published_at)}</span>
+      ${article.author_name ? `<span style="font-size:13px;color:var(--muted);">By ${article.author_name}</span>` : ''}
+    </div>
+    <h1 style="font-family:'Times New Roman',serif;font-size:clamp(1.75rem,5vw,2.75rem);color:var(--blue);font-weight:700;line-height:1.15;margin-bottom:1.5rem;">${article.title}</h1>
+    ${article.summary ? `<p style="font-size:1.1rem;color:var(--muted);line-height:1.7;margin-bottom:2rem;border-left:3px solid var(--green);padding-left:1rem;">${article.summary}</p>` : ''}
+    <div class="news-article-body" style="font-size:15px;line-height:1.85;color:var(--black);">
+      ${renderMarkdown(article.body)}
+    </div>`;
 }
