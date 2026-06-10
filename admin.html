@@ -624,95 +624,87 @@ const ALL_PERMISSIONS = [
 
 // ── Init ─────────────────────────────────────────────────────
 async function init() {
-  const { data: { session } } = await supabase.auth.getSession();
-  _session = session;
-  if (!session?.user) { show('denied'); return; }
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    _session = session;
 
-  // Load permissions first — this also determines if user is admin via
-  // either the new roles system OR the legacy profiles.role fallback
-  await loadMyPermissions(session);
+    if (!session?.user) { show('denied'); return; }
 
-  // Gate: must be admin (new system) OR legacy admin/super_admin
-  if (!_myPermissions.can_view_admin && !_legacyAdmin) {
-    show('denied'); return;
+    await loadMyPermissions(session.user);
+
+    if (!_myPermissions.can_view_admin) { show('denied'); return; }
+
+    show('main');
+
+    if (!_myPermissions.can_manage_roles && !_myPermissions.can_create_roles) {
+      document.getElementById('tab-btn-roles').classList.add('hidden');
+    }
+
+    const levelLabel = _myLevel >= 100 ? 'Owner' : _myLevel >= 80 ? 'Administrator' : 'Staff';
+    document.getElementById('admin-hero-meta').textContent = 'Signed in as ' + levelLabel;
+
+    await Promise.all([loadAll(), loadAllRoles()]);
+    checkPluginBridge();
+    loadLockState();
+  } catch(e) {
+    console.error('Admin init error:', e);
+    show('denied');
+    document.querySelector('.admin-denied p').textContent = 'Error loading admin panel: ' + e.message;
   }
-
-  show('main');
-
-  // Show Roles tab only for users who can manage/create roles
-  if (!_myPermissions.can_manage_roles && !_myPermissions.can_create_roles) {
-    document.getElementById('tab-btn-roles').classList.add('hidden');
-  }
-
-  // Meta line
-  const levelLabel = _myLevel >= 100 ? 'Owner' : _myLevel >= 80 ? 'Administrator' : _legacyAdmin ? 'Administrator (legacy)' : 'Staff';
-  document.getElementById('admin-hero-meta').textContent = `Signed in as ${levelLabel}`;
-
-  await Promise.all([loadAll(), loadAllRoles()]);
-  checkPluginBridge();
-  loadLockState();
 }
 
-// _legacyAdmin: true if old profiles.role was admin/super_admin (pre-migration fallback)
-let _legacyAdmin = false;
-
-async function loadMyPermissions(session) {
+async function loadMyPermissions(user) {
   _myPermissions = {};
   _myLevel = 0;
-  _legacyAdmin = false;
 
-  const user = session?.user || (await supabase.auth.getUser()).data.user;
-  if (!user) return;
-
-  // ── Try new roles system first ──────────────────────────────
-  try {
-    const { data: roles, error } = await supabase.rpc('get_user_roles', { p_user_id: user.id });
-    // If RPC exists and returned without error, use new system even if roles array is empty
-    // (empty just means no roles assigned yet — still beats legacy)
-    if (!error) {
-      (roles || []).forEach(r => {
-        if (r.level > _myLevel) _myLevel = r.level;
-        Object.entries(r.permissions || {}).forEach(([k, v]) => { if (v) _myPermissions[k] = true; });
-      });
-      // If user has no roles assigned yet, grant legacy-style access based on profiles.role
-      // so they aren't locked out while still setting up the new system
-      if (!roles || roles.length === 0) {
-        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-        const role = profile?.role;
-        if (role === 'super_admin' || role === 'admin') {
-          _legacyAdmin = true;
-          _myLevel = role === 'super_admin' ? 100 : 80;
-          ALL_PERMISSIONS.forEach(p => { _myPermissions[p.key] = true; });
-          if (role === 'admin') {
-            _myPermissions.can_assign_admin = false;
-            _myPermissions.can_manage_roles = false;
-            _myPermissions.can_create_roles = false;
-          }
-        }
-      }
-      return; // new system responded — don't fall through
-    }
-  } catch(e) { /* RPC doesn't exist yet — fall through to legacy */ }
-
-  // ── Legacy fallback: read profiles.role directly ────────────
+  // Step 1: always read profiles.role (works before and after migration)
+  let legacyRole = null;
   try {
     const { data: profile } = await supabase
       .from('profiles').select('role').eq('id', user.id).single();
-    const role = profile?.role;
-    if (role === 'super_admin') {
-      _legacyAdmin = true;
-      _myLevel = 100;
-      // Grant all permissions so UI works fully
-      ALL_PERMISSIONS.forEach(p => { _myPermissions[p.key] = true; });
-    } else if (role === 'admin') {
-      _legacyAdmin = true;
-      _myLevel = 80;
-      ALL_PERMISSIONS.forEach(p => { _myPermissions[p.key] = true; });
-      _myPermissions.can_assign_admin  = false;
-      _myPermissions.can_manage_roles  = false;
-      _myPermissions.can_create_roles  = false;
+    legacyRole = profile?.role || null;
+  } catch(e) { /* profiles table missing — very unusual */ }
+
+  // Step 2: try new user_roles system
+  let newRolesWorked = false;
+  try {
+    const { data: roles, error } = await supabase
+      .rpc('get_user_roles', { p_user_id: user.id });
+    if (!error && Array.isArray(roles) && roles.length > 0) {
+      newRolesWorked = true;
+      roles.forEach(r => {
+        if (r.level > _myLevel) _myLevel = r.level;
+        Object.entries(r.permissions || {}).forEach(([k, v]) => {
+          if (v === true) _myPermissions[k] = true;
+        });
+      });
     }
-  } catch(e) { console.warn('loadMyPermissions legacy fallback failed:', e); }
+  } catch(e) { /* migration not run yet — fine */ }
+
+  // Step 3: if new system returned nothing, fall back to legacy role
+  if (!newRolesWorked) {
+    const role = legacyRole;
+    if (role === 'super_admin' || role === 'admin') {
+      _myLevel = role === 'super_admin' ? 100 : 80;
+      ALL_PERMISSIONS.forEach(p => { _myPermissions[p.key] = true; });
+      if (role === 'admin') {
+        _myPermissions.can_assign_admin = false;
+        _myPermissions.can_manage_roles = false;
+        _myPermissions.can_create_roles = false;
+      }
+    }
+  }
+
+  // Always ensure legacy admins with no new roles assigned can still get in
+  if (!_myPermissions.can_view_admin && (legacyRole === 'super_admin' || legacyRole === 'admin')) {
+    ALL_PERMISSIONS.forEach(p => { _myPermissions[p.key] = true; });
+    _myLevel = legacyRole === 'super_admin' ? 100 : 80;
+    if (legacyRole === 'admin') {
+      _myPermissions.can_assign_admin = false;
+      _myPermissions.can_manage_roles = false;
+      _myPermissions.can_create_roles = false;
+    }
+  }
 }
 
 function show(which) {
