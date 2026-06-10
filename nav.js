@@ -433,9 +433,9 @@ async function initNavAuth() {
   }
 
   async function setSignedIn(user) {
-    // Fetch profile for display name + admin role
     let label = user.email?.split('@')[0] || 'Account';
     let isAdmin = false;
+    let canPublishNews = false;
     try {
       const mod = await import('./supabase.js');
       const { data } = await mod.supabase.from('profiles').select('display_name, username, role').eq('id', user.id).single();
@@ -443,6 +443,11 @@ async function initNavAuth() {
         label = data.display_name || data.username || label;
         isAdmin = data.role === 'admin' || data.role === 'super_admin' || data.role === 'owner';
       }
+      try {
+        const { data: perm } = await mod.supabase.rpc('user_has_permission', { perm: 'can_publish_news' });
+        if (perm) canPublishNews = true;
+      } catch(e) {}
+      if (isAdmin) canPublishNews = true;
     } catch(e) {}
 
     accountEl.innerHTML = `
@@ -455,6 +460,7 @@ async function initNavAuth() {
           <a class="nav-account-dropdown-item" href="shop.html">Shop</a>
           <a class="nav-account-dropdown-item" href="account.html">My Account</a>
           ${isAdmin ? `<a class="nav-account-dropdown-item" href="admin.html">Admin</a>` : ''}
+          ${canPublishNews ? `<a class="nav-account-dropdown-item" href="news-publish.html">Publish News</a>` : ''}
           <button class="nav-account-dropdown-item" id="nav-signout-btn">Sign Out</button>
         </div>
       </div>`;
