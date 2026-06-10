@@ -426,6 +426,7 @@
   supabase.auth.onAuthStateChange(async (event, session) => {
     if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && !_initialized) {
       _initialized = true;
+      await new Promise(r => setTimeout(r, 50)); // let nav.js auth listener fire first
       await init(session?.user || null, session?.access_token || null);
     } else if (event === 'TOKEN_REFRESHED') {
       // Re-init with fresh token so isAdmin/products don't break after expiry

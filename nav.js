@@ -435,8 +435,11 @@ async function initNavAuth() {
         isAdmin = data.role === 'admin' || data.role === 'super_admin' || data.role === 'owner';
       }
       try {
-        const { data: perm } = await mod.supabase.rpc('user_has_permission', { perm: 'can_publish_news' });
-        if (perm) canPublishNews = true;
+        const permResult = await Promise.race([
+          mod.supabase.rpc('user_has_permission', { perm: 'can_publish_news' }),
+          new Promise(r => setTimeout(() => r({ data: null }), 2000))
+        ]);
+        if (permResult?.data) canPublishNews = true;
       } catch(e) {}
       if (isAdmin) canPublishNews = true;
     } catch(e) {}
