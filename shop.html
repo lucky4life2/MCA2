@@ -458,8 +458,11 @@
     if (p) openDetail(p);
   };
   async function loadProducts() {
+    elGrid.innerHTML = '<div class="product-empty"><p>Loading products…</p></div>';
     const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
-    if (error) { elGrid.innerHTML = `<div class="product-empty"><p>Error: ${error.message}</p></div>`; return; }
+    if (error) { elGrid.innerHTML = `<div class="product-empty"><p>DB Error: ${error.message} (code: ${error.code})</p></div>`; return; }
+    if (!data) { elGrid.innerHTML = '<div class="product-empty"><p>No data returned.</p></div>'; return; }
+    elGrid.innerHTML = `<div class="product-empty"><p>Got ${data.length} products.</p></div>`;
     _products = data || [];
     const visible = _isAdmin ? _products : _products.filter(p => p.active);
     elCount.textContent = visible.length === 1 ? '1 product' : `${visible.length} products`;
