@@ -628,22 +628,24 @@ async function init() {
   _session = session;
   if (!session?.user) { show('denied'); return; }
 
-  const admin = await isAdmin(session.user.id, session.access_token);
-  if (!admin) { show('denied'); return; }
+  // Load permissions first — this also determines if user is admin via
+  // either the new roles system OR the legacy profiles.role fallback
+  await loadMyPermissions(session);
 
-  // Load merged permissions
-  const { data: permRows } = await supabase.rpc('user_has_permission', { perm: 'can_view_admin' }).throwOnError().catch(() => ({ data: false }));
-  await loadMyPermissions();
+  // Gate: must be admin (new system) OR legacy admin/super_admin
+  if (!_myPermissions.can_view_admin && !_legacyAdmin) {
+    show('denied'); return;
+  }
 
   show('main');
 
-  // Show/hide tabs based on permissions
+  // Show Roles tab only for users who can manage/create roles
   if (!_myPermissions.can_manage_roles && !_myPermissions.can_create_roles) {
     document.getElementById('tab-btn-roles').classList.add('hidden');
   }
 
   // Meta line
-  const levelLabel = _myLevel >= 100 ? 'Owner' : _myLevel >= 80 ? 'Administrator' : 'Staff';
+  const levelLabel = _myLevel >= 100 ? 'Owner' : _myLevel >= 80 ? 'Administrator' : _legacyAdmin ? 'Administrator (legacy)' : 'Staff';
   document.getElementById('admin-hero-meta').textContent = `Signed in as ${levelLabel}`;
 
   await Promise.all([loadAll(), loadAllRoles()]);
@@ -651,20 +653,48 @@ async function init() {
   loadLockState();
 }
 
-async function loadMyPermissions() {
+// _legacyAdmin: true if old profiles.role was admin/super_admin (pre-migration fallback)
+let _legacyAdmin = false;
+
+async function loadMyPermissions(session) {
+  _myPermissions = {};
+  _myLevel = 0;
+  _legacyAdmin = false;
+
+  const user = session?.user || (await supabase.auth.getUser()).data.user;
+  if (!user) return;
+
+  // ── Try new roles system first ──────────────────────────────
   try {
-    // Fetch all my roles and merge permissions client-side
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data: roles } = await supabase.rpc('get_user_roles', { p_user_id: user.id });
-    _myPermissions = {};
-    _myLevel = 0;
-    (roles || []).forEach(r => {
-      if (r.level > _myLevel) _myLevel = r.level;
-      const perms = r.permissions || {};
-      Object.entries(perms).forEach(([k, v]) => { if (v) _myPermissions[k] = true; });
-    });
-  } catch(e) { console.warn('loadMyPermissions:', e); }
+    const { data: roles, error } = await supabase.rpc('get_user_roles', { p_user_id: user.id });
+    if (!error && roles && roles.length > 0) {
+      roles.forEach(r => {
+        if (r.level > _myLevel) _myLevel = r.level;
+        Object.entries(r.permissions || {}).forEach(([k, v]) => { if (v) _myPermissions[k] = true; });
+      });
+      return; // new system worked, don't fall back
+    }
+  } catch(e) { /* table doesn't exist yet — fall through to legacy */ }
+
+  // ── Legacy fallback: read profiles.role directly ────────────
+  try {
+    const { data: profile } = await supabase
+      .from('profiles').select('role').eq('id', user.id).single();
+    const role = profile?.role;
+    if (role === 'super_admin') {
+      _legacyAdmin = true;
+      _myLevel = 100;
+      // Grant all permissions so UI works fully
+      ALL_PERMISSIONS.forEach(p => { _myPermissions[p.key] = true; });
+    } else if (role === 'admin') {
+      _legacyAdmin = true;
+      _myLevel = 80;
+      ALL_PERMISSIONS.forEach(p => { _myPermissions[p.key] = true; });
+      _myPermissions.can_assign_admin  = false;
+      _myPermissions.can_manage_roles  = false;
+      _myPermissions.can_create_roles  = false;
+    }
+  } catch(e) { console.warn('loadMyPermissions legacy fallback failed:', e); }
 }
 
 function show(which) {
@@ -701,10 +731,29 @@ async function loadAll() {
   populateRoleFilter();
 }
 
+// _migrationDone: false means the SQL migration has not been run yet
+let _migrationDone = true;
+
 async function loadAllRoles() {
   const { data, error } = await supabase.from('roles').select('*').order('level', { ascending: false });
-  if (!error) _allRoles = data || [];
+  if (error) {
+    _migrationDone = false;
+    _allRoles = [];
+    showMigrationBanner();
+  } else {
+    _allRoles = data || [];
+  }
   renderRoles();
+}
+
+function showMigrationBanner() {
+  if (document.getElementById('migration-banner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'migration-banner';
+  banner.style.cssText = 'background:#fff8e1;border:1px solid #f0c040;border-radius:6px;padding:1rem 1.5rem;margin-bottom:1.5rem;font-size:13px;line-height:1.6;display:flex;gap:12px;align-items:flex-start;';
+  banner.innerHTML = '<span style="font-size:20px;flex-shrink:0;">⚠️</span><div><strong style="color:#7a5c00;display:block;margin-bottom:4px;">Migration SQL not yet run</strong><span style="color:#6b4e00;">The new roles system requires <strong>migration.sql</strong> to be run in <strong>Supabase → SQL Editor</strong>. Until then the admin panel works in legacy mode. The Roles tab and role-assignment features will not work until you run the migration.</span></div>';
+  const hero = document.querySelector('.admin-hero');
+  if (hero) hero.after(banner);
 }
 
 // ── Stats ─────────────────────────────────────────────────────
