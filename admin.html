@@ -1480,11 +1480,16 @@ document.getElementById('lm-save').addEventListener('click', async () => {
   const name = document.getElementById('lm-name').value.trim(), title = document.getElementById('lm-title').value.trim();
   if (!name||!title) { const e = document.getElementById('lm-error'); e.textContent = 'Name and Title are required.'; e.style.display = 'block'; return; }
   const id = document.getElementById('lm-id').value;
-  const sortVal = document.getElementById('lm-sort').value;
-  const sort_order = sortVal === '' || sortVal === null ? 0 : parseInt(sortVal, 10);
+  const sortInput = document.getElementById('lm-sort');
+  const sortVal = sortInput.value;
+  const sort_order = sortVal === '' || sortVal === null || isNaN(sortVal) ? 0 : parseInt(sortVal, 10);
   const payload = { name, title, subtitle: document.getElementById('lm-subtitle').value.trim()||null, branch: document.getElementById('lm-branch').value, sort_order: sort_order, show_in_team: document.getElementById('lm-show-in-team').checked };
-  const { error } = id ? await supabase.from('leadership').update(payload).eq('id',id) : await supabase.from('leadership').insert(payload);
-  if (error) { const e = document.getElementById('lm-error'); e.textContent = error.message; e.style.display = 'block'; return; }
+  const result = id ? await supabase.from('leadership').update(payload).eq('id',id).select() : await supabase.from('leadership').insert(payload).select();
+  const { data, error } = result;
+  if (error) { const e = document.getElementById('lm-error'); e.textContent = 'Error: ' + error.message; e.style.display = 'block'; return; }
+  if (data && data.length > 0 && data[0].sort_order !== sort_order) {
+    const e = document.getElementById('lm-error'); e.textContent = 'Warning: sort_order may not have saved correctly'; e.style.display = 'block'; 
+  }
   closeLeaderModal(); await loadLeadershipAdmin();
 });
 window.deleteLeader = async (id) => { if (!confirm('Remove this person?')) return; await supabase.from('leadership').delete().eq('id',id); await loadLeadershipAdmin(); };
