@@ -396,14 +396,17 @@
 
   async function init(user, accessToken) {
     _isLoggedIn = !!user; _userId = user?.id || null;
+    // Show shop immediately — don't wait for isAdmin
+    elLoading.style.display = 'none'; elShop.style.display = 'block';
+    loadProducts(); updateFloatCart();
+    // Resolve admin status in background, then re-apply state
     try {
       _isAdmin = _isLoggedIn ? await Promise.race([
         isAdmin(_userId, accessToken),
         new Promise(res => setTimeout(() => res(false), 4000))
       ]) : false;
     } catch(e) { _isAdmin = false; }
-    elLoading.style.display = 'none'; elShop.style.display = 'block';
-    applyState(); loadProducts(); updateFloatCart();
+    applyState();
   }
 
   elLoading.style.display = 'flex'; elShop.style.display = 'none';
