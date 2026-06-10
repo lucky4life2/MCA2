@@ -105,7 +105,7 @@ const SUPABASE_ANON   = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
           if (profileRes.ok) {
             const profiles = await profileRes.json();
             const role = profiles?.[0]?.role;
-            if (role === 'admin' || role === 'super_admin') {
+            if (role === 'admin' || role === 'super_admin' || role === 'owner') {
               document.documentElement.style.visibility = '';
               return;
             }
@@ -435,7 +435,7 @@ async function initNavAuth() {
       const { data } = await mod.supabase.from('profiles').select('display_name, username, role').eq('id', user.id).single();
       if (data) {
         label = data.display_name || data.username || label;
-        isAdmin = data.role === 'admin' || data.role === 'super_admin';
+        isAdmin = data.role === 'admin' || data.role === 'super_admin' || data.role === 'owner';
       }
     } catch(e) {}
 
