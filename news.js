@@ -55,7 +55,7 @@ function renderFeaturedBanner(article) {
     <div class="featured-banner-inner">
       <div class="featured-banner-left">
         <span class="featured-tag">Featured</span>
-        <span class="featured-banner-title">${article.title}</span>
+        <span class="featured-banner-title" style="white-space:normal;overflow:visible;text-overflow:unset;">${article.title}</span>
       </div>
       <div class="featured-banner-right">
         <span class="featured-banner-meta">${formatDate(article.published_at)}</span>
@@ -198,32 +198,34 @@ const loadingEl = document.getElementById('news-loading');
 const errorEl   = document.getElementById('news-error');
 const searchEl  = document.getElementById('news-search');
 
-if (indexEl) {
-  try {
-    const { data: articles, error } = await supabase
-      .from('news_articles')
-      .select('id,title,slug,summary,body,category,author_name,published_at,image_url,status')
-      .eq('status', 'published')
-      .order('published_at', { ascending: false });
+// Always fetch articles — needed for featured banner on any page, and for the news index
+try {
+  const { data: articles, error } = await supabase
+    .from('news_articles')
+    .select('id,title,slug,summary,body,category,author_name,published_at,image_url,status')
+    .eq('status', 'published')
+    .order('published_at', { ascending: false });
 
-    if (loadingEl) loadingEl.style.display = 'none';
-    if (error) throw error;
+  if (loadingEl) loadingEl.style.display = 'none';
+  if (error) throw error;
 
-    if (!articles || articles.length === 0) {
-      const emptyEl = document.getElementById('news-empty');
-      if (emptyEl) emptyEl.style.display = 'block';
-    } else {
-      const featuredArticle = articles.find(a => a.category?.toLowerCase() === 'featured');
-      if (featuredArticle) renderFeaturedBanner(featuredArticle);
+  if (articles && articles.length > 0) {
+    // Featured banner — runs on any page that has #featured-banner or a .page-wrap
+    const featuredArticle = articles.find(a => a.category?.toLowerCase() === 'featured');
+    if (featuredArticle) renderFeaturedBanner(featuredArticle);
 
+    // News index — only on news.html
+    if (indexEl) {
       _allArticles = articles;
       indexEl.style.display = '';
       applySearch('');
-
       if (searchEl) searchEl.addEventListener('input', e => applySearch(e.target.value));
     }
-  } catch (err) {
-    if (loadingEl) loadingEl.style.display = 'none';
-    if (errorEl) { errorEl.textContent = `Failed to load news: ${err.message}`; errorEl.style.display = 'block'; }
+  } else if (indexEl) {
+    const emptyEl = document.getElementById('news-empty');
+    if (emptyEl) emptyEl.style.display = 'block';
   }
+} catch (err) {
+  if (loadingEl) loadingEl.style.display = 'none';
+  if (errorEl) { errorEl.textContent = `Failed to load news: ${err.message}`; errorEl.style.display = 'block'; }
 }
