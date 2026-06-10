@@ -87,30 +87,36 @@ const SUPABASE_ANON   = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
 
     // Check if the current user is an admin — admins bypass the lock
     try {
-      // Get session from localStorage (Supabase stores it there)
-      const storageKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
-      if (storageKey) {
-        const session = JSON.parse(localStorage.getItem(storageKey));
-        const token = session?.access_token;
-        if (token) {
-          const profileRes = await fetch(
-            `${SUPABASE_URL}/rest/v1/profiles?select=role`,
-            {
-              headers: {
-                'apikey': SUPABASE_ANON,
-                'Authorization': `Bearer ${token}`,
-              }
-            }
-          );
-          if (profileRes.ok) {
-            const profiles = await profileRes.json();
-            const role = profiles?.[0]?.role;
-            if (role === 'admin' || role === 'super_admin' || role === 'owner') {
-              document.documentElement.style.visibility = '';
-              return;
+      const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+      const _sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+      const { data: { session } } = await _sb.auth.getSession();
+      const token = session?.access_token;
+      if (token) {
+        const profileRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/profiles?select=role`,
+          {
+            headers: {
+              'apikey': SUPABASE_ANON,
+              'Authorization': `Bearer ${token}`,
             }
           }
+        );
+        if (profileRes.ok) {
+          const profiles = await profileRes.json();
+          const role = profiles?.[0]?.role;
+          if (role === 'admin' || role === 'super_admin' || role === 'owner') {
+            document.documentElement.style.visibility = '';
+            return;
+          }
         }
+        // Also check new roles system for can_lock_site permission
+        try {
+          const { data: permData } = await _sb.rpc('user_has_permission', { perm: 'can_lock_site' });
+          if (permData) {
+            document.documentElement.style.visibility = '';
+            return;
+          }
+        } catch(e) {}
       }
     } catch(e) {}
 
@@ -430,7 +436,6 @@ async function initNavAuth() {
     // Fetch profile for display name + admin role
     let label = user.email?.split('@')[0] || 'Account';
     let isAdmin = false;
-    let canPublishNews = false;
     try {
       const mod = await import('./supabase.js');
       const { data } = await mod.supabase.from('profiles').select('display_name, username, role').eq('id', user.id).single();
@@ -438,13 +443,6 @@ async function initNavAuth() {
         label = data.display_name || data.username || label;
         isAdmin = data.role === 'admin' || data.role === 'super_admin' || data.role === 'owner';
       }
-      // Check new roles system for news publish permission
-      try {
-        const { data: permData } = await mod.supabase.rpc('user_has_permission', { perm: 'can_publish_news' });
-        if (permData) canPublishNews = true;
-      } catch(e) {}
-      // Admins/owners always get it too
-      if (isAdmin) canPublishNews = true;
     } catch(e) {}
 
     accountEl.innerHTML = `
@@ -457,7 +455,6 @@ async function initNavAuth() {
           <a class="nav-account-dropdown-item" href="shop.html">Shop</a>
           <a class="nav-account-dropdown-item" href="account.html">My Account</a>
           ${isAdmin ? `<a class="nav-account-dropdown-item" href="admin.html">Admin</a>` : ''}
-          ${canPublishNews ? `<a class="nav-account-dropdown-item" href="news-publish.html">Publish News</a>` : ''}
           <button class="nav-account-dropdown-item" id="nav-signout-btn">Sign Out</button>
         </div>
       </div>`;
