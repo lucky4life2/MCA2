@@ -51,11 +51,7 @@ function renderFeaturedBanner(article) {
   const storageKey = `mca-featured-dismissed-${article.id}`;
   if (sessionStorage.getItem(storageKey)) return;
 
-  const banner = document.createElement('div');
-  banner.id = 'featured-banner';
-  banner.className = 'featured-banner';
-  banner.style.cursor = 'pointer';
-  banner.innerHTML = `
+  const inner = `
     <div class="featured-banner-inner">
       <div class="featured-banner-left">
         <span class="featured-tag">Featured</span>
@@ -71,8 +67,22 @@ function renderFeaturedBanner(article) {
         display:flex;align-items:center;justify-content:center;flex-shrink:0;">✕</button>
     </div>`;
 
-  const pageWrap = document.querySelector('.page-wrap') || document.body.firstElementChild;
-  document.body.insertBefore(banner, pageWrap);
+  // Reuse existing placeholder (index.html) or create+insert before .page-wrap (news.html)
+  let banner = document.getElementById('featured-banner');
+  if (banner) {
+    banner.innerHTML = inner;
+    banner.className = 'featured-banner';
+    banner.style.display = '';
+    banner.style.cursor = 'pointer';
+  } else {
+    banner = document.createElement('div');
+    banner.id = 'featured-banner';
+    banner.className = 'featured-banner';
+    banner.style.cursor = 'pointer';
+    banner.innerHTML = inner;
+    const pageWrap = document.querySelector('.page-wrap') || document.body.firstElementChild;
+    document.body.insertBefore(banner, pageWrap);
+  }
 
   banner.addEventListener('click', e => {
     if (e.target.id === 'featured-banner-close') return;
@@ -81,7 +91,7 @@ function renderFeaturedBanner(article) {
   document.getElementById('featured-banner-close').addEventListener('click', e => {
     e.stopPropagation();
     sessionStorage.setItem(storageKey, '1');
-    banner.remove();
+    banner.style.display = 'none';
   });
 }
 
