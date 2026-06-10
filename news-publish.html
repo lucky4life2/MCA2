@@ -323,7 +323,7 @@ async function init() {
     const { data: profile } = await supabase
       .from('profiles').select('role').eq('id', _user.id).single();
     const role = profile?.role;
-    hasAccess = role === 'super_admin' || role === 'admin';
+    hasAccess = role === 'super_admin' || role === 'owner' || role === 'admin';
   }
 
   if (!hasAccess) { showState('denied'); return; }
