@@ -305,11 +305,30 @@ async function init() {
   if (!session?.user) { showState('denied'); return; }
   _user = session.user;
 
-  // Check news permission
-  const { data: hasPerm } = await supabase.rpc('user_has_permission', { perm: 'can_manage_news' }).catch(() => ({ data: false }));
-  if (!hasPerm) { showState('denied'); return; }
+  // Check access — try new permission system first, fall back to legacy role
+  let hasAccess = false;
+  try {
+    const { data, error } = await supabase.rpc('user_has_permission', { perm: 'can_manage_news' });
+    if (!error && data === true) {
+      hasAccess = true;
+    } else if (!error) {
+      // RPC worked but returned false — user genuinely lacks the permission
+      hasAccess = false;
+    } else {
+      // RPC error means migration hasn't run — fall back to legacy role check
+      throw new Error('rpc_missing');
+    }
+  } catch(e) {
+    // Legacy fallback: admin and super_admin always get news access
+    const { data: profile } = await supabase
+      .from('profiles').select('role').eq('id', _user.id).single();
+    const role = profile?.role;
+    hasAccess = role === 'super_admin' || role === 'admin';
+  }
 
-  // Get profile
+  if (!hasAccess) { showState('denied'); return; }
+
+  // Get profile for display name
   const { data: profile } = await supabase.from('profiles').select('display_name,username').eq('id', _user.id).single();
   _profile = profile;
   const name = profile?.display_name || profile?.username || _user.email;

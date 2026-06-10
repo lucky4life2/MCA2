@@ -667,14 +667,32 @@ async function loadMyPermissions(session) {
   // ── Try new roles system first ──────────────────────────────
   try {
     const { data: roles, error } = await supabase.rpc('get_user_roles', { p_user_id: user.id });
-    if (!error && roles && roles.length > 0) {
-      roles.forEach(r => {
+    // If RPC exists and returned without error, use new system even if roles array is empty
+    // (empty just means no roles assigned yet — still beats legacy)
+    if (!error) {
+      (roles || []).forEach(r => {
         if (r.level > _myLevel) _myLevel = r.level;
         Object.entries(r.permissions || {}).forEach(([k, v]) => { if (v) _myPermissions[k] = true; });
       });
-      return; // new system worked, don't fall back
+      // If user has no roles assigned yet, grant legacy-style access based on profiles.role
+      // so they aren't locked out while still setting up the new system
+      if (!roles || roles.length === 0) {
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+        const role = profile?.role;
+        if (role === 'super_admin' || role === 'admin') {
+          _legacyAdmin = true;
+          _myLevel = role === 'super_admin' ? 100 : 80;
+          ALL_PERMISSIONS.forEach(p => { _myPermissions[p.key] = true; });
+          if (role === 'admin') {
+            _myPermissions.can_assign_admin = false;
+            _myPermissions.can_manage_roles = false;
+            _myPermissions.can_create_roles = false;
+          }
+        }
+      }
+      return; // new system responded — don't fall through
     }
-  } catch(e) { /* table doesn't exist yet — fall through to legacy */ }
+  } catch(e) { /* RPC doesn't exist yet — fall through to legacy */ }
 
   // ── Legacy fallback: read profiles.role directly ────────────
   try {
