@@ -257,7 +257,7 @@
 
 
 <script type="module">
-  import { supabase, isAdmin, signOut } from './supabase.js';
+  import { supabase, signOut } from './supabase.js';
 
   let _isAdmin = false, _isLoggedIn = false, _userId = null, _initialized = false;
 
@@ -400,12 +400,13 @@
     elLoading.style.display = 'none'; elShop.style.display = 'block';
     loadProducts(); updateFloatCart();
     // Resolve admin status in background, then re-apply state
-    try {
-      _isAdmin = _isLoggedIn ? await Promise.race([
-        isAdmin(_userId, accessToken),
-        new Promise(res => setTimeout(() => res(false), 4000))
-      ]) : false;
-    } catch(e) { _isAdmin = false; }
+    if (_isLoggedIn) {
+      try {
+        const { data } = await supabase.from('profiles').select('role').eq('id', _userId).single();
+        const role = data?.role;
+        _isAdmin = role === 'admin' || role === 'super_admin' || role === 'owner';
+      } catch(e) { _isAdmin = false; }
+    }
     applyState();
   }
 
