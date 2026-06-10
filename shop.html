@@ -457,10 +457,7 @@
     if (p) openDetail(p);
   };
   async function loadProducts() {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false }).abortSignal(controller.signal);
-    clearTimeout(timeout);
+    const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
     if (error) { elGrid.innerHTML = `<div class="product-empty"><p>Error: ${error.message}</p></div>`; return; }
     _products = data || [];
     const visible = _isAdmin ? _products : _products.filter(p => p.active);
