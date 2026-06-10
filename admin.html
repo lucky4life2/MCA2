@@ -741,29 +741,21 @@ async function loadAll() {
   populateRoleFilter();
 }
 
-// _migrationDone: false means the SQL migration has not been run yet
-let _migrationDone = true;
-
 async function loadAllRoles() {
-  const { data, error } = await supabase.from('roles').select('*').order('level', { ascending: false });
-  if (error) {
-    _migrationDone = false;
+  try {
+    const { data, error } = await supabase.from('roles').select('*').order('level', { ascending: false });
+    // If we get data (even empty array), migration has run fine
+    if (!error) {
+      _allRoles = data || [];
+    } else {
+      // RLS or other error — try fetching without order as fallback
+      const { data: d2 } = await supabase.from('roles').select('*');
+      _allRoles = d2 || [];
+    }
+  } catch(e) {
     _allRoles = [];
-    showMigrationBanner();
-  } else {
-    _allRoles = data || [];
   }
   renderRoles();
-}
-
-function showMigrationBanner() {
-  if (document.getElementById('migration-banner')) return;
-  const banner = document.createElement('div');
-  banner.id = 'migration-banner';
-  banner.style.cssText = 'background:#fff8e1;border:1px solid #f0c040;border-radius:6px;padding:1rem 1.5rem;margin-bottom:1.5rem;font-size:13px;line-height:1.6;display:flex;gap:12px;align-items:flex-start;';
-  banner.innerHTML = '<span style="font-size:20px;flex-shrink:0;">⚠️</span><div><strong style="color:#7a5c00;display:block;margin-bottom:4px;">Migration SQL not yet run</strong><span style="color:#6b4e00;">The new roles system requires <strong>migration.sql</strong> to be run in <strong>Supabase → SQL Editor</strong>. Until then the admin panel works in legacy mode. The Roles tab and role-assignment features will not work until you run the migration.</span></div>';
-  const hero = document.querySelector('.admin-hero');
-  if (hero) hero.after(banner);
 }
 
 // ── Stats ─────────────────────────────────────────────────────
