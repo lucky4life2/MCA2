@@ -260,6 +260,7 @@
   import { supabase, signOut } from './supabase.js';
 
   let _isAdmin = false, _isLoggedIn = false, _userId = null, _initialized = false;
+  let _products = [];
 
   // ── Cart
   function cartKey() { return 'mca_cart_' + _userId; }
@@ -452,7 +453,6 @@
 
   // ── Load products
   // Store products in memory for detail modal
-  let _products = [];
   window.openProductDetail = async (id) => {
     let p = _products.find(x => x.id === id);
     if (!p) { const { data } = await supabase.from('products').select('*').eq('id', id).single(); p = data; }
