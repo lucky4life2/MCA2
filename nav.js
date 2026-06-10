@@ -87,8 +87,7 @@ const SUPABASE_ANON   = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
 
     // Check if the current user is an admin — admins bypass the lock
     try {
-      const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-      const _sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+      const { supabase: _sb } = await import('./supabase.js');
       const { data: { session } } = await _sb.auth.getSession();
       const token = session?.access_token;
       if (token) {
@@ -109,14 +108,6 @@ const SUPABASE_ANON   = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
             return;
           }
         }
-        // Also check new roles system for can_lock_site permission
-        try {
-          const { data: permData } = await _sb.rpc('user_has_permission', { perm: 'can_lock_site' });
-          if (permData) {
-            document.documentElement.style.visibility = '';
-            return;
-          }
-        } catch(e) {}
       }
     } catch(e) {}
 
