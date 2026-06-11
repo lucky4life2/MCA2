@@ -913,6 +913,8 @@ function renderMembers(members) {
 
     const revokeEmailBtn = emailVerified && _myPermissions.can_manage_users
       ? `<button class="btn btn-danger btn-sm" onclick="revokeEmail('${m.id}')">Revoke Email</button>` : '';
+    const resendEmailBtn = !emailVerified && m.email && _myPermissions.can_manage_users
+      ? `<button class="btn btn-secondary btn-sm" onclick="resendVerification('${m.id}', '${m.email}')">Resend Verification</button>` : '';
     const revokeDiscordBtn = hasDiscord && _myPermissions.can_manage_users
       ? `<button class="btn btn-danger btn-sm" onclick="revokeDiscord('${m.id}')">Revoke Discord</button>` : '';
 
@@ -933,7 +935,7 @@ function renderMembers(members) {
             ? `<button class="btn btn-success btn-sm" onclick="approveMC('${m.id}')">Approve MC</button>` : ''}
           ${m.minecraft_verified && _myPermissions.can_manage_minecraft
             ? `<button class="btn btn-danger btn-sm" onclick="revokeMC('${m.id}')">Revoke MC</button>` : ''}
-          ${revokeEmailBtn}${revokeDiscordBtn}
+          ${resendEmailBtn}${revokeEmailBtn}${revokeDiscordBtn}
         </div>
       </td>
     </tr>`;
@@ -1371,6 +1373,12 @@ window.revokeMC   = async (id) => {
   if (!confirm('Remove Minecraft verification?')) return;
   await supabase.from('profiles').update({ minecraft_verified: false, minecraft_username: null, mc_verify_code: null, mc_verify_expires: null }).eq('id', id);
   await loadAll();
+};
+window.resendVerification = async (id, email) => {
+  if (!confirm(`Resend verification email to ${email}?`)) return;
+  const { error } = await supabase.auth.resend({ type: 'signup', email });
+  if (error) { alert('Error: ' + error.message); return; }
+  alert('Verification email sent to ' + email);
 };
 window.revokeEmail = async (id) => {
   if (!confirm('Revoke email verification?')) return;

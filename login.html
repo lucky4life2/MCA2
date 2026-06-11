@@ -228,6 +228,16 @@
           <a href="#" class="login-back-link" id="confirm-back">← Back to sign in</a>
         </div>
 
+        <!-- Email verified panel -->
+        <div class="login-panel" id="panel-verified">
+          <div class="login-success">
+            <div class="login-success-icon">✅</div>
+            <div class="login-success-title">Email Verified!</div>
+            <p class="login-success-text">Your email address has been confirmed. You can now sign in to your account.</p>
+          </div>
+          <a href="#" class="login-back-link" id="verified-signin-link">Sign in →</a>
+        </div>
+
         <!-- Forgot password panel -->
         <div class="login-panel" id="panel-forgot">
           <div class="login-form-group">
@@ -264,9 +274,27 @@
   const params   = new URLSearchParams(window.location.search);
   const returnTo = params.get('return') || 'account.html';
 
+  // ── Email verification callback ─────────────────────────────
+  // Supabase appends #access_token=...&token_type=signup to the URL after
+  // the user clicks the confirmation link in their email.
+  const hash = new URLSearchParams(window.location.hash.slice(1));
+  if (hash.get('token_type') === 'signup' || hash.get('type') === 'signup') {
+    // Hide tabs/footer, show verified panel
+    document.querySelectorAll('.login-tab, .login-card-footer, #login-card-footer').forEach(el => { if(el) el.style.display = 'none'; });
+    document.querySelectorAll('.login-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-verified').classList.add('active');
+    document.getElementById('verified-signin-link').addEventListener('click', e => {
+      e.preventDefault();
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      document.querySelectorAll('.login-tab, .login-card-footer, #login-card-footer').forEach(el => { if(el) el.style.display = ''; });
+      document.querySelectorAll('.login-panel').forEach(p => p.classList.remove('active'));
+      document.getElementById('panel-signin').classList.add('active');
+    });
+  }
+
   // If already signed in, skip the login page entirely
   const { data: { session } } = await supabase.auth.getSession();
-  if (session) window.location.replace(returnTo);
+  if (session && hash.get('token_type') !== 'signup' && hash.get('type') !== 'signup') window.location.replace(returnTo);
 
   // ── Tab switching ─────────────────────────────────────────────
   const tabs     = document.querySelectorAll('.login-tab');
