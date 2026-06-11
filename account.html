@@ -626,6 +626,23 @@ document.getElementById('btn-save-profile').addEventListener('click', async () =
   const errEl  = document.getElementById('profile-error');
   const succEl = document.getElementById('profile-success');
   errEl.style.display = 'none'; succEl.style.display = 'none';
+
+  // Validate username format
+  if (username && !/^[a-zA-Z0-9_]{3,32}$/.test(username)) {
+    errEl.textContent = 'Username must be 3–32 characters and can only contain letters, numbers, and underscores.';
+    errEl.style.display = 'block'; return;
+  }
+
+  // Check for duplicate username (only if changed)
+  if (username && username !== _profile.username) {
+    const { data: existing } = await supabase
+      .from('profiles').select('id').ilike('username', username).neq('id', _user.id).maybeSingle();
+    if (existing) {
+      errEl.textContent = `"${username}" is already taken. Please choose a different username.`;
+      errEl.style.display = 'block'; return;
+    }
+  }
+
   const { error } = await supabase.from('profiles').update({ display_name, username }).eq('id', _user.id);
   if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
   _profile.display_name = display_name;
