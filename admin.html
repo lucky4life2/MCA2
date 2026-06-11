@@ -584,6 +584,7 @@
       <div><label class="form-label">Territory</label><input type="text" id="nm-territory" class="form-input"></div>
       <div><label class="form-label">Status</label><input type="text" id="nm-status" class="form-input"></div>
       <div><label class="form-label">Flag filename</label><input type="text" id="nm-flag" class="form-input"></div>
+      <div><label class="form-label">Sort Order</label><input type="number" id="nm-sort_order" class="form-input" placeholder="0 = first"></div>
       <div style="grid-column:1/-1;"><label class="form-label">Description (optional)</label><textarea id="nm-body" class="form-input" rows="3" style="resize:vertical;"></textarea></div>
     </div>
     <div id="nm-error" style="font-size:13px;color:#c0392b;padding:0 1.5rem .5rem;display:none;"></div>
@@ -1516,6 +1517,8 @@ document.getElementById('nm-save').addEventListener('click', async () => {
   const id = document.getElementById('nm-id').value;
   const payload = { name };
   ['leader','capital','government','founded','population','territory','status','flag','body'].forEach(k => { payload[k] = document.getElementById('nm-'+k)?.value.trim()||null; });
+  const sortVal = document.getElementById('nm-sort_order')?.value;
+  payload.sort_order = sortVal !== '' && sortVal != null ? parseInt(sortVal) : null;
   const result = id ? await supabase.from('nations').update(payload).eq('id',id).select() : await supabase.from('nations').insert(payload).select();
   const { data, error } = result;
   if (error) { const e = document.getElementById('nm-error'); e.textContent = 'Error: ' + error.message; e.style.display = 'block'; return; }
