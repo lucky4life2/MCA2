@@ -190,8 +190,8 @@ function showLockScreen(cfg) {
       padding:2rem;
       text-align:center;
     ">
-      <img src="/images/logo.png" alt="MCA Logo" style="width:72px;height:72px;object-fit:contain;margin-bottom:1.5rem;" onerror="this.style.display='none'">
-      <div style="
+      <img src="/images/logo-light.png" alt="MCA Logo" id="lock-logo-img" style="width:72px;height:72px;object-fit:contain;margin-bottom:1.5rem;" onerror="this.style.display='none'">
+      <div id="lock-eyebrow" style="
         font-size:11px;
         font-weight:700;
         letter-spacing:2px;
@@ -221,17 +221,110 @@ function showLockScreen(cfg) {
         color:#18489e;
         font-weight:600;
       ">Expected return: ${cfg.return_time}</div>` : ''}
-      <p style="margin-top:3rem;font-size:11px;color:#aaa;letter-spacing:0.5px;">
+      <p style="margin-top:3rem;font-size:11px;color:#aaa;letter-spacing:0.5px;" id="lock-footer-text">
         MINECRAFT CLUB OF AMERICA
       </p>
+    </div>
+    <div id="lock-login-portal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:999;align-items:center;justify-content:center;">
+      <div style="background:#fff;border-radius:10px;padding:2rem;width:100%;max-width:360px;margin:1rem;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+        <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#18489e;margin-bottom:0.5rem;">Admin Access</div>
+        <h2 style="font-family:'Times New Roman',serif;font-size:1.4rem;font-weight:normal;margin:0 0 1.25rem;color:#1a1a2e;">Sign in to continue</h2>
+        <input id="lock-email" type="email" placeholder="Email" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #dde1ea;border-radius:5px;font-size:14px;margin-bottom:10px;outline:none;font-family:inherit;">
+        <input id="lock-password" type="password" placeholder="Password" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #dde1ea;border-radius:5px;font-size:14px;margin-bottom:14px;outline:none;font-family:inherit;">
+        <div id="lock-login-error" style="font-size:12px;color:#c0392b;margin-bottom:10px;display:none;"></div>
+        <div style="display:flex;gap:8px;">
+          <button id="lock-login-cancel" style="flex:1;padding:10px;border:1px solid #dde1ea;border-radius:5px;background:transparent;color:#666;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Cancel</button>
+          <button id="lock-login-submit" style="flex:2;padding:10px;border:none;border-radius:5px;background:#18489e;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Sign In</button>
+        </div>
+      </div>
     </div>`;
+
+  // Hidden sequence: logo ×3 → footer text ×2 → eyebrow label ×1 (in order, must complete within 20s each step)
+  let _seq = 0;
+  let _seqTimer = null;
+  const _steps = [
+    { id: 'lock-logo-img',    needed: 3 },
+    { id: 'lock-footer-text', needed: 2 },
+    { id: 'lock-eyebrow',     needed: 1 },
+  ];
+  let _stepCount = 0;
+
+  function resetSeq() { _seq = 0; _stepCount = 0; clearTimeout(_seqTimer); }
+  function bumpTimer() { clearTimeout(_seqTimer); _seqTimer = setTimeout(resetSeq, 20000); }
+
+  function attachStep(stepIndex) {
+    const el = document.getElementById(_steps[stepIndex].id);
+    if (!el) return;
+    el.style.cursor = 'default';
+    el.addEventListener('click', () => {
+      if (_seq !== stepIndex) { resetSeq(); return; }
+      _stepCount++;
+      bumpTimer();
+      if (_stepCount >= _steps[stepIndex].needed) {
+        _seq++;
+        _stepCount = 0;
+        if (_seq >= _steps.length) {
+          clearTimeout(_seqTimer);
+          showLockLogin();
+        }
+      }
+    });
+  }
+  _steps.forEach((_, i) => attachStep(i));
+
+  function showLockLogin() {
+    const portal = document.getElementById('lock-login-portal');
+    portal.style.display = 'flex';
+    document.getElementById('lock-email').focus();
+  }
+
+  document.getElementById('lock-login-cancel').addEventListener('click', () => {
+    document.getElementById('lock-login-portal').style.display = 'none';
+    resetSeq();
+  });
+
+  document.getElementById('lock-login-submit').addEventListener('click', async () => {
+    const email = document.getElementById('lock-email').value.trim();
+    const password = document.getElementById('lock-password').value;
+    const errEl = document.getElementById('lock-login-error');
+    errEl.style.display = 'none';
+    if (!email || !password) { errEl.textContent = 'Please enter your email and password.'; errEl.style.display = 'block'; return; }
+    const btn = document.getElementById('lock-login-submit');
+    btn.textContent = 'Signing in…'; btn.disabled = true;
+    try {
+      const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+      const _sb = createClient(SUPABASE_URL, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNzA2NTQsImV4cCI6MjA5NTg0NjY1NH0.nFqlc20iUDwE1sXLRi2Pev181v2RJKx_S6UcTkGgPWU');
+      const { data, error } = await _sb.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      // Verify they're actually an admin
+      const { data: profile } = await _sb.from('profiles').select('role').eq('id', data.user.id).single();
+      if (!profile || !['admin','super_admin'].includes(profile.role)) {
+        await _sb.auth.signOut();
+        throw new Error('You do not have admin access.');
+      }
+      window.location.reload();
+    } catch(err) {
+      errEl.textContent = err.message || 'Sign in failed.';
+      errEl.style.display = 'block';
+      btn.textContent = 'Sign In'; btn.disabled = false;
+    }
+  });
+
+  document.getElementById('lock-password').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('lock-login-submit').click();
+  });
+}
 }
 
 
-const NAV_HTML = () => `
+const NAV_HTML = () => {
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const wideLogo   = dark ? 'images/widelogo-dark.png'  : 'images/widelogo-light.png';
+  const squareLogo = dark ? 'images/logo-dark.png'      : 'images/logo-light.png';
+  return `
 <nav>
   <a class="nav-logo" href="index.html">
-    <img src="images/widelogo-light.png" alt="Minecraft Club of America" class="nav-logo-img" id="nav-logo-img">
+    <img src="${wideLogo}" alt="Minecraft Club of America" class="nav-logo-img" id="nav-logo-img">
   </a>
   <div class="nav-right">
     <button class="nav-hamburger" id="nav-hamburger" aria-label="Toggle menu">
@@ -261,15 +354,18 @@ const NAV_HTML = () => `
     </li>
   </ul>
 </nav>
-`;
+`; }; // end NAV_HTML
 
-const FOOTER_HTML = () => `
+const FOOTER_HTML = () => {
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const squareLogo = dark ? 'images/logo-dark.png' : 'images/logo-light.png';
+  return `
 <footer>
   <div class="footer-inner">
 
     <div class="footer-brand">
       <div class="footer-logo">
-        <img src="images/logo-light.png" alt="Minecraft Club of America" class="footer-logo-img" id="footer-logo-img">
+        <img src="${squareLogo}" alt="Minecraft Club of America" class="footer-logo-img" id="footer-logo-img">
         <span class="footer-logo-text">Minecraft Club of America</span>
       </div>
       <p class="footer-tagline">Trade · Build · Govern · Create</p>
@@ -312,7 +408,7 @@ const FOOTER_HTML = () => `
     <span class="footer-version">v2.5.0</span>
   </div>
 </footer>
-`;
+`; }; // end FOOTER_HTML
 
 const TOAST_HTML = `<div class="toast" id="toast">Address copied to clipboard</div>`;
 
