@@ -314,7 +314,6 @@ function showLockScreen(cfg) {
     if (e.key === 'Enter') document.getElementById('lock-login-submit').click();
   });
 }
-}
 
 
 const NAV_HTML = () => {
