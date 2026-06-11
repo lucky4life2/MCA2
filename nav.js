@@ -37,6 +37,10 @@ const PREVIEW_KEY     = 'I-pG1idLnWhIjId9i1TLAumZkBQjVcvc';
 const SUPABASE_URL    = 'https://hjaywokvgdzhvsoygctc.supabase.co';
 const SUPABASE_ANON   = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
 
+let _siteLocked = false;
+let _lockCheckResolve;
+const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
+
 // Hide page until lock check completes (unless preview key present)
 (function() {
   const params = new URLSearchParams(window.location.search);
@@ -50,6 +54,7 @@ const SUPABASE_ANON   = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
   const params = new URLSearchParams(window.location.search);
   if (params.get('preview') === PREVIEW_KEY) {
     document.documentElement.style.visibility = '';
+    _lockCheckResolve();
     return;
   }
 
@@ -57,6 +62,7 @@ const SUPABASE_ANON   = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
   const currentPage = window.location.pathname.split('/').pop() || 'index.html';
   if (currentPage === 'admin.html' || currentPage === 'login.html') {
     document.documentElement.style.visibility = '';
+    _lockCheckResolve();
     return;
   }
 
@@ -72,16 +78,17 @@ const SUPABASE_ANON   = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
       }
     );
 
-    if (!res.ok) { document.documentElement.style.visibility = ''; return; }
+    if (!res.ok) { document.documentElement.style.visibility = ''; _lockCheckResolve(); return; }
 
     const rows = await res.json();
-    if (!rows.length) { document.documentElement.style.visibility = ''; return; }
+    if (!rows.length) { document.documentElement.style.visibility = ''; _lockCheckResolve(); return; }
 
     let cfg = {};
     try { cfg = JSON.parse(rows[0].value); } catch(e) { cfg = {}; }
 
     if (cfg.locked !== true) {
       document.documentElement.style.visibility = '';
+      _lockCheckResolve();
       return;
     }
 
@@ -106,6 +113,7 @@ const SUPABASE_ANON   = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
           const role = profiles?.[0]?.role;
           if (role === 'admin' || role === 'super_admin' || role === 'owner') {
             document.documentElement.style.visibility = '';
+            _lockCheckResolve();
             return;
           }
         }
@@ -126,11 +134,16 @@ const SUPABASE_ANON   = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
           const hasAccess = await rpcRes.json();
           if (hasAccess === true) {
             document.documentElement.style.visibility = '';
+            _lockCheckResolve();
             return;
           }
         }
       }
     } catch(e) {}
+
+    // Site is locked and user is not an admin
+    _siteLocked = true;
+    _lockCheckResolve();
 
     // Show lock screen
     document.addEventListener('DOMContentLoaded', () => showLockScreen(cfg));
@@ -138,6 +151,7 @@ const SUPABASE_ANON   = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
   } catch(e) {
     // On any error, reveal the page so it doesn't stay hidden forever
     document.documentElement.style.visibility = '';
+    _lockCheckResolve();
   }
 })();
 
@@ -284,6 +298,12 @@ const TOAST_HTML = `<div class="toast" id="toast">Address copied to clipboard</d
 const PROGRESS_HTML = `<div class="scroll-progress" id="scroll-progress"></div>`;
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Wait for lock check to complete before injecting nav
+  await Promise.race([_lockCheckDone, new Promise(r => setTimeout(r, 3000))]);
+
+  // If site is locked, don't inject nav or footer
+  if (_siteLocked) return;
+
   // Wait for config (discord URL etc) before injecting nav so links are correct.
   // Cap the wait at 1.5s so a slow GitHub fetch doesn't delay the whole page.
   await Promise.race([_configReady, new Promise(r => setTimeout(r, 1500))]);
