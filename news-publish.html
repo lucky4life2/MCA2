@@ -17,7 +17,51 @@
 
     /* ── Two-panel split ────────────────────── */
     .np-split { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-    @media (max-width: 720px) { .np-split { grid-template-columns: 1fr; } }
+    @media (max-width: 720px) {
+      .np-split { grid-template-columns: 1fr; }
+      .np-wrap { padding: 2rem 1.25rem 5rem; }
+
+      /* Panel headers — stack buttons below title */
+      .np-panel-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+      .np-panel-header .btn-row { width: 100%; }
+      .np-panel-header .btn-row .btn { flex: 1; text-align: center; }
+
+      /* Category + image URL grid — stack */
+      .np-panel-body [style*="grid-template-columns:1fr 1fr"] { display: flex; flex-direction: column; gap: 0; }
+
+      /* Editor toolbar — wrap nicely */
+      .editor-toolbar { gap: 6px; }
+      .tb-btn { padding: 6px 10px; font-size: 12px; }
+
+      /* Body textarea — taller for comfortable writing */
+      #np-body { min-height: 220px; font-size: 14px; }
+
+      /* Article list rows */
+      .article-row { flex-wrap: wrap; gap: 8px; padding: 12px 1rem; }
+      .article-row .btn-row { width: 100%; justify-content: flex-start; gap: 6px; }
+      .article-row .btn-row .btn { flex: 1; text-align: center; }
+    }
+
+    @media (max-width: 480px) {
+      .np-wrap { padding: 1.5rem 1rem 5rem; }
+      .np-hero { padding-bottom: 1.5rem; margin-bottom: 1.5rem; }
+      .np-hero h1 { font-size: 1.6rem; }
+
+      /* Preview/write tabs */
+      .preview-tabs { margin-bottom: .75rem; }
+
+      /* Summary char counter */
+      #np-summary { font-size: 14px; }
+
+      /* Form inputs — easy touch */
+      .form-input { font-size: 14px; padding: 10px 12px; }
+
+      /* Toast — full width bottom */
+      #np-toast { left: 1rem; right: 1rem; bottom: 1rem; max-width: unset; text-align: center; }
+
+      /* Article row buttons — 2-col grid */
+      .article-row .btn-row { display: grid; grid-template-columns: 1fr 1fr; }
+    }
 
     /* ── Panel/card ────────────────────────── */
     .np-panel { border: 1px solid var(--border); border-radius: 6px; background: var(--white); overflow: hidden; }

@@ -145,9 +145,79 @@
     .members-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; position: relative; }
 
     @media (max-width: 680px) {
-      .admin-wrap { padding: 2rem 1.25rem 4rem; }
-      .members-table th:nth-child(3), .members-table td:nth-child(3) { display: none; }
+      .admin-wrap { padding: 1.5rem 1rem 4rem; }
+
+      /* Hero */
+      .admin-hero { padding-bottom: 1.5rem; margin-bottom: 1.5rem; }
+
+      /* Tabs — scrollable strip */
+      .admin-tabs { gap: 0; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+      .admin-tabs::-webkit-scrollbar { display: none; }
+      .admin-tab { padding: 10px 14px; font-size: 11px; }
+
+      /* Section headers — stack on small screens */
+      .admin-section-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+
+      /* Stats row — 2 columns */
+      .stats-row { grid-template-columns: 1fr 1fr; }
+
+      /* Members table — hide less-critical columns, allow horizontal scroll */
+      .members-table-wrap { font-size: 12px; }
+      .members-table th:nth-child(2), .members-table td:nth-child(2),
+      .members-table th:nth-child(4), .members-table td:nth-child(4) { display: none; }
+      .members-table th, .members-table td { padding: 10px 10px; }
+      .btn-actions { flex-wrap: wrap; gap: 4px; }
+      .btn-actions .btn { font-size: 10px; padding: 4px 8px; }
+
+      /* Filter bar — stack inputs */
+      .filter-bar { flex-direction: column; align-items: stretch; padding: 10px 1rem; gap: 8px; }
+      .search-input-grow { min-width: unset; }
+      .filter-select { width: 100%; }
+
+      /* News article rows — stack */
+      .news-article-row { flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px 1rem; }
+      .news-article-row > div:last-child { width: 100%; justify-content: flex-start; }
+
+      /* Verify cards — stack */
+      .verify-card { flex-direction: column; gap: 10px; padding: 1rem; }
+      .verify-card .btn-actions { flex-direction: row; }
+
+      /* Site lock grid */
+      #site-lock-section .admin-section-header + div > div[style*="grid-template-columns:1fr 1fr"] {
+        display: flex; flex-direction: column; gap: 10px;
+      }
+
+      /* Plugin status */
+      .plugin-status { flex-wrap: wrap; }
+
+      /* Role cards */
+      .role-card { padding: 1rem; }
+      .role-card-perms { gap: 3px; }
+
+      /* Permission grid in modal */
       .perm-grid { grid-template-columns: 1fr; }
+
+      /* Modals — full screen on mobile */
+      .modal-overlay > div,
+      [id$="-modal"] > div { max-width: 100% !important; max-height: 95vh !important; margin: 0 !important; border-radius: 12px 12px 0 0 !important; position: fixed !important; bottom: 0; left: 0; right: 0; }
+      [id$="-modal"] { align-items: flex-end !important; padding: 0 !important; }
+      #product-modal { align-items: flex-end !important; padding: 0 !important; }
+
+      /* Config panel two-column grids */
+      .admin-panel #tab-config [style*="grid-template-columns:1fr 1fr"] { display: flex; flex-direction: column; }
+
+      /* Leadership/nations rows */
+      [id="leadership-admin-list"] > div,
+      [id="nations-admin-list"] > div { flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 1rem; }
+      [id="leadership-admin-list"] > div > div:last-child,
+      [id="nations-admin-list"] > div > div:last-child { display: flex; gap: 8px; }
+    }
+
+    @media (max-width: 420px) {
+      .admin-tabs { font-size: 10px; }
+      .admin-tab { padding: 10px 10px; }
+      .stat-value { font-size: 1.3rem; }
+      .stats-row { grid-template-columns: 1fr 1fr; }
     }
   </style>
 </head>

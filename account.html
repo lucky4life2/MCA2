@@ -85,9 +85,46 @@
     .account-not-signed-in p { font-size: 14px; color: var(--muted); margin-bottom: 1.5rem; }
 
     @media (max-width: 600px) {
-      .account-wrap { padding: 2rem 1.25rem 4rem; }
-      .mc-code-box { flex-direction: column; align-items: flex-start; }
+      .account-wrap { padding: 1.5rem 1rem 4rem; }
+
+      /* Hero */
+      .account-hero { padding-bottom: 1.5rem; margin-bottom: 1.5rem; }
+
+      /* Section headers */
+      .account-section-header { flex-wrap: wrap; gap: 8px; }
+
+      /* MC code box — readable on small screens */
+      .mc-code-box { flex-direction: column; align-items: flex-start; gap: 8px; }
+      .mc-code-command { font-size: 12px; word-break: break-all; white-space: pre-wrap; }
+      .mc-code { font-size: 1rem; letter-spacing: 1px; }
+
+      /* Connected accounts — wrap action buttons */
       .connected-row { flex-wrap: wrap; }
+      .connected-row .btn { width: 100%; text-align: center; justify-content: center; margin-top: 4px; }
+
+      /* Password buttons — stack */
+      #section-password .account-section-body > div[style*="flex-wrap"] { flex-direction: column; align-items: stretch; }
+      #section-password .btn { width: 100%; text-align: center; }
+
+      /* Form inputs — comfortable touch targets */
+      .form-input { padding: 11px 12px; font-size: 15px; }
+      .btn { padding: 11px 18px; font-size: 13px; width: 100%; text-align: center; }
+      .btn-primary, .btn-outline, .btn-discord, .btn-danger { display: block; }
+
+      /* Add-email inline form buttons */
+      #add-email-form .btn { width: auto; display: inline-block; }
+
+      /* Badge in header — keep it small */
+      .account-section-badge { flex-shrink: 0; }
+
+      /* Minecraft verify buttons row */
+      #mc-body .form-group + .btn,
+      #mc-body [style*="flex-wrap"] { flex-direction: column; gap: 8px; }
+      #mc-body [style*="flex-wrap"] .btn { width: 100%; }
+    }
+
+    @media (max-width: 380px) {
+      .account-hero h1 { font-size: 1.6rem; }
     }
   </style>
 </head>
