@@ -498,7 +498,7 @@
     <div id="lm-error" style="font-size:13px;color:#c0392b;padding:0 1.5rem .5rem;display:none;"></div>
     <div style="padding:0 1.5rem 1.5rem;display:flex;gap:10px;justify-content:flex-end;">
       <button id="lm-cancel" style="background:transparent;color:var(--muted);font-size:13px;font-weight:600;padding:9px 18px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">Cancel</button>
-      <button id="lm-save" onclick="saveLeader()" style="background:var(--blue);color:#fff;font-size:13px;font-weight:600;padding:9px 18px;border:none;border-radius:4px;cursor:pointer;">Save</button>
+      <button id="lm-save" style="background:var(--blue);color:#fff;font-size:13px;font-weight:600;padding:9px 18px;border:none;border-radius:4px;cursor:pointer;">Save</button>
     </div>
   </div>
 </div>
@@ -1476,7 +1476,7 @@ window.openLeaderModal = (id) => {
 function closeLeaderModal() { document.getElementById('leader-modal').style.display = 'none'; }
 document.getElementById('lm-close').addEventListener('click', closeLeaderModal);
 document.getElementById('lm-cancel').addEventListener('click', closeLeaderModal);
-window.saveLeader = async () => {
+document.getElementById('lm-save').addEventListener('click', async () => {
   const name = document.getElementById('lm-name').value.trim(), title = document.getElementById('lm-title').value.trim();
   if (!name||!title) { const e = document.getElementById('lm-error'); e.textContent = 'Name and Title are required.'; e.style.display = 'block'; return; }
   const id = document.getElementById('lm-id').value;
@@ -1486,11 +1486,8 @@ window.saveLeader = async () => {
   const result = id ? await supabase.from('leadership').update(payload).eq('id',id).select() : await supabase.from('leadership').insert(payload).select();
   const { data, error } = result;
   if (error) { const e = document.getElementById('lm-error'); e.textContent = 'Error: ' + error.message; e.style.display = 'block'; return; }
-  if (data && data.length > 0 && data[0].sort_order !== sort_order) {
-    const e = document.getElementById('lm-error'); e.textContent = 'Warning: sort_order may not have saved correctly'; e.style.display = 'block'; return;
-  }
   closeLeaderModal(); await loadLeadershipAdmin();
-};
+});
 window.deleteLeader = async (id) => { if (!confirm('Remove this person?')) return; await supabase.from('leadership').delete().eq('id',id); await loadLeadershipAdmin(); };
 
 // ── Tabs ──────────────────────────────────────────────────────
