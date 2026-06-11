@@ -17,6 +17,7 @@
 
     /* ── Two-panel split ────────────────────── */
     .np-split { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .col2-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     @media (max-width: 720px) {
       .np-split { grid-template-columns: 1fr; }
       .np-wrap { padding: 2rem 1.25rem 5rem; }
@@ -27,7 +28,7 @@
       .np-panel-header .btn-row .btn { flex: 1; text-align: center; }
 
       /* Category + image URL grid — stack */
-      .np-panel-body [style*="grid-template-columns:1fr 1fr"] { display: flex; flex-direction: column; gap: 0; }
+      .col2-grid { grid-template-columns: 1fr; }
 
       /* Editor toolbar — wrap nicely */
       .editor-toolbar { gap: 6px; }
@@ -191,7 +192,7 @@
           <input type="text" id="np-title" class="form-input" placeholder="Write a clear, compelling headline…">
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="col2-grid">
           <div class="form-group">
             <label class="form-label">Category</label>
             <input type="text" id="np-category" class="form-input" list="np-category-list" placeholder="e.g. Announcements">

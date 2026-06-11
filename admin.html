@@ -117,6 +117,9 @@
     .perm-chip { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 3px; background: #e8eeff; color: var(--blue); }
     .perm-chip.off { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
 
+    /* Two-column form grid utility */
+    .col2-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
     /* Permission toggles in modal */
     .perm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
     .perm-toggle { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; transition: background .15s; }
@@ -158,6 +161,9 @@
       /* Section headers — stack on small screens */
       .admin-section-header { flex-direction: column; align-items: flex-start; gap: 8px; }
 
+      /* All two-column grids collapse to single column */
+      .col2-grid { grid-template-columns: 1fr; }
+
       /* Stats row — 2 columns */
       .stats-row { grid-template-columns: 1fr 1fr; }
 
@@ -182,29 +188,18 @@
       .verify-card { flex-direction: column; gap: 10px; padding: 1rem; }
       .verify-card .btn-actions { flex-direction: row; }
 
-      /* Site lock grid */
-      #site-lock-section .admin-section-header + div > div[style*="grid-template-columns:1fr 1fr"] {
-        display: flex; flex-direction: column; gap: 10px;
-      }
-
-      /* Plugin status */
-      .plugin-status { flex-wrap: wrap; }
-
-      /* Role cards */
-      .role-card { padding: 1rem; }
-      .role-card-perms { gap: 3px; }
-
       /* Permission grid in modal */
       .perm-grid { grid-template-columns: 1fr; }
 
-      /* Modals — full screen on mobile */
+      /* Modals — full-screen sheet on mobile */
       .modal-overlay > div,
       [id$="-modal"] > div { max-width: 100% !important; max-height: 95vh !important; margin: 0 !important; border-radius: 12px 12px 0 0 !important; position: fixed !important; bottom: 0; left: 0; right: 0; }
       [id$="-modal"] { align-items: flex-end !important; padding: 0 !important; }
       #product-modal { align-items: flex-end !important; padding: 0 !important; }
 
-      /* Config panel two-column grids */
-      .admin-panel #tab-config [style*="grid-template-columns:1fr 1fr"] { display: flex; flex-direction: column; }
+      /* Role cards */
+      .role-card { padding: 1rem; }
+      .role-card-perms { gap: 3px; }
 
       /* Leadership/nations rows */
       [id="leadership-admin-list"] > div,
@@ -214,10 +209,8 @@
     }
 
     @media (max-width: 420px) {
-      .admin-tabs { font-size: 10px; }
-      .admin-tab { padding: 10px 10px; }
+      .admin-tab { padding: 10px 10px; font-size: 10px; }
       .stat-value { font-size: 1.3rem; }
-      .stats-row { grid-template-columns: 1fr 1fr; }
     }
   </style>
 </head>
@@ -275,7 +268,7 @@
           <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:1.25rem;">
             When enabled, the site is hidden from non-admins and replaced with a maintenance screen.
           </p>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1rem;">
+          <div class="col2-grid" style="margin-bottom:1rem;">
             <div>
               <label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Reason</label>
               <input type="text" id="lock-reason" class="search-input" placeholder="e.g. Under Maintenance" style="width:100%;box-sizing:border-box;">
@@ -479,7 +472,7 @@
           <div class="admin-section-title">Site Config</div>
           <span id="cfg-save-badge" class="badge badge-unlinked" style="display:none;">Saved</span>
         </div>
-        <div style="padding:1.25rem 1.5rem;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="col2-grid" style="padding:1.25rem 1.5rem;">
           <div style="grid-column:1/-1;">
             <label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Discord Invite URL</label>
             <input type="text" id="cfg-discord-url" class="search-input" placeholder="https://discord.gg/..." style="width:100%;box-sizing:border-box;">
@@ -520,17 +513,17 @@
       <input type="hidden" id="pm-id">
       <div class="form-group"><label class="form-label">Product Name</label><input type="text" id="pm-name" class="form-input" placeholder="e.g. MCA Logo T-Shirt"></div>
       <div class="form-group"><label class="form-label">Description</label><textarea id="pm-desc" class="form-input" rows="3" style="resize:vertical;"></textarea></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="col2-grid">
         <div class="form-group"><label class="form-label">Price (USD)</label><input type="number" id="pm-price" class="form-input" step="0.01" min="0"></div>
         <div class="form-group"><label class="form-label">Inventory</label><input type="number" id="pm-inventory" class="form-input" min="0"></div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="col2-grid">
         <div class="form-group"><label class="form-label">Category</label><input type="text" id="pm-category" class="form-input"></div>
         <div class="form-group"><label class="form-label">Status</label><select id="pm-active" class="form-input"><option value="true">Active</option><option value="false">Inactive</option></select></div>
       </div>
       <div class="form-group"><label class="form-label">Primary Image URL</label><input type="text" id="pm-image" class="form-input"></div>
       <div class="form-group"><label class="form-label">Secondary Image URL</label><input type="text" id="pm-image2" class="form-input"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="col2-grid">
         <div class="form-group"><label class="form-label">Weight</label><input type="text" id="pm-weight" class="form-input"></div>
         <div class="form-group"><label class="form-label">Dimensions</label><input type="text" id="pm-dimensions" class="form-input"></div>
         <div class="form-group"><label class="form-label">Material</label><input type="text" id="pm-material" class="form-input"></div>
@@ -556,7 +549,7 @@
       <div style="font-family:'Times New Roman',serif;font-size:1.3rem;color:var(--blue);font-weight:normal;" id="lm-modal-title">Add Person</div>
       <button id="lm-close" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:20px;line-height:1;padding:4px;">✕</button>
     </div>
-    <div style="padding:1.5rem;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+    <div class="col2-grid" style="padding:1.5rem;">
       <input type="hidden" id="lm-id">
       <div style="grid-column:1/-1;"><label class="form-label">Name *</label><input type="text" id="lm-name" class="form-input"></div>
       <div style="grid-column:1/-1;"><label class="form-label">Title / Role *</label><input type="text" id="lm-title" class="form-input"></div>
@@ -580,7 +573,7 @@
       <div style="font-family:'Times New Roman',serif;font-size:1.3rem;color:var(--blue);font-weight:normal;" id="nm-title">Add Nation</div>
       <button id="nm-close" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:20px;line-height:1;padding:4px;">✕</button>
     </div>
-    <div style="padding:1.5rem;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+    <div class="col2-grid" style="padding:1.5rem;">
       <input type="hidden" id="nm-id">
       <div style="grid-column:1/-1;"><label class="form-label">Nation Name *</label><input type="text" id="nm-name" class="form-input"></div>
       <div><label class="form-label">Leader(s)</label><input type="text" id="nm-leader" class="form-input"></div>
@@ -610,7 +603,7 @@
     </div>
     <div style="padding:1.5rem;">
       <input type="hidden" id="rm-id">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1rem;">
+      <div class="col2-grid" style="margin-bottom:1rem;">
         <div><label class="form-label">Role Name (slug) *</label><input type="text" id="rm-name" class="form-input" placeholder="e.g. moderator"><p class="form-hint">Lowercase, no spaces</p></div>
         <div><label class="form-label">Display Label *</label><input type="text" id="rm-label" class="form-input" placeholder="e.g. Moderator"></div>
         <div><label class="form-label">Badge Color</label><input type="color" id="rm-color" class="form-input" value="#888888" style="height:38px;cursor:pointer;"></div>
@@ -639,7 +632,7 @@
     <div style="padding:1.5rem;">
       <input type="hidden" id="nm2-id">
       <div class="form-group"><label class="form-label">Title *</label><input type="text" id="nm2-title-input" class="form-input" placeholder="Article headline..."></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="col2-grid">
         <div class="form-group"><label class="form-label">Category</label><input type="text" id="nm2-category" class="form-input" placeholder="e.g. Announcements"></div>
         <div class="form-group"><label class="form-label">Status</label>
           <select id="nm2-status" class="form-input">

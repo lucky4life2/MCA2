@@ -786,6 +786,43 @@ footer {
     border-radius: 4px !important;
   }
 
+  /* Theme toggle + account button — centered row at bottom of menu */
+  .nav-theme-item,
+  .nav-account-item {
+    width: auto !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+  }
+
+  .nav-theme-item {
+    margin-left: 0;
+  }
+
+  /* Group them together in a centered flex row */
+  .nav-links li.nav-theme-item,
+  .nav-links li.nav-account-item {
+    display: inline-flex;
+  }
+
+  /* Wrap the two items in a centered row using a pseudo-container trick via adjacent sibling */
+  .nav-links li.nav-theme-item {
+    border-top: 1px solid var(--border);
+    margin-top: 0.5rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.25rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+  }
+
+  /* Hide account item as a separate row — it gets merged into theme-item row via JS flex trick */
+  .nav-links li.nav-account-item {
+    display: none;
+  }
+
   .nav-logo-img { height: 28px; }
 
   /* Scroll progress bar */
