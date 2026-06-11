@@ -16,10 +16,10 @@
 
 /* ── DARK MODE ── */
 [data-theme="dark"] {
-  --black:   #e8eaf0;
-  --mid:     #adb3c2;
-  --muted:   #7a8299;
-  --border:  #2a3147;
+  --black:   #eceef4;
+  --mid:     #c4c9d8;
+  --muted:   #8f96ad;
+  --border:  #2e3650;
   --bg:      #111620;
   --white:   #1a2035;
 }
@@ -28,6 +28,14 @@
 [data-theme="dark"] footer { background: var(--white); border-top-color: var(--border); }
 [data-theme="dark"] .nav-links { background: var(--white); }
 [data-theme="dark"] .section-image figcaption { background: var(--white); }
+[data-theme="dark"] .nav-dropdown { background: var(--white); }
+[data-theme="dark"] .nav-dropdown li a { color: var(--mid); }
+[data-theme="dark"] .nav-dropdown li a:hover { background: var(--bg); color: var(--black); }
+[data-theme="dark"] .nav-account-dropdown { box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
+[data-theme="dark"] .nav-account-dropdown-item { color: var(--mid); }
+[data-theme="dark"] .nav-account-dropdown-item:hover { background: var(--bg); color: var(--black); }
+[data-theme="dark"] a { color: #6ea3f0; }
+[data-theme="dark"] a:hover { color: #93bbf5; }
 
 /* Dark mode toggle button */
 .nav-theme-toggle {
@@ -173,6 +181,15 @@ nav {
 .nav-account-dropdown-item:hover { background: var(--bg); color: var(--black); }
 #nav-signout-btn { color: #c0392b; }
 #nav-signout-btn:hover { background: #fdf2f2; color: #a93226; }
+[data-theme="dark"] #nav-signout-btn:hover { background: rgba(192,57,43,0.15); }
+
+@media (max-width: 480px) {
+  .nav-account-dropdown {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
 
 /* Cart button in nav */
 .nav-cart-btn {

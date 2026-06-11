@@ -383,6 +383,7 @@ async function injectNav() {
   if (aboutItem && aboutDropdown) {
     aboutItem.querySelector('.nav-dropdown-trigger').addEventListener('click', e => {
       e.stopPropagation();
+      e.preventDefault();
       aboutItem.classList.toggle('open');
     });
     document.addEventListener('click', e => {
@@ -398,7 +399,8 @@ async function injectNav() {
       hamburger.classList.toggle('open');
       navLinks.classList.toggle('open');
     });
-    navLinks.querySelectorAll('a').forEach(a => {
+    // Close menu when a non-dropdown link is clicked
+    navLinks.querySelectorAll('a:not(.nav-dropdown-trigger)').forEach(a => {
       a.addEventListener('click', () => {
         hamburger.classList.remove('open');
         navLinks.classList.remove('open');
