@@ -93,7 +93,7 @@ const SUPABASE_ANON   = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
       if (token) {
         // Check legacy profiles.role
         const profileRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/profiles?select=role`,
+          `${SUPABASE_URL}/rest/v1/profiles?select=role&id=eq.${session.user.id}`,
           {
             headers: {
               'apikey': SUPABASE_ANON,
