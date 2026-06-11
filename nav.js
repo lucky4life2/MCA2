@@ -61,7 +61,7 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
 
   // Admin pages are never locked — admins need access to turn the lock off
   const currentPage = window.location.pathname.split('/').pop() || 'index.html';
-  if (currentPage === 'admin.html' || currentPage === 'login.html') {
+  if (currentPage === 'admin.html') {
     document.documentElement.style.visibility = '';
     _lockCheckResolve();
     injectNav();
@@ -154,10 +154,25 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
     document.addEventListener('DOMContentLoaded', () => showLockScreen(cfg));
     if (document.readyState !== 'loading') showLockScreen(cfg);
   } catch(e) {
-    // On any error, reveal the page so it doesn't stay hidden forever
-    document.documentElement.style.visibility = '';
+    // Can't reach Supabase — show an outage notice instead of the lock screen
+    _siteLocked = true;
     _lockCheckResolve();
-    injectNav();
+    const showOutage = () => {
+      document.documentElement.style.visibility = '';
+      document.body.innerHTML = `
+        <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0f1e;font-family:'Open Sans',sans-serif;padding:2rem;text-align:center;">
+          <img src="assets/mca-logo.png" alt="MCA" style="width:72px;height:72px;border-radius:12px;margin-bottom:1.5rem;" onerror="this.style.display='none'">
+          <h1 style="color:#fff;font-size:1.6rem;font-weight:700;margin:0 0 0.5rem;">Site Temporarily Unavailable</h1>
+          <p style="color:#94a3b8;font-size:0.95rem;max-width:420px;line-height:1.6;margin:0 0 1.5rem;">
+            We're unable to load the site right now because Supabase — the service we use for our database — appears to be unreachable. This is likely due to an ongoing outage.
+          </p>
+          <a href="https://status.supabase.com" target="_blank" rel="noopener" style="display:inline-block;background:#3ecf8e;color:#0a0f1e;font-weight:700;font-size:0.9rem;padding:10px 20px;border-radius:6px;text-decoration:none;margin-bottom:1rem;">Check Supabase Status</a>
+          <p style="color:#475569;font-size:0.8rem;margin:0;">Please try again once the outage is resolved.</p>
+        </div>
+      `;
+    };
+    document.addEventListener('DOMContentLoaded', showOutage);
+    if (document.readyState !== 'loading') showOutage();
   }
 })();
 
