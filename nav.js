@@ -231,7 +231,7 @@ function showLockScreen(cfg) {
 const NAV_HTML = () => `
 <nav>
   <a class="nav-logo" href="index.html">
-    <img src="images/widelogo.png" alt="Minecraft Club of America" class="nav-logo-img">
+    <img src="images/widelogo-light.png" alt="Minecraft Club of America" class="nav-logo-img" id="nav-logo-img">
   </a>
   <div class="nav-right">
     <button class="nav-hamburger" id="nav-hamburger" aria-label="Toggle menu">
@@ -269,7 +269,7 @@ const FOOTER_HTML = () => `
 
     <div class="footer-brand">
       <div class="footer-logo">
-        <img src="images/logo.png" alt="Minecraft Club of America" class="footer-logo-img">
+        <img src="images/logo-light.jpg" alt="Minecraft Club of America" class="footer-logo-img" id="footer-logo-img">
         <span class="footer-logo-text">Minecraft Club of America</span>
       </div>
       <p class="footer-tagline">Trade · Build · Govern · Create</p>
@@ -352,6 +352,17 @@ async function injectNav() {
   const yearEl = document.getElementById('year');
   if (yearEl) yearEl.textContent = new Date().getFullYear();
 
+  // Logo swap helper
+  function applyLogoTheme(dark) {
+    const navLogo    = document.getElementById('nav-logo-img');
+    const footerLogo = document.getElementById('footer-logo-img');
+    if (navLogo)    navLogo.src    = dark ? 'images/widelogo-dark.png'  : 'images/widelogo-light.png';
+    if (footerLogo) footerLogo.src = dark ? 'images/logo-dark.jpg'      : 'images/logo-light.jpg';
+  }
+
+  // Set logos on initial load
+  applyLogoTheme(document.documentElement.getAttribute('data-theme') === 'dark');
+
   // Dark mode toggle
   const themeToggle = document.getElementById('nav-theme-toggle');
   if (themeToggle) {
@@ -360,9 +371,11 @@ async function injectNav() {
       if (isDark) {
         document.documentElement.removeAttribute('data-theme');
         localStorage.setItem('mca_theme', 'light');
+        applyLogoTheme(false);
       } else {
         document.documentElement.setAttribute('data-theme', 'dark');
         localStorage.setItem('mca_theme', 'dark');
+        applyLogoTheme(true);
       }
     });
   }
