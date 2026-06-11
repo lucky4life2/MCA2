@@ -91,6 +91,7 @@ const SUPABASE_ANON   = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
       const { data: { session } } = await _sb.auth.getSession();
       const token = session?.access_token;
       if (token) {
+        // Check legacy profiles.role
         const profileRes = await fetch(
           `${SUPABASE_URL}/rest/v1/profiles?select=role`,
           {
@@ -104,6 +105,26 @@ const SUPABASE_ANON   = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
           const profiles = await profileRes.json();
           const role = profiles?.[0]?.role;
           if (role === 'admin' || role === 'super_admin' || role === 'owner') {
+            document.documentElement.style.visibility = '';
+            return;
+          }
+        }
+        // Check new roles system via RPC
+        const rpcRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/rpc/user_has_permission`,
+          {
+            method: 'POST',
+            headers: {
+              'apikey': SUPABASE_ANON,
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ perm: 'can_view_admin' }),
+          }
+        );
+        if (rpcRes.ok) {
+          const hasAccess = await rpcRes.json();
+          if (hasAccess === true) {
             document.documentElement.style.visibility = '';
             return;
           }
