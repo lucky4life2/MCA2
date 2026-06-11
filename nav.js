@@ -55,6 +55,7 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
   if (params.get('preview') === PREVIEW_KEY) {
     document.documentElement.style.visibility = '';
     _lockCheckResolve();
+    injectNav();
     return;
   }
 
@@ -63,6 +64,7 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
   if (currentPage === 'admin.html' || currentPage === 'login.html') {
     document.documentElement.style.visibility = '';
     _lockCheckResolve();
+    injectNav();
     return;
   }
 
@@ -78,10 +80,10 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
       }
     );
 
-    if (!res.ok) { document.documentElement.style.visibility = ''; _lockCheckResolve(); return; }
+    if (!res.ok) { document.documentElement.style.visibility = ''; _lockCheckResolve(); injectNav(); return; }
 
     const rows = await res.json();
-    if (!rows.length) { document.documentElement.style.visibility = ''; _lockCheckResolve(); return; }
+    if (!rows.length) { document.documentElement.style.visibility = ''; _lockCheckResolve(); injectNav(); return; }
 
     let cfg = {};
     try { cfg = JSON.parse(rows[0].value); } catch(e) { cfg = {}; }
@@ -89,6 +91,7 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
     if (cfg.locked !== true) {
       document.documentElement.style.visibility = '';
       _lockCheckResolve();
+      injectNav();
       return;
     }
 
@@ -114,6 +117,7 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
           if (role === 'admin' || role === 'super_admin' || role === 'owner') {
             document.documentElement.style.visibility = '';
             _lockCheckResolve();
+            injectNav();
             return;
           }
         }
@@ -135,6 +139,7 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
           if (hasAccess === true) {
             document.documentElement.style.visibility = '';
             _lockCheckResolve();
+            injectNav();
             return;
           }
         }
@@ -152,6 +157,7 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
     // On any error, reveal the page so it doesn't stay hidden forever
     document.documentElement.style.visibility = '';
     _lockCheckResolve();
+    injectNav();
   }
 })();
 
@@ -297,15 +303,12 @@ const TOAST_HTML = `<div class="toast" id="toast">Address copied to clipboard</d
 
 const PROGRESS_HTML = `<div class="scroll-progress" id="scroll-progress"></div>`;
 
-document.addEventListener('DOMContentLoaded', async () => {
-  // Wait for lock check to complete before injecting nav
-  await Promise.race([_lockCheckDone, new Promise(r => setTimeout(r, 3000))]);
-
-  // If site is locked, don't inject nav or footer
-  if (_siteLocked) return;
+async function injectNav() {
+  if (document.readyState === 'loading') {
+    await new Promise(r => document.addEventListener('DOMContentLoaded', r, { once: true }));
+  }
 
   // Wait for config (discord URL etc) before injecting nav so links are correct.
-  // Cap the wait at 1.5s so a slow GitHub fetch doesn't delay the whole page.
   await Promise.race([_configReady, new Promise(r => setTimeout(r, 1500))]);
 
   // Inject nav
@@ -328,7 +331,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     bar.style.width = docHeight > 0 ? (scrollTop / docHeight * 100) + '%' : '0%';
   }
   window.addEventListener('scroll', updateProgress, { passive: true });
-  updateProgress(); // set initial state
+  updateProgress();
 
   // Auto-update year in footer
   const yearEl = document.getElementById('year');
@@ -349,7 +352,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Highlight active nav link — also mark About dropdown active if on a child page
+  // Highlight active nav link
   const current = window.location.pathname.split('/').pop() || 'index.html';
   const page = current.replace('.html', '') || 'index';
   const activeLink = document.querySelector(`.nav-links a[data-page="${page}"]`);
@@ -380,14 +383,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       hamburger.classList.toggle('open');
       navLinks.classList.toggle('open');
     });
-    // Close menu when a link is clicked
     navLinks.querySelectorAll('a').forEach(a => {
       a.addEventListener('click', () => {
         hamburger.classList.remove('open');
         navLinks.classList.remove('open');
       });
     });
-    // Close menu when clicking outside
     document.addEventListener('click', e => {
       if (!hamburger.contains(e.target) && !navLinks.contains(e.target)) {
         hamburger.classList.remove('open');
@@ -410,7 +411,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }, 2000);
     });
   }
-});
+}
 
 // Copy-to-clipboard helper (server.html)
 function copyAddress() {
