@@ -1516,8 +1516,9 @@ document.getElementById('nm-save').addEventListener('click', async () => {
   const id = document.getElementById('nm-id').value;
   const payload = { name };
   ['leader','capital','government','founded','population','territory','status','flag','body'].forEach(k => { payload[k] = document.getElementById('nm-'+k)?.value.trim()||null; });
-  const { error } = id ? await supabase.from('nations').update(payload).eq('id',id) : await supabase.from('nations').insert(payload);
-  if (error) { const e = document.getElementById('nm-error'); e.textContent = error.message; e.style.display = 'block'; return; }
+  const result = id ? await supabase.from('nations').update(payload).eq('id',id).select() : await supabase.from('nations').insert(payload).select();
+  const { data, error } = result;
+  if (error) { const e = document.getElementById('nm-error'); e.textContent = 'Error: ' + error.message; e.style.display = 'block'; return; }
   closeNationModal(); await loadNationsAdmin();
 });
 window.deleteNation = async (id) => { if (!confirm('Delete this nation?')) return; await supabase.from('nations').delete().eq('id',id); await loadNationsAdmin(); };
