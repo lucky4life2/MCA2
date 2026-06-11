@@ -1501,8 +1501,8 @@ async function loadLeadershipAdmin() {
 document.getElementById('btn-add-nation').addEventListener('click', () => openNationModal(null));
 window.openNationModal = (id) => {
   const n = id ? _nationsAdmin.find(x => x.id === id) : null;
-  ['id','name','leader','capital','government','founded','population','territory','status','flag','body'].forEach(k => {
-    const el = document.getElementById('nm-'+k); if (el) el.value = n?.[k]||'';
+  ['id','name','leader','capital','government','founded','population','territory','status','flag','body','sort_order'].forEach(k => {
+    const el = document.getElementById('nm-'+k); if (el) el.value = n?.[k] ?? '';
   });
   document.getElementById('nm-error').style.display = 'none';
   document.getElementById('nm-title').textContent = n ? 'Edit Nation' : 'Add Nation';
@@ -1517,8 +1517,8 @@ document.getElementById('nm-save').addEventListener('click', async () => {
   const id = document.getElementById('nm-id').value;
   const payload = { name };
   ['leader','capital','government','founded','population','territory','status','flag','body'].forEach(k => { payload[k] = document.getElementById('nm-'+k)?.value.trim()||null; });
-  const sortVal = document.getElementById('nm-sort_order')?.value;
-  payload.sort_order = sortVal !== '' && sortVal != null ? parseInt(sortVal) : null;
+  const sortVal = document.getElementById('nm-sort_order')?.value.trim();
+  if (sortVal !== '') payload.sort_order = parseInt(sortVal);
   const result = id ? await supabase.from('nations').update(payload).eq('id',id).select() : await supabase.from('nations').insert(payload).select();
   const { data, error } = result;
   if (error) { const e = document.getElementById('nm-error'); e.textContent = 'Error: ' + error.message; e.style.display = 'block'; return; }
