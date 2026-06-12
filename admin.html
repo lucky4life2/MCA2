@@ -1412,11 +1412,19 @@ window.revokeMC   = async (id) => {
   await loadAll();
 };
 window.verifyEmail = async (id) => {
-  if (!confirm('Manually verify this email address?')) return;
-  const { error } = await supabase.rpc('restore_email_verification', { user_id: id });
-  if (error) { alert('Error: ' + error.message); return; }
-  alert('Email verified.');
-  loadMembers();
+  const member = _allMembers.find(m => m.id === id);
+  if (!member?.email) { alert('No email address on this account.'); return; }
+  if (!confirm(`Send a verification email to ${member.email}?`)) return;
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/admin-resend-verification', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+    body: JSON.stringify({ email: member.email }),
+  });
+  const json = await res.json();
+  if (!res.ok) { alert('Error: ' + (json.error || 'Unknown error')); return; }
+  alert(`Verification email sent to ${member.email}.`);
+  await loadAll();
 };
 window.revokeEmail = async (id) => {
   if (!confirm('Revoke email verification? This will prevent the user from signing in with email.')) return;
