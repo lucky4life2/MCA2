@@ -575,6 +575,7 @@ function renderVerifyCodeSection() {
       </div>
       <p class="form-hint">The code expires after 10 minutes. If it expires, refresh the page to generate a new one.</p>
       <div style="margin-top:1rem;display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="btn-check-mc">Check Verification Status</button>
         <button class="btn btn-outline" id="btn-regen-code">Generate New Code</button>
         <button class="btn btn-danger" id="btn-unlink-mc">Unlink Username</button>
       </div>
@@ -593,6 +594,20 @@ function bindCodeButtons(body) {
   body.querySelector('#btn-regen-code')?.addEventListener('click', () => {
     _verifyCode = generateCode();
     renderMinecraft();
+  });
+  body.querySelector('#btn-check-mc')?.addEventListener('click', async () => {
+    const successEl = document.getElementById('mc-verify-success');
+    const errorEl = document.getElementById('mc-verify-error');
+    successEl.style.display = 'none';
+    errorEl.style.display = 'none';
+    await loadProfile();
+    if (_profile.minecraft_verified) {
+      _verifyCode = null;
+      renderMinecraft();
+      return;
+    }
+    errorEl.textContent = 'Not verified yet. Run the command in-game, then check again.';
+    errorEl.style.display = 'block';
   });
   body.querySelector('#btn-unlink-mc')?.addEventListener('click', async () => {
     if (!confirm('Remove your Minecraft username? You will need to re-verify.')) return;
