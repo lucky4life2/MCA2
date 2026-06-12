@@ -382,20 +382,24 @@
       errEl.textContent = 'Please enter your email or username and password.';
       errEl.style.display = 'block'; return;
     }
-    // Block sign-in if email access has been revoked for this account
     try {
-      const { data: revokeCheck } = await supabase
-        .from('profiles')
-        .select('email_access_revoked')
-        .eq('email', identifier)
-        .maybeSingle();
-      if (revokeCheck?.email_access_revoked) {
-        errEl.textContent = 'Email sign-in has been disabled for this account. Please sign in with Discord.';
+      // Route through edge function so the revoke check is enforced server-side
+      const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/sign-in-with-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: identifier, password }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        errEl.textContent = json.error || 'Sign in failed.';
         errEl.style.display = 'block'; return;
       }
-    } catch(_) { /* non-fatal */ }
-    try {
-      await signInWithEmail(identifier, password);
+      // Set the session from the tokens returned by the edge function
+      const { error: sessionErr } = await supabase.auth.setSession({
+        access_token: json.access_token,
+        refresh_token: json.refresh_token,
+      });
+      if (sessionErr) throw sessionErr;
       window.location.replace(returnTo);
     } catch(e) {
       errEl.textContent   = e.message || 'Sign in failed.';
