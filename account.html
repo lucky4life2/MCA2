@@ -489,7 +489,7 @@ function renderConnectedAccounts() {
         const json = await res.json();
         if (!res.ok) { errEl.textContent = json.error || 'Unknown error'; errEl.style.display = 'block'; return; }
 
-        succEl.textContent = 'Check your inbox — we sent a confirmation link to ' + email + '. Click it to finish linking.';
+        succEl.textContent = json.sameEmail ? 'Email linked successfully.' : 'Check your inbox — we sent a confirmation link to ' + email + '. Click it to finish linking.';
         succEl.style.display = 'block';
         document.getElementById('btn-add-email-save').disabled = true;
 
