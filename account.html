@@ -480,11 +480,7 @@ function renderConnectedAccounts() {
         if (!/[A-Z]/.test(password)) { errEl.textContent = 'Password must contain at least one uppercase letter.'; errEl.style.display = 'block'; return; }
         if (!/[a-z]/.test(password)) { errEl.textContent = 'Password must contain at least one lowercase letter.'; errEl.style.display = 'block'; return; }
 
-        // First set the password, then update the email
-        const { error: pwError } = await supabase.auth.updateUser({ password });
-        if (pwError) { errEl.textContent = pwError.message; errEl.style.display = 'block'; return; }
-
-        const { error: emailError } = await supabase.auth.updateUser({ email });
+        const { error: emailError } = await supabase.auth.updateUser({ email, password });
         if (emailError) { errEl.textContent = emailError.message; errEl.style.display = 'block'; return; }
 
         succEl.textContent = 'Check your inbox — we sent a confirmation link to ' + email + '. Click it to finish linking.';
