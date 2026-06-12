@@ -661,7 +661,7 @@ async function initNavAuth() {
   try {
     if (!mod) mod = await import('./supabase.js');
     mod.supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
+      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED' || event === 'EMAIL_CHANGE') {
         if (session?.user) await setSignedIn(session.user);
         else setSignedOut();
       } else if (event === 'SIGNED_OUT') {
