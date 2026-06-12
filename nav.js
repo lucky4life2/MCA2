@@ -296,8 +296,12 @@ function showLockScreen(cfg) {
       const _sb = createClient(SUPABASE_URL, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNzA2NTQsImV4cCI6MjA5NTg0NjY1NH0.nFqlc20iUDwE1sXLRi2Pev181v2RJKx_S6UcTkGgPWU');
       const { data, error } = await _sb.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      // Verify they're actually an admin
-      const { data: profile } = await _sb.from('profiles').select('role').eq('id', data.user.id).single();
+      // Check if email access has been revoked
+      const { data: profile } = await _sb.from('profiles').select('role, email_access_revoked').eq('id', data.user.id).single();
+      if (profile?.email_access_revoked) {
+        await _sb.auth.signOut();
+        throw new Error('Email sign-in has been disabled for this account.');
+      }
       if (!profile || !['admin','super_admin'].includes(profile.role)) {
         await _sb.auth.signOut();
         throw new Error('You do not have admin access.');

@@ -382,6 +382,18 @@
       errEl.textContent = 'Please enter your email or username and password.';
       errEl.style.display = 'block'; return;
     }
+    // Block sign-in if email access has been revoked for this account
+    try {
+      const { data: revokeCheck } = await supabase
+        .from('profiles')
+        .select('email_access_revoked')
+        .eq('email', identifier)
+        .maybeSingle();
+      if (revokeCheck?.email_access_revoked) {
+        errEl.textContent = 'Email sign-in has been disabled for this account. Please sign in with Discord.';
+        errEl.style.display = 'block'; return;
+      }
+    } catch(_) { /* non-fatal */ }
     try {
       await signInWithEmail(identifier, password);
       window.location.replace(returnTo);
