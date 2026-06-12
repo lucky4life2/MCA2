@@ -480,8 +480,14 @@ function renderConnectedAccounts() {
         if (!/[A-Z]/.test(password)) { errEl.textContent = 'Password must contain at least one uppercase letter.'; errEl.style.display = 'block'; return; }
         if (!/[a-z]/.test(password)) { errEl.textContent = 'Password must contain at least one lowercase letter.'; errEl.style.display = 'block'; return; }
 
-        const { error: emailError } = await supabase.auth.updateUser({ email, password });
-        if (emailError) { errEl.textContent = emailError.message; errEl.style.display = 'block'; return; }
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/add-email-to-account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          body: JSON.stringify({ email, password }),
+        });
+        const json = await res.json();
+        if (!res.ok) { errEl.textContent = json.error || 'Unknown error'; errEl.style.display = 'block'; return; }
 
         succEl.textContent = 'Check your inbox — we sent a confirmation link to ' + email + '. Click it to finish linking.';
         succEl.style.display = 'block';
