@@ -124,8 +124,19 @@
       #mc-body [style*="flex-wrap"] .btn { width: 100%; }
     }
 
-    @media (max-width: 380px) {
-      .account-hero h1 { font-size: 1.6rem; }
+    /* Contact admin modal */
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .modal-backdrop.hidden { display: none; }
+    .modal-card { background: var(--white); border: 1px solid var(--border); border-radius: 8px; width: 100%; max-width: 480px; box-shadow: 0 8px 32px rgba(0,0,0,.12); }
+    .modal-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .modal-title { font-family: 'Times New Roman', serif; font-size: 1.1rem; color: var(--blue); font-weight: normal; }
+    .modal-close { background: none; border: none; font-size: 18px; color: var(--muted); cursor: pointer; padding: 0 4px; line-height: 1; }
+    .modal-close:hover { color: var(--black); }
+    .modal-body { padding: 1.5rem; }
+    .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+
+    @media (max-width: 600px) {
+      .account-loading-spinner { width: 28px; height: 28px; }
     }
   </style>
 </head>
@@ -214,6 +225,17 @@
           <button class="btn btn-primary" id="btn-change-password">Update Password</button>
           <button class="btn btn-outline" id="btn-reset-password">Send Reset Email Instead</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Contact Administrator -->
+    <div class="account-section">
+      <div class="account-section-header">
+        <div class="account-section-title">Contact Administrator</div>
+      </div>
+      <div class="account-section-body">
+        <p class="form-hint" style="margin-bottom:1rem;">Send a message to the MCA admin team. Use this to report issues, appeal decisions, or ask questions.</p>
+        <button class="btn btn-outline" id="btn-contact-admin">Send Message</button>
       </div>
     </div>
 
@@ -375,16 +397,12 @@ function renderConnectedAccounts() {
       ${!hasEmail
         ? `<button class="btn btn-outline" id="btn-add-email">Add Email</button>`
         : _profile.email_access_revoked
-          ? `<span class="account-section-badge badge-revoked" title="Email sign-in has been disabled by an admin.">Revoked</span>`
+          ? `<span class="account-section-badge badge-revoked">Revoked</span>`
           : canUnlinkEmail
             ? `<button class="btn btn-danger" id="btn-unlink-email">Unlink</button>`
             : `<span class="account-section-badge badge-linked">Connected</span>`
       }
     </div>
-    ${_profile.email_access_revoked ? `
-    <div style="padding: 10px 0 4px; font-size: 12px; color: var(--muted); line-height: 1.6;">
-      Email sign-in has been disabled for this account by an administrator. Contact an admin to have it restored.
-    </div>` : ''}
     <div class="connected-row">
       <div class="connected-provider">
         <div class="connected-provider-icon icon-discord">
@@ -730,7 +748,79 @@ document.getElementById('btn-sign-out').addEventListener('click', async () => {
   window.location.replace('login.html');
 });
 
+// ── Contact Administrator ─────────────────────────────────────
+document.getElementById('btn-contact-admin').addEventListener('click', () => {
+  document.getElementById('contact-modal').classList.remove('hidden');
+  document.getElementById('contact-subject').focus();
+});
+function closeContactModal() {
+  document.getElementById('contact-modal').classList.add('hidden');
+  document.getElementById('contact-error').style.display = 'none';
+  document.getElementById('contact-success').style.display = 'none';
+  document.getElementById('contact-subject').value = '';
+  document.getElementById('contact-body').value = '';
+  document.getElementById('contact-char-count').textContent = '0 / 2000';
+  document.getElementById('contact-send').disabled = false;
+}
+document.getElementById('contact-modal-close').addEventListener('click', closeContactModal);
+document.getElementById('contact-cancel').addEventListener('click', closeContactModal);
+document.getElementById('contact-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('contact-modal')) closeContactModal();
+});
+document.getElementById('contact-body').addEventListener('input', function() {
+  document.getElementById('contact-char-count').textContent = `${this.value.length} / 2000`;
+});
+document.getElementById('contact-send').addEventListener('click', async () => {
+  const subject = document.getElementById('contact-subject').value.trim();
+  const body    = document.getElementById('contact-body').value.trim();
+  const errEl   = document.getElementById('contact-error');
+  const succEl  = document.getElementById('contact-success');
+  errEl.style.display = 'none'; succEl.style.display = 'none';
+  if (!subject) { errEl.textContent = 'Please enter a subject.'; errEl.style.display = 'block'; return; }
+  if (!body)    { errEl.textContent = 'Please enter a message.'; errEl.style.display = 'block'; return; }
+  document.getElementById('contact-send').disabled = true;
+  const { error } = await supabase.from('admin_messages').insert({ user_id: _user.id, subject, body });
+  if (error) {
+    errEl.textContent = error.message || 'Failed to send message.';
+    errEl.style.display = 'block';
+    document.getElementById('contact-send').disabled = false;
+    return;
+  }
+  succEl.textContent = 'Message sent. An administrator will review it shortly.';
+  succEl.style.display = 'block';
+  document.getElementById('contact-subject').value = '';
+  document.getElementById('contact-body').value = '';
+  setTimeout(closeContactModal, 2200);
+});
+
 init();
 </script>
+
+<!-- Contact Admin Modal -->
+<div class="modal-backdrop hidden" id="contact-modal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title">Message to Administrators</div>
+      <button class="modal-close" id="contact-modal-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="contact-subject">Subject</label>
+        <input type="text" id="contact-subject" class="form-input" placeholder="e.g. Email revocation appeal" maxlength="120">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="contact-body">Message</label>
+        <textarea id="contact-body" class="form-input" rows="5" placeholder="Describe your issue or question..." maxlength="2000" style="resize:vertical;min-height:100px;"></textarea>
+        <div class="form-hint" id="contact-char-count" style="text-align:right;">0 / 2000</div>
+      </div>
+      <div class="form-error" id="contact-error"></div>
+      <div class="form-success" id="contact-success"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="contact-cancel">Cancel</button>
+      <button class="btn btn-primary" id="contact-send">Send Message</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

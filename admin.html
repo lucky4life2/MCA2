@@ -147,6 +147,22 @@
 
     .members-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; position: relative; }
 
+    /* Messages inbox */
+    .msg-row { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; gap: 14px; align-items: flex-start; transition: background .1s; }
+    .msg-row:last-child { border-bottom: none; }
+    .msg-row.unread { background: #f0f4ff; }
+    .msg-row:hover { background: var(--bg); }
+    .msg-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--blue); flex-shrink: 0; margin-top: 5px; opacity: 0; }
+    .msg-row.unread .msg-dot { opacity: 1; }
+    .msg-content { flex: 1; min-width: 0; }
+    .msg-meta { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; flex-wrap: wrap; }
+    .msg-sender { font-size: 12px; font-weight: 700; color: var(--black); }
+    .msg-time { font-size: 11px; color: var(--muted); }
+    .msg-subject { font-size: 13px; font-weight: 600; color: var(--blue); margin-bottom: 4px; }
+    .msg-body { font-size: 13px; color: var(--mid); line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+    .msg-actions { display: flex; gap: 6px; flex-shrink: 0; margin-top: 2px; }
+    .msg-empty { padding: 2.5rem; text-align: center; color: var(--muted); font-size: 13px; }
+
     @media (max-width: 680px) {
       .admin-wrap { padding: 1.5rem 1rem 4rem; }
 
@@ -242,6 +258,7 @@
       <button class="admin-tab" data-tab="news">News</button>
       <button class="admin-tab" data-tab="minecraft">Minecraft</button>
       <button class="admin-tab" data-tab="shop">Shop</button>
+      <button class="admin-tab" data-tab="messages" id="tab-btn-messages">Messages <span id="messages-unread-badge" style="display:none;background:#c0392b;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:middle;"></span></button>
       <button class="admin-tab" data-tab="config">Config</button>
     </div>
 
@@ -443,6 +460,21 @@
         </div>
         <div id="shop-product-list" style="min-height:80px;">
           <div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">Loading products...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── MESSAGES ──────────────────────────────────────── -->
+    <div class="admin-panel" id="tab-messages">
+      <div class="admin-section">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Member Messages</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-outline btn-sm" id="btn-mark-all-read">Mark All Read</button>
+          </div>
+        </div>
+        <div id="messages-inbox" style="padding:0;">
+          <div style="padding:2rem;text-align:center;color:var(--muted);font-size:13px;">Loading messages...</div>
         </div>
       </div>
     </div>
@@ -916,8 +948,8 @@ function renderMembers(members) {
 
     const revokeEmailBtn = !emailRevoked && emailVerified && _myPermissions.can_manage_users
       ? `<button class="btn btn-danger btn-sm" onclick="revokeEmail('${m.id}')">Revoke Email</button>` : '';
-    const repealEmailBtn = emailRevoked && _myPermissions.can_manage_users
-      ? `<button class="btn btn-success btn-sm" onclick="repealEmail('${m.id}')">Repeal Revocation</button>` : '';
+    const allowEmailBtn = emailRevoked && _myPermissions.can_manage_users
+      ? `<button class="btn btn-success btn-sm" onclick="repealEmail('${m.id}')">Allow Email</button>` : '';
     const resendEmailBtn = !emailRevoked && !emailVerified && m.email && _myPermissions.can_manage_users
       ? `<button class="btn btn-secondary btn-sm" onclick="verifyEmail('${m.id}')">Verify Email</button>` : '';
     const revokeDiscordBtn = hasDiscord && _myPermissions.can_manage_users
@@ -940,7 +972,7 @@ function renderMembers(members) {
             ? `<button class="btn btn-success btn-sm" onclick="approveMC('${m.id}')">Approve MC</button>` : ''}
           ${m.minecraft_verified && _myPermissions.can_manage_minecraft
             ? `<button class="btn btn-danger btn-sm" onclick="revokeMC('${m.id}')">Revoke MC</button>` : ''}
-          ${resendEmailBtn}${revokeEmailBtn}${repealEmailBtn}${revokeDiscordBtn}
+          ${resendEmailBtn}${revokeEmailBtn}${allowEmailBtn}${revokeDiscordBtn}
         </div>
       </td>
     </tr>`;
@@ -1387,13 +1419,13 @@ window.verifyEmail = async (id) => {
   loadMembers();
 };
 window.revokeEmail = async (id) => {
-  if (!confirm('Revoke email verification?')) return;
+  if (!confirm('Revoke email verification? This will prevent the user from signing in with email.')) return;
   const { error } = await supabase.rpc('revoke_email_verification', { user_id: id });
   if (error) { alert('Error: ' + error.message); return; }
   await loadAll();
 };
 window.repealEmail = async (id) => {
-  if (!confirm('Repeal email revocation and restore email sign-in for this account?')) return;
+  if (!confirm('Allow email sign-in again for this account?')) return;
   const { error } = await supabase.rpc('restore_email_verification', { user_id: id });
   if (error) { alert('Error: ' + error.message); return; }
   await loadAll();
@@ -1591,13 +1623,116 @@ document.querySelectorAll('.admin-tab').forEach(tab => {
     if (tab.dataset.tab === 'shop')   loadAdminProducts();
     if (tab.dataset.tab === 'config') loadConfigTab();
     if (tab.dataset.tab === 'news')   loadNewsAdmin();
-    if (tab.dataset.tab === 'roles')  renderRoles();
+    if (tab.dataset.tab === 'roles')    renderRoles();
+    if (tab.dataset.tab === 'messages') loadMessages();
   });
 });
 const _hashTab = window.location.hash.replace('#','');
 if (_hashTab) { const b = document.querySelector(`.admin-tab[data-tab="${_hashTab}"]`); if (b) b.click(); }
 
+// ── Admin Messages ────────────────────────────────────────────
+let _messages = [];
+
+async function loadMessages() {
+  const inbox = document.getElementById('messages-inbox');
+  inbox.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--muted);font-size:13px;">Loading...</div>';
+
+  const { data, error } = await supabase
+    .from('admin_messages')
+    .select('*, profiles(display_name, username, email)')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    inbox.innerHTML = `<div class="msg-empty">Failed to load messages: ${error.message}</div>`;
+    return;
+  }
+  _messages = data || [];
+  renderMessages();
+  updateUnreadBadge();
+}
+
+function renderMessages() {
+  const inbox = document.getElementById('messages-inbox');
+  if (!_messages.length) {
+    inbox.innerHTML = '<div class="msg-empty">No messages yet.</div>';
+    return;
+  }
+  inbox.innerHTML = _messages.map(m => {
+    const p = m.profiles || {};
+    const sender = p.display_name || p.username || p.email || m.user_id;
+    const time = new Date(m.created_at).toLocaleString(undefined, { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
+    return `<div class="msg-row ${m.read ? '' : 'unread'}" data-id="${m.id}">
+      <div class="msg-dot"></div>
+      <div class="msg-content">
+        <div class="msg-meta">
+          <span class="msg-sender">${sender}</span>
+          <span class="msg-time">${time}</span>
+        </div>
+        <div class="msg-subject">${m.subject}</div>
+        <div class="msg-body">${m.body}</div>
+      </div>
+      <div class="msg-actions">
+        ${m.read
+          ? `<button class="btn btn-outline btn-sm" onclick="toggleMessageRead('${m.id}', false)">Mark Unread</button>`
+          : `<button class="btn btn-outline btn-sm" onclick="toggleMessageRead('${m.id}', true)">Mark Read</button>`
+        }
+        <button class="btn btn-danger btn-sm" onclick="deleteMessage('${m.id}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function updateUnreadBadge() {
+  const unread = _messages.filter(m => !m.read).length;
+  const badge = document.getElementById('messages-unread-badge');
+  if (unread > 0) {
+    badge.textContent = unread;
+    badge.style.display = 'inline';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+window.toggleMessageRead = async (id, read) => {
+  await supabase.from('admin_messages').update({ read }).eq('id', id);
+  const m = _messages.find(x => x.id === id);
+  if (m) m.read = read;
+  renderMessages();
+  updateUnreadBadge();
+};
+
+window.deleteMessage = async (id) => {
+  if (!confirm('Delete this message?')) return;
+  await supabase.from('admin_messages').delete().eq('id', id);
+  _messages = _messages.filter(x => x.id !== id);
+  renderMessages();
+  updateUnreadBadge();
+};
+
+document.getElementById('btn-mark-all-read')?.addEventListener('click', async () => {
+  const unreadIds = _messages.filter(m => !m.read).map(m => m.id);
+  if (!unreadIds.length) return;
+  await supabase.from('admin_messages').update({ read: true }).in('id', unreadIds);
+  _messages.forEach(m => m.read = true);
+  renderMessages();
+  updateUnreadBadge();
+});
+
+// Load unread count on page init so badge shows even before tab is clicked
+async function loadUnreadCount() {
+  const { count } = await supabase
+    .from('admin_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('read', false);
+  if (count) {
+    const badge = document.getElementById('messages-unread-badge');
+    badge.textContent = count;
+    badge.style.display = 'inline';
+  }
+}
+
 init();
+loadUnreadCount();
 </script>
 </body>
 </html>
