@@ -931,6 +931,8 @@ function renderMembers(members) {
     const emailVerified = auth.email_confirmed_at;
     const hasDiscord = (auth.providers||[]).includes('discord');
     const emailRevoked = !!m.email_access_revoked;
+    const accountStatus = m.account_status || 'active';
+
     const emailBadge = emailRevoked
       ? `<span class="badge" style="background:#fdecea;color:#c0392b;">✉ Revoked</span>`
       : emailVerified
@@ -939,6 +941,11 @@ function renderMembers(members) {
     const discordBadge = hasDiscord
       ? `<span class="badge badge-verified" style="background:#5865F2;color:#fff;">Discord</span>`
       : `<span class="badge badge-unlinked">No Discord</span>`;
+    const statusBadge = accountStatus === 'frozen'
+      ? `<span class="badge" style="background:#fff8e1;color:#b07d00;">⏸ Frozen</span>`
+      : accountStatus === 'terminated'
+        ? `<span class="badge" style="background:#fdecea;color:#c0392b;">✕ Terminated</span>`
+        : '';
 
     const mcBadge = m.minecraft_verified
       ? `<span class="badge badge-verified">Verified</span>`
@@ -946,14 +953,20 @@ function renderMembers(members) {
         ? `<span class="badge badge-pending">Pending</span>`
         : `<span class="badge badge-unlinked">None</span>`;
 
+    const allowEmailBtn = !emailRevoked && !emailVerified && m.email && _myPermissions.can_manage_users
+      ? `<button class="btn btn-secondary btn-sm" onclick="allowEmail('${m.id}')">Allow Email</button>` : '';
     const revokeEmailBtn = !emailRevoked && emailVerified && _myPermissions.can_manage_users
       ? `<button class="btn btn-danger btn-sm" onclick="revokeEmail('${m.id}')">Revoke Email</button>` : '';
-    const allowEmailBtn = emailRevoked && _myPermissions.can_manage_users
+    const repealEmailBtn = emailRevoked && _myPermissions.can_manage_users
       ? `<button class="btn btn-success btn-sm" onclick="repealEmail('${m.id}')">Allow Email</button>` : '';
-    const resendEmailBtn = !emailRevoked && !emailVerified && m.email && _myPermissions.can_manage_users
-      ? `<button class="btn btn-secondary btn-sm" onclick="verifyEmail('${m.id}')">Verify Email</button>` : '';
     const revokeDiscordBtn = hasDiscord && _myPermissions.can_manage_users
       ? `<button class="btn btn-danger btn-sm" onclick="revokeDiscord('${m.id}')">Revoke Discord</button>` : '';
+    const freezeBtn = accountStatus === 'active' && _myPermissions.can_manage_users
+      ? `<button class="btn btn-outline btn-sm" onclick="freezeAccount('${m.id}')">Freeze</button>` : '';
+    const unfreezeBtn = accountStatus === 'frozen' && _myPermissions.can_manage_users
+      ? `<button class="btn btn-success btn-sm" onclick="unfreezeAccount('${m.id}')">Unfreeze</button>` : '';
+    const terminateBtn = accountStatus !== 'terminated' && _myPermissions.can_manage_users
+      ? `<button class="btn btn-danger btn-sm" onclick="terminateAccount('${m.id}')">Terminate</button>` : '';
 
     return `<tr>
       <td>
@@ -963,7 +976,7 @@ function renderMembers(members) {
       <td><div class="member-email">${m.email||'—'}</div></td>
       <td>${rolesCell}</td>
       <td style="white-space:nowrap;">
-        <div style="display:flex;flex-direction:column;gap:4px;">${emailBadge}${discordBadge}</div>
+        <div style="display:flex;flex-direction:column;gap:4px;">${emailBadge}${discordBadge}${statusBadge}</div>
       </td>
       <td>${mcBadge}</td>
       <td>
@@ -972,7 +985,8 @@ function renderMembers(members) {
             ? `<button class="btn btn-success btn-sm" onclick="approveMC('${m.id}')">Approve MC</button>` : ''}
           ${m.minecraft_verified && _myPermissions.can_manage_minecraft
             ? `<button class="btn btn-danger btn-sm" onclick="revokeMC('${m.id}')">Revoke MC</button>` : ''}
-          ${resendEmailBtn}${revokeEmailBtn}${allowEmailBtn}${revokeDiscordBtn}
+          ${allowEmailBtn}${revokeEmailBtn}${repealEmailBtn}${revokeDiscordBtn}
+          ${freezeBtn}${unfreezeBtn}${terminateBtn}
         </div>
       </td>
     </tr>`;
@@ -1411,23 +1425,15 @@ window.revokeMC   = async (id) => {
   await supabase.from('profiles').update({ minecraft_verified: false, minecraft_username: null, mc_verify_code: null, mc_verify_expires: null }).eq('id', id);
   await loadAll();
 };
-window.verifyEmail = async (id) => {
+window.allowEmail = async (id) => {
   const member = _allMembers.find(m => m.id === id);
-  if (!member?.email) { alert('No email address on this account.'); return; }
-  if (!confirm(`Send a verification email to ${member.email}?`)) return;
-  const { data: { session } } = await supabase.auth.getSession();
-  const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/admin-resend-verification', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-    body: JSON.stringify({ email: member.email }),
-  });
-  const json = await res.json();
-  if (!res.ok) { alert('Error: ' + (json.error || 'Unknown error')); return; }
-  alert(`Verification email sent to ${member.email}.`);
+  if (!confirm(`Allow ${member?.email || 'this user'} to sign in with email? Their email will be marked as verified without sending a confirmation.`)) return;
+  const { error } = await supabase.rpc('allow_email_access', { user_id: id });
+  if (error) { alert('Error: ' + error.message); return; }
   await loadAll();
 };
 window.revokeEmail = async (id) => {
-  if (!confirm('Revoke email verification? This will prevent the user from signing in with email.')) return;
+  if (!confirm('Revoke email sign-in? This will prevent the user from signing in with email.')) return;
   const { error } = await supabase.rpc('revoke_email_verification', { user_id: id });
   if (error) { alert('Error: ' + error.message); return; }
   await loadAll();
@@ -1441,6 +1447,31 @@ window.repealEmail = async (id) => {
 window.revokeDiscord = async (id) => {
   if (!confirm('Unlink Discord from this account?')) return;
   const { error } = await supabase.rpc('revoke_discord_identity', { user_id: id });
+  if (error) { alert('Error: ' + error.message); return; }
+  await loadAll();
+};
+window.freezeAccount = async (id) => {
+  const member = _allMembers.find(m => m.id === id);
+  const name = member?.display_name || member?.username || 'this account';
+  if (!confirm(`Freeze ${name}? They will be signed out and blocked from signing in until unfrozen.`)) return;
+  const { error } = await supabase.rpc('freeze_account', { user_id: id });
+  if (error) { alert('Error: ' + error.message); return; }
+  await loadAll();
+};
+window.unfreezeAccount = async (id) => {
+  const member = _allMembers.find(m => m.id === id);
+  const name = member?.display_name || member?.username || 'this account';
+  if (!confirm(`Unfreeze ${name}? They will be able to sign in again.`)) return;
+  const { error } = await supabase.rpc('unfreeze_account', { user_id: id });
+  if (error) { alert('Error: ' + error.message); return; }
+  await loadAll();
+};
+window.terminateAccount = async (id) => {
+  const member = _allMembers.find(m => m.id === id);
+  const name = member?.display_name || member?.username || 'this account';
+  const input = prompt(`Type TERMINATE to permanently terminate ${name}'s account. This cannot be undone.`);
+  if (input !== 'TERMINATE') return;
+  const { error } = await supabase.rpc('terminate_account', { user_id: id });
   if (error) { alert('Error: ' + error.message); return; }
   await loadAll();
 };

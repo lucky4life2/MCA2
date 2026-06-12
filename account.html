@@ -124,7 +124,11 @@
       #mc-body [style*="flex-wrap"] .btn { width: 100%; }
     }
 
-    /* Contact admin modal */
+    @media (max-width: 380px) {
+      .account-hero h1 { font-size: 1.6rem; }
+    }
+
+    /* Contact admin + delete account modals */
     .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 1rem; }
     .modal-backdrop.hidden { display: none; }
     .modal-card { background: var(--white); border: 1px solid var(--border); border-radius: 8px; width: 100%; max-width: 480px; box-shadow: 0 8px 32px rgba(0,0,0,.12); }
@@ -134,10 +138,6 @@
     .modal-close:hover { color: var(--black); }
     .modal-body { padding: 1.5rem; }
     .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
-
-    @media (max-width: 600px) {
-      .account-loading-spinner { width: 28px; height: 28px; }
-    }
   </style>
 </head>
 <body>
@@ -263,6 +263,17 @@
       </div>
     </div>
 
+    <!-- Delete Account -->
+    <div class="account-section" style="border-color:#fca5a5;">
+      <div class="account-section-header" style="border-bottom-color:#fca5a5;">
+        <div class="account-section-title" style="color:#c0392b;">Delete Account</div>
+      </div>
+      <div class="account-section-body">
+        <p class="danger-zone-note">Permanently delete your MCA account. You will be signed out immediately and will no longer be able to sign in. This cannot be undone.</p>
+        <button class="btn btn-danger" id="btn-delete-account">Delete My Account</button>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -320,9 +331,39 @@ async function init() {
   }
   _user = session.user;
   await loadProfile();
+
+  // Block frozen/terminated accounts
+  if (_profile.account_status === 'frozen') {
+    elLoading.style.display = 'none';
+    elNotSignedIn.style.display = 'block';
+    elNotSignedIn.querySelector('h2').textContent = 'Account Frozen';
+    elNotSignedIn.querySelector('p').textContent = 'Your account has been frozen by an administrator. Contact an admin to appeal.';
+    elNotSignedIn.querySelector('a').style.display = 'none';
+    await signOut();
+    return;
+  }
+  if (_profile.account_status === 'terminated') {
+    elLoading.style.display = 'none';
+    elNotSignedIn.style.display = 'block';
+    elNotSignedIn.querySelector('h2').textContent = 'Account Terminated';
+    elNotSignedIn.querySelector('p').textContent = 'This account has been terminated.';
+    elNotSignedIn.querySelector('a').style.display = 'none';
+    await signOut();
+    return;
+  }
+
   renderPage();
   elLoading.style.display = 'none';
   elMain.style.display = 'block';
+
+  // Keep user data fresh; re-check status on USER_UPDATED/EMAIL_CHANGE
+  supabase.auth.onAuthStateChange(async (event, updatedSession) => {
+    if (event === 'USER_UPDATED' || event === 'EMAIL_CHANGE') {
+      if (updatedSession?.user) { _user = updatedSession.user; await loadProfile(); renderPage(); }
+    } else if (event === 'SIGNED_OUT') {
+      window.location.replace('login.html?return=account.html');
+    }
+  });
 }
 
 function showRecoveryBanner() {
@@ -397,12 +438,13 @@ function renderConnectedAccounts() {
       ${!hasEmail
         ? `<button class="btn btn-outline" id="btn-add-email">Add Email</button>`
         : _profile.email_access_revoked
-          ? `<span class="account-section-badge badge-revoked">Revoked</span>`
+          ? `<span class="account-section-badge badge-revoked" title="Email sign-in disabled by admin.">Revoked</span>`
           : canUnlinkEmail
             ? `<button class="btn btn-danger" id="btn-unlink-email">Unlink</button>`
             : `<span class="account-section-badge badge-linked">Connected</span>`
       }
     </div>
+    ${_profile.email_access_revoked ? `<div style="padding:8px 0 4px;font-size:12px;color:var(--muted);line-height:1.6;">Email sign-in has been disabled for this account by an administrator. Contact an admin to have it restored.</div>` : ''}
     <div class="connected-row">
       <div class="connected-provider">
         <div class="connected-provider-icon icon-discord">
@@ -746,6 +788,16 @@ document.getElementById('btn-reset-password').addEventListener('click', async ()
 document.getElementById('btn-sign-out').addEventListener('click', async () => {
   await signOut();
   window.location.replace('login.html');
+});
+
+// ── Delete account ────────────────────────────────────────────
+document.getElementById('btn-delete-account').addEventListener('click', async () => {
+  const input = prompt('Type DELETE to permanently delete your account. This cannot be undone.');
+  if (input !== 'DELETE') return;
+  const { error } = await supabase.rpc('terminate_own_account');
+  if (error) { alert('Error: ' + error.message); return; }
+  await signOut();
+  window.location.replace('login.html?deleted=1');
 });
 
 // ── Contact Administrator ─────────────────────────────────────
