@@ -898,9 +898,12 @@ function renderMembers(members) {
     const auth = _authUsers[m.id] || {};
     const emailVerified = auth.email_confirmed_at;
     const hasDiscord = (auth.providers||[]).includes('discord');
-    const emailBadge = emailVerified
-      ? `<span class="badge badge-verified">✉ Verified</span>`
-      : `<span class="badge badge-pending">✉ Unverified</span>`;
+    const emailRevoked = !!m.email_access_revoked;
+    const emailBadge = emailRevoked
+      ? `<span class="badge" style="background:#fdecea;color:#c0392b;">✉ Revoked</span>`
+      : emailVerified
+        ? `<span class="badge badge-verified">✉ Verified</span>`
+        : `<span class="badge badge-pending">✉ Unverified</span>`;
     const discordBadge = hasDiscord
       ? `<span class="badge badge-verified" style="background:#5865F2;color:#fff;">Discord</span>`
       : `<span class="badge badge-unlinked">No Discord</span>`;
@@ -911,9 +914,11 @@ function renderMembers(members) {
         ? `<span class="badge badge-pending">Pending</span>`
         : `<span class="badge badge-unlinked">None</span>`;
 
-    const revokeEmailBtn = emailVerified && _myPermissions.can_manage_users
+    const revokeEmailBtn = !emailRevoked && emailVerified && _myPermissions.can_manage_users
       ? `<button class="btn btn-danger btn-sm" onclick="revokeEmail('${m.id}')">Revoke Email</button>` : '';
-    const resendEmailBtn = !emailVerified && m.email && _myPermissions.can_manage_users
+    const repealEmailBtn = emailRevoked && _myPermissions.can_manage_users
+      ? `<button class="btn btn-success btn-sm" onclick="repealEmail('${m.id}')">Repeal Revocation</button>` : '';
+    const resendEmailBtn = !emailRevoked && !emailVerified && m.email && _myPermissions.can_manage_users
       ? `<button class="btn btn-secondary btn-sm" onclick="verifyEmail('${m.id}')">Verify Email</button>` : '';
     const revokeDiscordBtn = hasDiscord && _myPermissions.can_manage_users
       ? `<button class="btn btn-danger btn-sm" onclick="revokeDiscord('${m.id}')">Revoke Discord</button>` : '';
@@ -935,7 +940,7 @@ function renderMembers(members) {
             ? `<button class="btn btn-success btn-sm" onclick="approveMC('${m.id}')">Approve MC</button>` : ''}
           ${m.minecraft_verified && _myPermissions.can_manage_minecraft
             ? `<button class="btn btn-danger btn-sm" onclick="revokeMC('${m.id}')">Revoke MC</button>` : ''}
-          ${resendEmailBtn}${revokeEmailBtn}${revokeDiscordBtn}
+          ${resendEmailBtn}${revokeEmailBtn}${repealEmailBtn}${revokeDiscordBtn}
         </div>
       </td>
     </tr>`;
@@ -1384,6 +1389,12 @@ window.verifyEmail = async (id) => {
 window.revokeEmail = async (id) => {
   if (!confirm('Revoke email verification?')) return;
   const { error } = await supabase.rpc('revoke_email_verification', { user_id: id });
+  if (error) { alert('Error: ' + error.message); return; }
+  await loadAll();
+};
+window.repealEmail = async (id) => {
+  if (!confirm('Repeal email revocation and restore email sign-in for this account?')) return;
+  const { error } = await supabase.rpc('restore_email_verification', { user_id: id });
   if (error) { alert('Error: ' + error.message); return; }
   await loadAll();
 };

@@ -301,20 +301,6 @@ async function init() {
   renderPage();
   elLoading.style.display = 'none';
   elMain.style.display = 'block';
-
-  // Keep user data fresh when Supabase fires USER_UPDATED or EMAIL_CHANGE
-  // (e.g. after email confirmation link is clicked — prevents erroneous sign-out)
-  supabase.auth.onAuthStateChange(async (event, updatedSession) => {
-    if (event === 'USER_UPDATED' || event === 'EMAIL_CHANGE') {
-      if (updatedSession?.user) {
-        _user = updatedSession.user;
-        await loadProfile();
-        renderPage();
-      }
-    } else if (event === 'SIGNED_OUT') {
-      window.location.replace('login.html?return=account.html');
-    }
-  });
 }
 
 function showRecoveryBanner() {
@@ -389,12 +375,16 @@ function renderConnectedAccounts() {
       ${!hasEmail
         ? `<button class="btn btn-outline" id="btn-add-email">Add Email</button>`
         : _profile.email_access_revoked
-          ? `<span class="account-section-badge badge-revoked">Revoked</span>`
+          ? `<span class="account-section-badge badge-revoked" title="Email sign-in has been disabled by an admin.">Revoked</span>`
           : canUnlinkEmail
             ? `<button class="btn btn-danger" id="btn-unlink-email">Unlink</button>`
             : `<span class="account-section-badge badge-linked">Connected</span>`
       }
     </div>
+    ${_profile.email_access_revoked ? `
+    <div style="padding: 10px 0 4px; font-size: 12px; color: var(--muted); line-height: 1.6;">
+      Email sign-in has been disabled for this account by an administrator. Contact an admin to have it restored.
+    </div>` : ''}
     <div class="connected-row">
       <div class="connected-provider">
         <div class="connected-provider-icon icon-discord">
@@ -494,23 +484,25 @@ function renderConnectedAccounts() {
         if (!/[A-Z]/.test(password)) { errEl.textContent = 'Password must contain at least one uppercase letter.'; errEl.style.display = 'block'; return; }
         if (!/[a-z]/.test(password)) { errEl.textContent = 'Password must contain at least one lowercase letter.'; errEl.style.display = 'block'; return; }
 
-        // Set the password first, then add the email identity
-        // updateUser with both email + password: Supabase will send a confirmation
-        // email and link the identity once confirmed.
-        const { data: updateData, error: updateError } = await supabase.auth.updateUser(
-          { email, password },
-          { emailRedirectTo: window.location.origin + '/account.html' }
-        );
-        if (updateError) {
-          errEl.textContent = updateError.message || 'Could not add email.';
-          errEl.style.display = 'block';
-          return;
-        }
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) { errEl.textContent = 'You are not logged in.'; errEl.style.display = 'block'; return; }
+        const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/add-email-to-account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          body: JSON.stringify({ email, password }),
+        });
+        const json = await res.json();
+        if (!res.ok) { errEl.textContent = json.error || 'Unknown error'; errEl.style.display = 'block'; return; }
 
-        // Supabase sends a confirmation email; the identity isn't linked until confirmed.
-        succEl.textContent = 'Check your inbox — we sent a confirmation link to ' + email + '. Click it to finish linking your email.';
+        succEl.textContent = json.confirmed ? 'Email linked successfully. You can now sign in with email and password.' : 'Check your inbox — we sent a confirmation link to ' + email + '. Click it to finish linking.';
         succEl.style.display = 'block';
         document.getElementById('btn-add-email-save').disabled = true;
+
+        // Refresh user after a moment
+        setTimeout(async () => {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) { _user = user; renderConnectedAccounts(); }
+        }, 3000);
       });
     });
   }
