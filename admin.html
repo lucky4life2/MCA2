@@ -914,7 +914,7 @@ function renderMembers(members) {
     const revokeEmailBtn = emailVerified && _myPermissions.can_manage_users
       ? `<button class="btn btn-danger btn-sm" onclick="revokeEmail('${m.id}')">Revoke Email</button>` : '';
     const resendEmailBtn = !emailVerified && m.email && _myPermissions.can_manage_users
-      ? `<button class="btn btn-secondary btn-sm" onclick="resendVerification('${m.id}', '${m.email}')">Resend Verification</button>` : '';
+      ? `<button class="btn btn-secondary btn-sm" onclick="verifyEmail('${m.id}')">Verify Email</button>` : '';
     const revokeDiscordBtn = hasDiscord && _myPermissions.can_manage_users
       ? `<button class="btn btn-danger btn-sm" onclick="revokeDiscord('${m.id}')">Revoke Discord</button>` : '';
 
@@ -1374,17 +1374,12 @@ window.revokeMC   = async (id) => {
   await supabase.from('profiles').update({ minecraft_verified: false, minecraft_username: null, mc_verify_code: null, mc_verify_expires: null }).eq('id', id);
   await loadAll();
 };
-window.resendVerification = async (id, email) => {
-  if (!confirm(`Resend verification email to ${email}?`)) return;
-  const { data: { session } } = await supabase.auth.getSession();
-  const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/admin-resend-verification', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-    body: JSON.stringify({ email }),
-  });
-  const json = await res.json();
-  if (!res.ok) { alert('Error: ' + (json.error || 'Unknown error')); return; }
-  alert('Verification email sent to ' + email);
+window.verifyEmail = async (id) => {
+  if (!confirm('Manually verify this email address?')) return;
+  const { error } = await supabase.rpc('restore_email_verification', { user_id: id });
+  if (error) { alert('Error: ' + error.message); return; }
+  alert('Email verified.');
+  loadMembers();
 };
 window.revokeEmail = async (id) => {
   if (!confirm('Revoke email verification?')) return;
