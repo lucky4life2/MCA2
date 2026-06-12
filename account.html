@@ -481,6 +481,7 @@ function renderConnectedAccounts() {
         if (!/[a-z]/.test(password)) { errEl.textContent = 'Password must contain at least one lowercase letter.'; errEl.style.display = 'block'; return; }
 
         const { data: { session } } = await supabase.auth.getSession();
+        if (!session) { errEl.textContent = 'You are not logged in.'; errEl.style.display = 'block'; return; }
         const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/add-email-to-account', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
