@@ -542,7 +542,7 @@ async function renderConnectedAccounts() {
         </div>`;
       container.insertAdjacentHTML('beforeend', formHtml);
 
-      document.getElementById('btn-add-email-cancel').addEventListener('click', () => {
+      document.getElementById('btn-add-email-cancel').addEventListener('click', async () => {
         await renderConnectedAccounts();
       });
 
