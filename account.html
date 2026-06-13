@@ -306,7 +306,7 @@ async function init() {
         if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
           _user = recoverySession.user;
           await loadProfile();
-          renderPage();
+          await renderPage();
           elLoading.style.display = 'none';
           elMain.style.display = 'block';
           showRecoveryBanner();
@@ -316,7 +316,7 @@ async function init() {
     }
     _user = session.user;
     await loadProfile();
-    renderPage();
+    await renderPage();
     elLoading.style.display = 'none';
     elMain.style.display = 'block';
     showRecoveryBanner();
@@ -352,14 +352,14 @@ async function init() {
     return;
   }
 
-  renderPage();
+  await renderPage();
   elLoading.style.display = 'none';
   elMain.style.display = 'block';
 
   // Keep user data fresh; re-check status on USER_UPDATED/EMAIL_CHANGE
   supabase.auth.onAuthStateChange(async (event, updatedSession) => {
     if (event === 'USER_UPDATED' || event === 'EMAIL_CHANGE') {
-      if (updatedSession?.user) { _user = updatedSession.user; await loadProfile(); renderPage(); }
+      if (updatedSession?.user) { _user = updatedSession.user; await loadProfile(); await renderPage(); }
     } else if (event === 'SIGNED_OUT') {
       window.location.replace('login.html?return=account.html');
     }
@@ -393,7 +393,7 @@ async function loadProfile() {
 }
 
 // ── Render ───────────────────────────────────────────────────
-function renderPage() {
+async function renderPage() {
   // Hero
   const name = _profile.display_name || _profile.username || _user.email?.split('@')[0] || 'Account';
   document.getElementById('account-hero-name').textContent = name;
@@ -404,7 +404,7 @@ function renderPage() {
   document.getElementById('field-username').value = _profile.username || '';
 
   // Connected accounts
-  renderConnectedAccounts();
+  await renderConnectedAccounts();
 
   // Minecraft
   renderMinecraft();
@@ -415,7 +415,10 @@ function renderPage() {
   document.getElementById('section-password').style.display = hasEmailIdentity ? '' : 'none';
 }
 
-function renderConnectedAccounts() {
+async function renderConnectedAccounts() {
+  // Always fetch fresh user so identity list is never stale
+  const { data: { user: fresh } } = await supabase.auth.getUser();
+  if (fresh) _user = fresh;
   const el = document.getElementById('connected-accounts-body');
   const identities = _user.identities || [];
   const hasDiscord = identities.some(i => i.provider === 'discord') || !!_profile.discord_id;
@@ -490,7 +493,7 @@ function renderConnectedAccounts() {
         if (!(_user.identities || []).some(id => id.provider === 'discord')) break;
         await new Promise(r => setTimeout(r, 300));
       }
-      renderConnectedAccounts();
+      await renderConnectedAccounts();
     });
   }
   if (canUnlinkEmail) {
@@ -510,7 +513,7 @@ function renderConnectedAccounts() {
         if (!(_user.identities || []).some(id => id.provider === 'email')) break;
         await new Promise(r => setTimeout(r, 300));
       }
-      renderConnectedAccounts();
+      await renderConnectedAccounts();
     });
   }
   if (!hasEmail) {
@@ -540,7 +543,7 @@ function renderConnectedAccounts() {
       container.insertAdjacentHTML('beforeend', formHtml);
 
       document.getElementById('btn-add-email-cancel').addEventListener('click', () => {
-        renderConnectedAccounts();
+        await renderConnectedAccounts();
       });
 
       document.getElementById('btn-add-email-save').addEventListener('click', async () => {
@@ -572,7 +575,7 @@ function renderConnectedAccounts() {
         // Refresh user after a moment
         setTimeout(async () => {
           const { data: { user } } = await supabase.auth.getUser();
-          if (user) { _user = user; renderConnectedAccounts(); }
+          if (user) { _user = user; await renderConnectedAccounts(); }
         }, 3000);
       });
     });
