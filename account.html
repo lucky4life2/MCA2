@@ -794,8 +794,17 @@ document.getElementById('btn-sign-out').addEventListener('click', async () => {
 document.getElementById('btn-delete-account').addEventListener('click', async () => {
   const input = prompt('Type DELETE to permanently delete your account. This cannot be undone.');
   if (input !== 'DELETE') return;
-  const { error } = await supabase.rpc('terminate_own_account');
-  if (error) { alert('Error: ' + error.message); return; }
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) { alert('You are not signed in.'); return; }
+  const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/delete-own-account', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    alert('Error: ' + (json.error || res.statusText));
+    return;
+  }
   await signOut();
   window.location.replace('login.html?deleted=1');
 });
