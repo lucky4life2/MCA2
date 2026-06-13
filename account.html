@@ -860,6 +860,34 @@ document.getElementById('contact-send').addEventListener('click', async () => {
 });
 
 init();
+
+// ── Confirm email link handler ────────────────────────────────
+(async function handleConfirmEmail() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.get('confirm_email')) return;
+  const uid = params.get('uid');
+  const token = params.get('token');
+  if (!uid || !token) return;
+
+  // Wait for session to be ready
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return;
+
+  const { data: { session: currentSession } } = await supabase.auth.getSession();
+  const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/confirm-email-link', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentSession.access_token}` },
+    body: JSON.stringify({ uid, token }),
+  });
+  const json = await res.json();
+  // Clean the URL
+  history.replaceState(null, '', window.location.pathname);
+  if (!res.ok) {
+    alert('Could not link email: ' + (json.error || 'Unknown error'));
+  } else {
+    alert('Email linked successfully! You can now sign in with email and password.');
+  }
+})();
 </script>
 
 <!-- Contact Admin Modal -->
