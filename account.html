@@ -474,11 +474,13 @@ function renderConnectedAccounts() {
   if (canUnlinkDiscord) {
     document.getElementById('btn-unlink-discord')?.addEventListener('click', async () => {
       if (!confirm('Unlink Discord from your account? You will still be able to sign in with email.')) return;
+      // Always fetch fresh user so we get the real identity objects, not cached ones
+      const { data: { user: freshUser } } = await supabase.auth.getUser();
+      _user = freshUser;
       const discordIdentity = (_user.identities || []).find(i => i.provider === 'discord');
-      if (discordIdentity) {
-        const { error } = await supabase.auth.unlinkIdentity(discordIdentity);
-        if (error) { alert('Could not unlink Discord: ' + error.message); return; }
-      }
+      if (!discordIdentity) { alert('Discord identity not found.'); return; }
+      const { error } = await supabase.auth.unlinkIdentity(discordIdentity);
+      if (error) { alert('Could not unlink Discord: ' + error.message); return; }
       await supabase.from('profiles').update({ discord_id: null }).eq('id', _user.id);
       _profile.discord_id = null;
       // Poll until Supabase reflects the removed identity
@@ -494,11 +496,13 @@ function renderConnectedAccounts() {
   if (canUnlinkEmail) {
     document.getElementById('btn-unlink-email')?.addEventListener('click', async () => {
       if (!confirm('Unlink email/password from your account? You will only be able to sign in with Discord.')) return;
+      // Always fetch fresh user so we get the real identity objects, not cached ones
+      const { data: { user: freshUser } } = await supabase.auth.getUser();
+      _user = freshUser;
       const emailIdentity = (_user.identities || []).find(i => i.provider === 'email');
-      if (emailIdentity) {
-        const { error } = await supabase.auth.unlinkIdentity(emailIdentity);
-        if (error) { alert('Could not unlink email: ' + error.message); return; }
-      }
+      if (!emailIdentity) { alert('Email identity not found.'); return; }
+      const { error } = await supabase.auth.unlinkIdentity(emailIdentity);
+      if (error) { alert('Could not unlink email: ' + error.message); return; }
       // Poll until Supabase reflects the removed identity
       for (let i = 0; i < 10; i++) {
         const { data: { user: fresh } } = await supabase.auth.getUser();
