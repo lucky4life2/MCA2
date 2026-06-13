@@ -76,12 +76,6 @@
     /* Danger zone */
     .danger-zone-note { font-size: 13px; color: var(--muted); margin-bottom: 1rem; line-height: 1.6; }
 
-    /* Deletion pending banner */
-    .deletion-banner { background: #fff8f0; border: 1px solid #f59e0b; border-radius: 6px; padding: 14px 18px; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-    .deletion-banner-text { font-size: 13px; color: #92400e; line-height: 1.6; }
-    .deletion-banner-text strong { color: #78350f; }
-    .deletion-banner-actions { display: flex; gap: 8px; flex-shrink: 0; }
-
     /* Loading */
     .account-loading { display: flex; align-items: center; justify-content: center; min-height: 60vh; flex-direction: column; gap: 12px; color: var(--muted); font-size: 14px; }
     .account-loading-spinner { width: 28px; height: 28px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin .7s linear infinite; }
@@ -162,16 +156,6 @@
   </div>
 
   <div id="account-main" class="account-wrap" style="display:none;">
-
-    <div id="deletion-banner" style="display:none;" class="deletion-banner">
-      <div class="deletion-banner-text">
-        <strong>Account scheduled for deletion.</strong><br>
-        Your account will be permanently deleted on <span id="deletion-date"></span>. You can cancel this within the 7-day window.
-      </div>
-      <div class="deletion-banner-actions">
-        <button class="btn btn-outline" id="btn-cancel-deletion">Cancel Deletion</button>
-      </div>
-    </div>
 
     <div class="account-hero">
       <div class="account-hero-eyebrow">My Account</div>
@@ -285,7 +269,7 @@
         <div class="account-section-title" style="color:#c0392b;">Delete Account</div>
       </div>
       <div class="account-section-body">
-        <p class="danger-zone-note">Schedule your MCA account for permanent deletion. You will be signed out immediately. You have 7 days to cancel — after that, your account and all data will be permanently removed.</p>
+        <p class="danger-zone-note">Permanently delete your MCA account. You will be signed out immediately and will no longer be able to sign in. This cannot be undone.</p>
         <button class="btn btn-danger" id="btn-delete-account">Delete My Account</button>
       </div>
     </div>
@@ -415,16 +399,6 @@ function renderPage() {
   document.getElementById('account-hero-name').textContent = name;
   document.getElementById('account-hero-sub').textContent = _profile.role === 'admin' ? 'Administrator' : 'Member';
 
-  // Deletion banner
-  const banner = document.getElementById('deletion-banner');
-  if (_profile.deletion_scheduled_at) {
-    const deletionDate = new Date(_profile.deletion_scheduled_at);
-    document.getElementById('deletion-date').textContent = deletionDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-    banner.style.display = 'flex';
-  } else {
-    banner.style.display = 'none';
-  }
-
   // Profile fields
   document.getElementById('field-display-name').value = _profile.display_name || '';
   document.getElementById('field-username').value = _profile.username || '';
@@ -500,18 +474,20 @@ function renderConnectedAccounts() {
   if (canUnlinkDiscord) {
     document.getElementById('btn-unlink-discord')?.addEventListener('click', async () => {
       if (!confirm('Unlink Discord from your account? You will still be able to sign in with email.')) return;
-      // Remove from Supabase identities
       const discordIdentity = (_user.identities || []).find(i => i.provider === 'discord');
       if (discordIdentity) {
         const { error } = await supabase.auth.unlinkIdentity(discordIdentity);
         if (error) { alert('Could not unlink Discord: ' + error.message); return; }
       }
-      // Also clear discord_id from profile
       await supabase.from('profiles').update({ discord_id: null }).eq('id', _user.id);
       _profile.discord_id = null;
-      // Refresh user data
-      const { data: { user } } = await supabase.auth.getUser();
-      _user = user;
+      // Poll until Supabase reflects the removed identity
+      for (let i = 0; i < 10; i++) {
+        const { data: { user: fresh } } = await supabase.auth.getUser();
+        _user = fresh;
+        if (!(_user.identities || []).some(id => id.provider === 'discord')) break;
+        await new Promise(r => setTimeout(r, 300));
+      }
       renderConnectedAccounts();
     });
   }
@@ -523,8 +499,13 @@ function renderConnectedAccounts() {
         const { error } = await supabase.auth.unlinkIdentity(emailIdentity);
         if (error) { alert('Could not unlink email: ' + error.message); return; }
       }
-      const { data: { user } } = await supabase.auth.getUser();
-      _user = user;
+      // Poll until Supabase reflects the removed identity
+      for (let i = 0; i < 10; i++) {
+        const { data: { user: fresh } } = await supabase.auth.getUser();
+        _user = fresh;
+        if (!(_user.identities || []).some(id => id.provider === 'email')) break;
+        await new Promise(r => setTimeout(r, 300));
+      }
       renderConnectedAccounts();
     });
   }
@@ -818,43 +799,12 @@ document.getElementById('btn-sign-out').addEventListener('click', async () => {
 
 // ── Delete account ────────────────────────────────────────────
 document.getElementById('btn-delete-account').addEventListener('click', async () => {
-  const input = prompt('Type DELETE to schedule your account for permanent deletion in 7 days. You can cancel this within the 7-day window.');
+  const input = prompt('Type DELETE to permanently delete your account. This cannot be undone.');
   if (input !== 'DELETE') return;
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) { alert('You are not signed in.'); return; }
-  const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/delete-own-account', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-  });
-  if (!res.ok) {
-    const json = await res.json().catch(() => ({}));
-    alert('Error: ' + (json.error || res.statusText));
-    return;
-  }
+  const { error } = await supabase.rpc('terminate_own_account');
+  if (error) { alert('Error: ' + error.message); return; }
   await signOut();
-  window.location.replace('login.html?deletion=scheduled');
-});
-
-// ── Cancel deletion ───────────────────────────────────────────
-document.getElementById('btn-cancel-deletion').addEventListener('click', async () => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) { alert('You are not signed in.'); return; }
-  const btn = document.getElementById('btn-cancel-deletion');
-  btn.disabled = true;
-  btn.textContent = 'Cancelling...';
-  const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/delete-own-account?action=cancel', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-  });
-  if (!res.ok) {
-    const json = await res.json().catch(() => ({}));
-    alert('Error: ' + (json.error || res.statusText));
-    btn.disabled = false;
-    btn.textContent = 'Cancel Deletion';
-    return;
-  }
-  _profile.deletion_scheduled_at = null;
-  document.getElementById('deletion-banner').style.display = 'none';
+  window.location.replace('login.html?deleted=1');
 });
 
 // ── Contact Administrator ─────────────────────────────────────
