@@ -527,7 +527,7 @@
       errEl.textContent   = 'Password must contain at least one lowercase letter.';
       errEl.style.display = 'block'; return;
     }
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: null } });
     if (error) {
       errEl.textContent   = error.message || 'Sign up failed.';
       errEl.style.display = 'block'; return;
