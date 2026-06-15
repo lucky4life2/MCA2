@@ -223,34 +223,46 @@
           <div class="login-success">
             <div class="login-success-icon">✉️</div>
             <div class="login-success-title">Check your email</div>
-            <p class="login-success-text">We sent a confirmation link to your email address. Click it to activate your account, then come back to sign in.</p>
+            <p class="login-success-text">We sent a 6-digit code to your email address. Enter it below to activate your account.</p>
           </div>
+          <div class="login-form-group">
+            <label class="login-form-label" for="signup-code">Verification Code</label>
+            <input type="text" id="signup-code" class="login-form-input" placeholder="123456" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+          </div>
+          <div class="login-error" id="confirm-error"></div>
+          <button class="btn-login-submit" id="btn-verify-signup">Verify &amp; Continue</button>
           <a href="#" class="login-back-link" id="confirm-back">← Back to sign in</a>
-        </div>
-
-        <!-- Email verified panel -->
-        <div class="login-panel" id="panel-verified">
-          <div class="login-success">
-            <div class="login-success-icon">✅</div>
-            <div class="login-success-title">Email Verified!</div>
-            <p class="login-success-text">Your email address has been confirmed. You can now sign in to your account.</p>
-          </div>
-          <a href="#" class="login-back-link" id="verified-signin-link">Sign in →</a>
         </div>
 
         <!-- Forgot password panel -->
         <div class="login-panel" id="panel-forgot">
-          <div class="login-form-group">
-            <label class="login-form-label" for="forgot-email">Email Address</label>
-            <input type="email" id="forgot-email" class="login-form-input" placeholder="you@example.com" autocomplete="email">
+          <div id="forgot-step-email">
+            <div class="login-form-group">
+              <label class="login-form-label" for="forgot-email">Email Address</label>
+              <input type="email" id="forgot-email" class="login-form-input" placeholder="you@example.com" autocomplete="email">
+            </div>
+            <div class="login-error" id="forgot-error"></div>
+            <button class="btn-login-submit" id="btn-send-reset">Send Reset Code</button>
           </div>
-          <div class="login-error" id="forgot-error"></div>
+          <div id="forgot-step-code" style="display:none;">
+            <p class="login-success-text">Enter the 6-digit code sent to your email, then choose a new password.</p>
+            <div class="login-form-group">
+              <label class="login-form-label" for="forgot-code">Verification Code</label>
+              <input type="text" id="forgot-code" class="login-form-input" placeholder="123456" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+            </div>
+            <div class="login-form-group">
+              <label class="login-form-label" for="forgot-new-password">New Password</label>
+              <input type="password" id="forgot-new-password" class="login-form-input" placeholder="8+ characters" autocomplete="new-password">
+              <div class="password-hint">Must be 8+ characters with at least one uppercase and one lowercase letter.</div>
+            </div>
+            <div class="login-error" id="forgot-code-error"></div>
+            <button class="btn-login-submit" id="btn-reset-password">Reset Password</button>
+          </div>
           <div class="login-success" id="forgot-success" style="display:none;">
-            <div class="login-success-icon">✉️</div>
-            <div class="login-success-title">Reset link sent</div>
-            <p class="login-success-text">Check your email for a password reset link.</p>
+            <div class="login-success-icon">✅</div>
+            <div class="login-success-title">Password reset</div>
+            <p class="login-success-text">Your password has been changed. You can now sign in.</p>
           </div>
-          <button class="btn-login-submit" id="btn-send-reset">Send Reset Link</button>
           <a href="#" class="login-back-link" id="forgot-back">← Back to sign in</a>
         </div>
 
@@ -274,27 +286,13 @@
   const params   = new URLSearchParams(window.location.search);
   const returnTo = params.get('return') || 'account.html';
 
-  // ── Email verification callback ─────────────────────────────
-  // Supabase appends #access_token=...&token_type=signup to the URL after
-  // the user clicks the confirmation link in their email.
-  const hash = new URLSearchParams(window.location.hash.slice(1));
-  if (hash.get('token_type') === 'signup' || hash.get('type') === 'signup') {
-    // Hide tabs/footer, show verified panel
-    document.querySelectorAll('.login-tab, .login-card-footer, #login-card-footer').forEach(el => { if(el) el.style.display = 'none'; });
-    document.querySelectorAll('.login-panel').forEach(p => p.classList.remove('active'));
-    document.getElementById('panel-verified').classList.add('active');
-    document.getElementById('verified-signin-link').addEventListener('click', e => {
-      e.preventDefault();
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
-      document.querySelectorAll('.login-tab, .login-card-footer, #login-card-footer').forEach(el => { if(el) el.style.display = ''; });
-      document.querySelectorAll('.login-panel').forEach(p => p.classList.remove('active'));
-      document.getElementById('panel-signin').classList.add('active');
-    });
-  }
-
   // If already signed in, skip the login page entirely
   const { data: { session } } = await supabase.auth.getSession();
-  if (session && hash.get('token_type') !== 'signup' && hash.get('type') !== 'signup') window.location.replace(returnTo);
+  if (session) window.location.replace(returnTo);
+
+  // Pending email addresses for the code-entry steps below
+  let _pendingSignupEmail = null;
+  let _pendingResetEmail  = null;
 
   // ── Tab switching ─────────────────────────────────────────────
   const tabs     = document.querySelectorAll('.login-tab');
@@ -421,6 +419,16 @@
     document.getElementById('login-tabs').style.display = 'none';
     document.getElementById('login-card-footer').style.display = 'none';
     cardTitle.textContent = 'Reset Password';
+    // Reset panel to its initial step
+    document.getElementById('forgot-step-email').style.display = '';
+    document.getElementById('forgot-step-code').style.display = 'none';
+    document.getElementById('forgot-success').style.display = 'none';
+    document.getElementById('forgot-error').style.display = 'none';
+    document.getElementById('forgot-code-error').style.display = 'none';
+    document.getElementById('forgot-code').value = '';
+    document.getElementById('forgot-new-password').value = '';
+    document.getElementById('forgot-back').style.display = '';
+    document.getElementById('forgot-back').textContent = '← Back to sign in';
     // Pre-fill email if already typed
     const existingEmail = document.getElementById('signin-email').value.trim();
     if (existingEmail && existingEmail.includes('@')) document.getElementById('forgot-email').value = existingEmail;
@@ -443,16 +451,58 @@
       errEl.textContent = 'Please enter your email address.';
       errEl.style.display = 'block'; return;
     }
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + '/account.html'
-    });
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
     if (error) {
-      errEl.textContent = error.message || 'Could not send reset email.';
+      errEl.textContent = error.message || 'Could not send reset code.';
       errEl.style.display = 'block'; return;
     }
-    document.getElementById('btn-send-reset').style.display = 'none';
-    document.getElementById('forgot-back').style.display = 'none';
+    _pendingResetEmail = email;
+    document.getElementById('forgot-step-email').style.display = 'none';
+    document.getElementById('forgot-step-code').style.display = '';
+  });
+
+  document.getElementById('btn-reset-password').addEventListener('click', async () => {
+    const code    = document.getElementById('forgot-code').value.trim();
+    const newPass = document.getElementById('forgot-new-password').value;
+    const errEl   = document.getElementById('forgot-code-error');
+    errEl.style.display = 'none';
+    if (!code) {
+      errEl.textContent = 'Enter the code from your email.';
+      errEl.style.display = 'block'; return;
+    }
+    if (newPass.length < 8) {
+      errEl.textContent = 'Password must be at least 8 characters.';
+      errEl.style.display = 'block'; return;
+    }
+    if (!/[A-Z]/.test(newPass)) {
+      errEl.textContent = 'Password must contain at least one uppercase letter.';
+      errEl.style.display = 'block'; return;
+    }
+    if (!/[a-z]/.test(newPass)) {
+      errEl.textContent = 'Password must contain at least one lowercase letter.';
+      errEl.style.display = 'block'; return;
+    }
+
+    const { error: otpErr } = await supabase.auth.verifyOtp({ email: _pendingResetEmail, token: code, type: 'recovery' });
+    if (otpErr) {
+      errEl.textContent = otpErr.message || 'Invalid or expired code.';
+      errEl.style.display = 'block'; return;
+    }
+
+    const { error: updateErr } = await supabase.auth.updateUser({ password: newPass });
+    if (updateErr) {
+      errEl.textContent = updateErr.message || 'Could not update password.';
+      errEl.style.display = 'block'; return;
+    }
+
+    document.getElementById('forgot-step-code').style.display = 'none';
     document.getElementById('forgot-success').style.display = 'block';
+    document.getElementById('forgot-back').textContent = '→ Sign in now';
+  });
+
+  // Enter key on reset password field
+  document.getElementById('forgot-new-password').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('btn-reset-password').click();
   });
 
   // ── Email sign up ─────────────────────────────────────────────
@@ -482,13 +532,38 @@
       errEl.textContent   = error.message || 'Sign up failed.';
       errEl.style.display = 'block'; return;
     }
-    // Show confirmation panel
+    // Show code-entry confirmation panel
+    _pendingSignupEmail = email;
+    document.getElementById('signup-code').value = '';
+    document.getElementById('confirm-error').style.display = 'none';
     tabs.forEach(t => t.classList.remove('active'));
     panels.forEach(p => p.classList.remove('active'));
     document.getElementById('panel-confirm').classList.add('active');
     document.getElementById('login-tabs').style.display = 'none';
     document.getElementById('login-card-footer').style.display = 'none';
     cardTitle.textContent = 'Almost there';
+  });
+
+  // ── Verify signup code ──────────────────────────────────────────
+  document.getElementById('btn-verify-signup').addEventListener('click', async () => {
+    const code  = document.getElementById('signup-code').value.trim();
+    const errEl = document.getElementById('confirm-error');
+    errEl.style.display = 'none';
+    if (!code) {
+      errEl.textContent = 'Enter the code from your email.';
+      errEl.style.display = 'block'; return;
+    }
+    const { error } = await supabase.auth.verifyOtp({ email: _pendingSignupEmail, token: code, type: 'signup' });
+    if (error) {
+      errEl.textContent = error.message || 'Invalid or expired code.';
+      errEl.style.display = 'block'; return;
+    }
+    window.location.replace(returnTo);
+  });
+
+  // Enter key on signup code field
+  document.getElementById('signup-code').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('btn-verify-signup').click();
   });
 
   // Back to sign in from confirmation
