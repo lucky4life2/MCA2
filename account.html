@@ -533,10 +533,15 @@ async function renderConnectedAccounts() {
             <input type="password" id="add-email-password" class="form-input" placeholder="8+ characters" autocomplete="new-password">
             <div class="form-hint">Must be 8+ characters with at least one uppercase and one lowercase letter.</div>
           </div>
+          <div class="form-group" id="add-email-code-group" style="display:none;margin-bottom:10px;">
+            <label class="form-label" for="add-email-code">Verification Code</label>
+            <input type="text" id="add-email-code" class="form-input" placeholder="6-digit code" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code">
+            <div class="form-hint">Enter the 6-digit code we emailed to that address. It expires in 15 minutes.</div>
+          </div>
           <div class="form-error" id="add-email-error" style="display:none;margin-bottom:10px;"></div>
           <div class="form-success" id="add-email-success" style="display:none;margin-bottom:10px;"></div>
-          <div style="display:flex;gap:8px;">
-            <button class="btn btn-primary" id="btn-add-email-save">Add Email</button>
+          <div style="display:flex;gap:8px;" id="add-email-buttons">
+            <button class="btn btn-primary" id="btn-add-email-save">Send Code</button>
             <button class="btn btn-outline" id="btn-add-email-cancel">Cancel</button>
           </div>
         </div>`;
@@ -546,37 +551,87 @@ async function renderConnectedAccounts() {
         await renderConnectedAccounts();
       });
 
-      document.getElementById('btn-add-email-save').addEventListener('click', async () => {
-        const email    = document.getElementById('add-email-input').value.trim();
-        const password = document.getElementById('add-email-password').value;
-        const errEl    = document.getElementById('add-email-error');
-        const succEl   = document.getElementById('add-email-success');
-        errEl.style.display = 'none'; succEl.style.display = 'none';
+      let pendingEmail = null;
+      let awaitingCode = false;
 
-        if (!email) { errEl.textContent = 'Please enter an email address.'; errEl.style.display = 'block'; return; }
-        if (password.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; errEl.style.display = 'block'; return; }
-        if (!/[A-Z]/.test(password)) { errEl.textContent = 'Password must contain at least one uppercase letter.'; errEl.style.display = 'block'; return; }
-        if (!/[a-z]/.test(password)) { errEl.textContent = 'Password must contain at least one lowercase letter.'; errEl.style.display = 'block'; return; }
+      document.getElementById('btn-add-email-save').addEventListener('click', async () => {
+        const emailInput = document.getElementById('add-email-input');
+        const pwInput    = document.getElementById('add-email-password');
+        const codeInput  = document.getElementById('add-email-code');
+        const codeGroup  = document.getElementById('add-email-code-group');
+        const saveBtn    = document.getElementById('btn-add-email-save');
+        const errEl      = document.getElementById('add-email-error');
+        const succEl     = document.getElementById('add-email-success');
+        errEl.style.display = 'none'; succEl.style.display = 'none';
 
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) { errEl.textContent = 'You are not logged in.'; errEl.style.display = 'block'; return; }
-        const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/add-email-to-account', {
+
+        if (!awaitingCode) {
+          // Step 1: validate + request a verification code
+          const email    = emailInput.value.trim();
+          const password = pwInput.value;
+
+          if (!email) { errEl.textContent = 'Please enter an email address.'; errEl.style.display = 'block'; return; }
+          if (password.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; errEl.style.display = 'block'; return; }
+          if (!/[A-Z]/.test(password)) { errEl.textContent = 'Password must contain at least one uppercase letter.'; errEl.style.display = 'block'; return; }
+          if (!/[a-z]/.test(password)) { errEl.textContent = 'Password must contain at least one lowercase letter.'; errEl.style.display = 'block'; return; }
+
+          saveBtn.disabled = true;
+          const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/add-email-to-account', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+            body: JSON.stringify({ email, password }),
+          });
+          const json = await res.json();
+          saveBtn.disabled = false;
+          if (!res.ok) { errEl.textContent = json.error || 'Unknown error'; errEl.style.display = 'block'; return; }
+
+          if (json.confirmed) {
+            succEl.textContent = 'Email linked successfully. You can now sign in with email and password.';
+            succEl.style.display = 'block';
+            saveBtn.disabled = true;
+            setTimeout(async () => {
+              const { data: { user } } = await supabase.auth.getUser();
+              if (user) { _user = user; await renderConnectedAccounts(); }
+            }, 1500);
+            return;
+          }
+
+          // Step 2: switch the form into "enter the code" mode
+          pendingEmail = email;
+          awaitingCode = true;
+          emailInput.disabled = true;
+          pwInput.disabled = true;
+          codeGroup.style.display = '';
+          saveBtn.textContent = 'Verify Code';
+          succEl.textContent = 'Code sent — check the inbox for ' + email + '.';
+          succEl.style.display = 'block';
+          codeInput.focus();
+          return;
+        }
+
+        // Step 2: verify the code
+        const code = codeInput.value.trim();
+        if (!/^\d{6}$/.test(code)) { errEl.textContent = 'Enter the 6-digit code from your email.'; errEl.style.display = 'block'; return; }
+
+        saveBtn.disabled = true;
+        const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/verify-email-code', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({ code }),
         });
         const json = await res.json();
+        saveBtn.disabled = false;
         if (!res.ok) { errEl.textContent = json.error || 'Unknown error'; errEl.style.display = 'block'; return; }
 
-        succEl.textContent = json.confirmed ? 'Email linked successfully. You can now sign in with email and password.' : 'Check your inbox — we sent a confirmation link to ' + email + '. Click it to finish linking.';
+        succEl.textContent = 'Email linked successfully. You can now sign in with email and password.';
         succEl.style.display = 'block';
-        document.getElementById('btn-add-email-save').disabled = true;
-
-        // Refresh user after a moment
+        saveBtn.disabled = true;
         setTimeout(async () => {
           const { data: { user } } = await supabase.auth.getUser();
           if (user) { _user = user; await renderConnectedAccounts(); }
-        }, 3000);
+        }, 1500);
       });
     });
   }
@@ -860,34 +915,6 @@ document.getElementById('contact-send').addEventListener('click', async () => {
 });
 
 init();
-
-// ── Confirm email link handler ────────────────────────────────
-(async function handleConfirmEmail() {
-  const params = new URLSearchParams(window.location.search);
-  if (!params.get('confirm_email')) return;
-  const uid = params.get('uid');
-  const token = params.get('token');
-  if (!uid || !token) return;
-
-  // Wait for session to be ready
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return;
-
-  const { data: { session: currentSession } } = await supabase.auth.getSession();
-  const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/confirm-email-link', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentSession.access_token}` },
-    body: JSON.stringify({ uid, token }),
-  });
-  const json = await res.json();
-  // Clean the URL
-  history.replaceState(null, '', window.location.pathname);
-  if (!res.ok) {
-    alert('Could not link email: ' + (json.error || 'Unknown error'));
-  } else {
-    alert('Email linked successfully! You can now sign in with email and password.');
-  }
-})();
 </script>
 
 <!-- Contact Admin Modal -->
