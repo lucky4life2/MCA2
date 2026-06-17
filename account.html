@@ -518,6 +518,16 @@ async function renderConnectedAccounts() {
         if (!(_user.identities || []).some(id => id.provider === 'email')) break;
         await new Promise(r => setTimeout(r, 300));
       }
+      // Clear email from auth.users and profiles table
+      const { error: cleanupError } = await supabase.rpc('clear_user_email');
+      if (cleanupError) console.warn('Email cleanup warning:', cleanupError.message);
+      // Refresh profile so the email field reflects the removal
+      const { data: freshProfile } = await supabase
+        .from('profiles')
+        .select('role, display_name, username, email, discord_id, email_access_revoked')
+        .eq('id', _user.id)
+        .single();
+      if (freshProfile) _profile = freshProfile;
       await renderConnectedAccounts();
     });
   }
