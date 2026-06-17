@@ -511,16 +511,16 @@ async function renderConnectedAccounts() {
       if (!emailIdentity) { alert('Email identity not found.'); return; }
       const { error } = await supabase.auth.unlinkIdentity(emailIdentity);
       if (error) { alert('Could not unlink email: ' + error.message); return; }
-      // Poll until Supabase reflects the removed identity
-      for (let i = 0; i < 10; i++) {
-        const { data: { user: fresh } } = await supabase.auth.getUser();
-        _user = fresh;
-        if (!(_user.identities || []).some(id => id.provider === 'email')) break;
-        await new Promise(r => setTimeout(r, 300));
-      }
       // Clear email from auth.users and profiles table
       const { error: cleanupError } = await supabase.rpc('clear_user_email');
       if (cleanupError) console.warn('Email cleanup warning:', cleanupError.message);
+      // refreshSession() busts the client-side cache so getUser() and the re-render
+      // immediately reflect the removal (no email in JWT, no identity in list).
+      // Without this the first click appears to do nothing because getUser() still
+      // returns the pre-unlink cached user object.
+      await supabase.auth.refreshSession();
+      const { data: { user: clearedUser } } = await supabase.auth.getUser();
+      if (clearedUser) _user = clearedUser;
       // Refresh profile so the email field reflects the removal
       const { data: freshProfile } = await supabase
         .from('profiles')
