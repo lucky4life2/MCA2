@@ -1478,17 +1478,40 @@ window.terminateAccount = async (id) => {
 
 // ── Plugin bridge ─────────────────────────────────────────────
 const EDGE_FUNCTION_URL = 'https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/mcaverify';
+const PLUGIN_HEARTBEAT_STALE_MS = 3 * 60 * 1000; // 3 minutes — plugin pings every 60s by default
 async function checkPluginBridge() {
   const dot = document.getElementById('plugin-dot'), text = document.getElementById('plugin-status-text'), badge = document.getElementById('plugin-badge');
+  // Step 1: confirm the Edge Function is reachable
   try {
     const res = await fetch(EDGE_FUNCTION_URL, { method:'GET', signal: AbortSignal.timeout(5000) });
-    if (res.status === 405 || res.status === 200) {
-      dot.className = 'plugin-dot online'; text.textContent = 'Edge Function is deployed and reachable.'; badge.textContent = 'Online'; badge.className = 'badge badge-verified';
-    } else {
+    if (res.status !== 405 && res.status !== 200) {
       dot.className = 'plugin-dot offline'; text.textContent = `Edge Function returned ${res.status}.`; badge.textContent = 'Error'; badge.className = 'badge badge-pending';
+      return;
     }
   } catch(e) {
     dot.className = 'plugin-dot offline'; text.textContent = 'Edge Function not reachable. Not yet deployed.'; badge.textContent = 'Offline'; badge.className = 'badge badge-unlinked';
+    return;
+  }
+  // Step 2: check plugin heartbeat — confirms the Bukkit plugin is actually running
+  try {
+    const { data, error } = await supabase.from('settings').select('value').eq('key', 'plugin_heartbeat').single();
+    if (error || !data) {
+      dot.className = 'plugin-dot offline'; text.textContent = 'Edge Function is reachable, but the plugin has never sent a heartbeat. Is MCAVerify installed and running?'; badge.textContent = 'Plugin Not Detected'; badge.className = 'badge badge-unlinked';
+      return;
+    }
+    const heartbeat = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+    const lastSeen = new Date(heartbeat.last_seen);
+    const ageMs = Date.now() - lastSeen.getTime();
+    if (isNaN(ageMs) || ageMs > PLUGIN_HEARTBEAT_STALE_MS) {
+      const ago = isNaN(ageMs) ? 'unknown time' : ageMs < 60000 ? `${Math.round(ageMs/1000)}s ago` : `${Math.round(ageMs/60000)}m ago`;
+      dot.className = 'plugin-dot offline'; text.textContent = `Plugin heartbeat is stale (last seen ${ago}). The plugin may have stopped or crashed.`; badge.textContent = 'Plugin Offline'; badge.className = 'badge badge-pending';
+      return;
+    }
+    const ago = ageMs < 60000 ? `${Math.round(ageMs/1000)}s ago` : `${Math.round(ageMs/60000)}m ago`;
+    const server = heartbeat.server ? ` · ${heartbeat.server}` : '';
+    dot.className = 'plugin-dot online'; text.textContent = `Edge Function deployed · Plugin running (last heartbeat ${ago}${server}).`; badge.textContent = 'Online'; badge.className = 'badge badge-verified';
+  } catch(e) {
+    dot.className = 'plugin-dot offline'; text.textContent = 'Could not read plugin heartbeat from Supabase.'; badge.textContent = 'Error'; badge.className = 'badge badge-pending';
   }
 }
 document.getElementById('btn-ping-plugin').addEventListener('click', () => {

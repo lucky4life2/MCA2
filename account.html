@@ -219,6 +219,11 @@
           <label class="form-label" for="field-confirm-password">Confirm New Password</label>
           <input type="password" id="field-confirm-password" class="form-input" placeholder="Repeat password" autocomplete="new-password">
         </div>
+        <div class="form-group" id="reset-code-group" style="display:none;">
+          <label class="form-label" for="reset-code-input">Verification Code</label>
+          <input type="text" id="reset-code-input" class="form-input" placeholder="6-digit code" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code">
+          <div class="form-hint">Enter the code we emailed you, then set your new password above and click Update Password.</div>
+        </div>
         <div class="form-success" id="password-success"></div>
         <div class="form-error" id="password-error"></div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
@@ -841,16 +846,39 @@ document.getElementById('btn-change-password').addEventListener('click', async (
 });
 
 // ── Password reset ────────────────────────────────────────────
+let _awaitingResetCode = false;
 document.getElementById('btn-reset-password').addEventListener('click', async () => {
-  const errEl  = document.getElementById('password-error');
-  const succEl = document.getElementById('password-success');
+  const errEl     = document.getElementById('password-error');
+  const succEl    = document.getElementById('password-success');
+  const codeGroup = document.getElementById('reset-code-group');
+  const codeInput = document.getElementById('reset-code-input');
+  const resetBtn  = document.getElementById('btn-reset-password');
   errEl.style.display = 'none'; succEl.style.display = 'none';
-  if (!_user.email) { errEl.textContent = 'No email address on this account.'; errEl.style.display = 'block'; return; }
-  const { error } = await supabase.auth.resetPasswordForEmail(_user.email, {
-    redirectTo: window.location.origin + '/account.html'
-  });
-  if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
-  succEl.textContent = 'Reset link sent — check your email.'; succEl.style.display = 'block';
+
+  if (!_awaitingResetCode) {
+    if (!_user.email) { errEl.textContent = 'No email address on this account.'; errEl.style.display = 'block'; return; }
+    const { error } = await supabase.auth.resetPasswordForEmail(_user.email);
+    if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+    _awaitingResetCode = true;
+    codeGroup.style.display = '';
+    resetBtn.textContent = 'Verify Code';
+    succEl.textContent = 'Code sent — check the inbox for ' + _user.email + '.';
+    succEl.style.display = 'block';
+    codeInput.focus();
+    return;
+  }
+
+  const code = codeInput.value.trim();
+  if (!/^\d{6}$/.test(code)) { errEl.textContent = 'Enter the 6-digit code from your email.'; errEl.style.display = 'block'; return; }
+  const { error: otpErr } = await supabase.auth.verifyOtp({ email: _user.email, token: code, type: 'recovery' });
+  if (otpErr) { errEl.textContent = otpErr.message || 'Invalid or expired code.'; errEl.style.display = 'block'; return; }
+
+  succEl.textContent = 'Code verified — enter your new password above and click Update Password.';
+  succEl.style.display = 'block';
+  codeGroup.style.display = 'none';
+  codeInput.value = '';
+  resetBtn.textContent = 'Send Reset Email Instead';
+  _awaitingResetCode = false;
 });
 
 // ── Sign out ──────────────────────────────────────────────────
