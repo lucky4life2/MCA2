@@ -482,35 +482,45 @@ async function renderConnectedAccounts() {
   if (canUnlinkDiscord) {
     document.getElementById('btn-unlink-discord')?.addEventListener('click', async () => {
       if (!confirm('Unlink Discord from your account? You will still be able to sign in with email.')) return;
+      const btn = document.getElementById('btn-unlink-discord');
+      if (btn) { btn.disabled = true; btn.textContent = 'Unlinking…'; }
       // Always fetch fresh user so we get the real identity objects, not cached ones
-      const { data: { user: freshUser } } = await supabase.auth.getUser();
+      const { data: { user: freshUser }, error: fetchErr } = await supabase.auth.getUser();
+      if (fetchErr || !freshUser) { alert('Could not fetch user data. Please refresh and try again.'); if (btn) { btn.disabled = false; btn.textContent = 'Unlink'; } return; }
       _user = freshUser;
       const discordIdentity = (_user.identities || []).find(i => i.provider === 'discord');
-      if (!discordIdentity) { alert('Discord identity not found.'); return; }
+      if (!discordIdentity) {
+        // Identity not in Supabase auth (linked via discord_id only) — just clear the profile field
+        await supabase.from('profiles').update({ discord_id: null }).eq('id', _user.id);
+        _profile.discord_id = null;
+        await renderConnectedAccounts();
+        return;
+      }
       const { error } = await supabase.auth.unlinkIdentity(discordIdentity);
-      if (error) { alert('Could not unlink Discord: ' + error.message); return; }
+      if (error) { alert('Could not unlink Discord: ' + error.message); if (btn) { btn.disabled = false; btn.textContent = 'Unlink'; } return; }
       await supabase.from('profiles').update({ discord_id: null }).eq('id', _user.id);
       _profile.discord_id = null;
-      // Poll until Supabase reflects the removed identity
-      for (let i = 0; i < 10; i++) {
-        const { data: { user: fresh } } = await supabase.auth.getUser();
-        _user = fresh;
-        if (!(_user.identities || []).some(id => id.provider === 'discord')) break;
-        await new Promise(r => setTimeout(r, 300));
-      }
+      // Optimistically strip the Discord identity so re-render is immediate
+      _user = {
+        ..._user,
+        identities: (_user.identities || []).filter(i => i.provider !== 'discord'),
+      };
       await renderConnectedAccounts();
     });
   }
   if (canUnlinkEmail) {
     document.getElementById('btn-unlink-email')?.addEventListener('click', async () => {
       if (!confirm('Unlink email/password from your account? You will only be able to sign in with Discord.')) return;
+      const btn = document.getElementById('btn-unlink-email');
+      if (btn) { btn.disabled = true; btn.textContent = 'Unlinking…'; }
       // Always fetch fresh user so we get the real identity objects, not cached ones
-      const { data: { user: freshUser } } = await supabase.auth.getUser();
+      const { data: { user: freshUser }, error: fetchErr } = await supabase.auth.getUser();
+      if (fetchErr || !freshUser) { alert('Could not fetch user data. Please refresh and try again.'); if (btn) { btn.disabled = false; btn.textContent = 'Unlink'; } return; }
       _user = freshUser;
       const emailIdentity = (_user.identities || []).find(i => i.provider === 'email');
-      if (!emailIdentity) { alert('Email identity not found.'); return; }
+      if (!emailIdentity) { alert('Email identity not found. Please refresh and try again.'); if (btn) { btn.disabled = false; btn.textContent = 'Unlink'; } return; }
       const { error } = await supabase.auth.unlinkIdentity(emailIdentity);
-      if (error) { alert('Could not unlink email: ' + error.message); return; }
+      if (error) { alert('Could not unlink email: ' + error.message); if (btn) { btn.disabled = false; btn.textContent = 'Unlink'; } return; }
       // Clear email from auth.users and profiles table
       const { error: cleanupError } = await supabase.rpc('clear_user_email');
       if (cleanupError) console.warn('Email cleanup warning:', cleanupError.message);
