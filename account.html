@@ -421,6 +421,9 @@ async function renderPage() {
 }
 
 async function renderConnectedAccounts() {
+  // Always fetch fresh user from server so identity list is never stale
+  const { data: { user: fresh } } = await supabase.auth.getUser();
+  if (fresh) _user = fresh;
   const el = document.getElementById('connected-accounts-body');
   const identities = _user.identities || [];
   const hasDiscord = identities.some(i => i.provider === 'discord') || !!_profile.discord_id;
@@ -511,26 +514,16 @@ async function renderConnectedAccounts() {
       // Clear email from auth.users and profiles table
       const { error: cleanupError } = await supabase.rpc('clear_user_email');
       if (cleanupError) console.warn('Email cleanup warning:', cleanupError.message);
-      // Poll until getUser() returns without the email identity — necessary because
-      // the Supabase client caches the user object and unlinkIdentity() propagation
-      // is async on the server side. refreshSession() is intentionally avoided here
-      // because after removing the email identity the session may be bound to Discord
-      // only, causing refreshSession() to fail and crash the handler before re-render.
-      let clearedUser = _user;
-      for (let i = 0; i < 15; i++) {
-        await new Promise(r => setTimeout(r, 400));
-        const { data: { user: polled } } = await supabase.auth.getUser();
-        if (polled) clearedUser = polled;
-        if (!(clearedUser.identities || []).some(id => id.provider === 'email')) break;
-      }
-      _user = clearedUser;
-      // Refresh profile so the email field reflects the removal
-      const { data: freshProfile } = await supabase
-        .from('profiles')
-        .select('role, display_name, username, email, discord_id, email_access_revoked')
-        .eq('id', _user.id)
-        .single();
-      if (freshProfile) _profile = freshProfile;
+      // Optimistically strip the email identity from _user so renderConnectedAccounts
+      // renders the correct state even if getUser() inside it still returns stale data
+      // on the first call after unlinkIdentity(). Without this the button re-renders
+      // as Unlink again and appears to do nothing.
+      _user = {
+        ..._user,
+        email: null,
+        identities: (_user.identities || []).filter(i => i.provider !== 'email'),
+      };
+      _profile = { ..._profile, email: null };
       await renderConnectedAccounts();
     });
   }
