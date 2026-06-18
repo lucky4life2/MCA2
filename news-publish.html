@@ -365,11 +365,11 @@ async function init() {
       throw new Error('rpc_missing');
     }
   } catch(e) {
-    // Legacy fallback: admin and super_admin always get news access
+    // Legacy fallback: admin and owner always get news access
     const { data: profile } = await supabase
       .from('profiles').select('role').eq('id', _user.id).single();
     const role = profile?.role;
-    hasAccess = role === 'super_admin' || role === 'owner' || role === 'admin';
+    hasAccess = role === 'owner' || role === 'admin';
   }
 
   if (!hasAccess) { showState('denied'); return; }

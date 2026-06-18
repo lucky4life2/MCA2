@@ -414,7 +414,7 @@
       try {
         const { data } = await withTimeout(supabase.from('profiles').select('role').eq('id', _userId).single(), 6000);
         const role = data?.role;
-        _isAdmin = role === 'admin' || role === 'super_admin' || role === 'owner';
+        _isAdmin = role === 'admin' || role === 'owner';
       } catch(e) { _isAdmin = false; }
     }
     applyState();

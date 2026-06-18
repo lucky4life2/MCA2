@@ -74,7 +74,7 @@ export async function hasPermission(perm) {
 
 /**
  * Returns true if the current user can view the admin panel.
- * Checks for can_view_admin permission OR legacy admin/super_admin role.
+ * Checks for can_view_admin permission OR legacy admin/owner role.
  */
 export async function isAdmin(userId, accessToken) {
   // Try new permission system first
@@ -84,7 +84,7 @@ export async function isAdmin(userId, accessToken) {
   } catch {}
   // Fallback: legacy role check
   const profile = await getProfile(userId, accessToken);
-  return profile?.role === 'admin' || profile?.role === 'super_admin';
+  return profile?.role === 'admin' || profile?.role === 'owner';
 }
 
 /**
@@ -96,9 +96,9 @@ export async function isOwner(userId, accessToken) {
     const { data } = await supabase.rpc('user_has_permission', { perm: 'can_assign_admin' });
     if (data === true) return true;
   } catch {}
-  // Fallback: legacy super_admin
+  // Fallback: legacy owner
   const profile = await getProfile(userId, accessToken);
-  return profile?.role === 'super_admin';
+  return profile?.role === 'owner';
 }
 
 /** @deprecated Use isOwner() instead */

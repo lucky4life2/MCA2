@@ -121,7 +121,7 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
           if (profileRes.ok) {
             const profiles = await profileRes.json();
             const role = profiles?.[0]?.role;
-            if (role === 'admin' || role === 'super_admin' || role === 'owner') return true;
+            if (role === 'admin' || role === 'owner') return true;
           }
 
           // Check new roles system via RPC
@@ -319,7 +319,7 @@ function showLockScreen(cfg) {
       if (sessionErr) throw sessionErr;
       // Verify they're actually an admin
       const { data: profile } = await _sb.from('profiles').select('role').eq('id', json.user.id).single();
-      if (!profile || !['admin','super_admin'].includes(profile.role)) {
+      if (!profile || !['admin'].includes(profile.role)) {
         await _sb.auth.signOut();
         throw new Error('You do not have admin access.');
       }
@@ -624,7 +624,7 @@ async function initNavAuth() {
       const { data } = await mod.supabase.from('profiles').select('display_name, username, role').eq('id', user.id).single();
       if (data) {
         label = data.display_name || data.username || label;
-        isAdmin = data.role === 'admin' || data.role === 'super_admin' || data.role === 'owner';
+        isAdmin = data.role === 'admin' || data.role === 'owner';
       }
       try {
         const permResult = await Promise.race([
