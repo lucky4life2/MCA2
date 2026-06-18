@@ -439,16 +439,16 @@ async function injectNav() {
     await new Promise(r => document.addEventListener('DOMContentLoaded', r, { once: true }));
   }
 
-  // Inject nav immediately — don't wait for config so the nav appears at once.
+  // Inject nav immediately without waiting for config.
   document.body.insertAdjacentHTML('afterbegin', NAV_HTML());
 
-  // Update Discord links once config resolves (in the background).
+  // Init nav auth immediately (must run after nav is in DOM).
+  initNavAuth();
+
+  // Update Discord links once config resolves in the background.
   Promise.race([_configReady, new Promise(r => setTimeout(r, 1500))]).then(() => {
     document.querySelectorAll('a[data-discord]').forEach(a => { a.href = DISCORD_URL; });
   });
-
-  // Init nav auth (must run after nav is in DOM)
-  initNavAuth();
 
   // Inject footer + toast
   document.body.insertAdjacentHTML('beforeend', FOOTER_HTML() + TOAST_HTML);
@@ -586,8 +586,8 @@ async function initNavAuth() {
 
   if (!accountEl) return;
 
-  // Render a placeholder immediately so the button appears at once.
-  // Auth resolution will swap it out below.
+  // Render the button immediately so it appears without any async wait.
+  // Auth resolution below will upgrade it to the signed-in state if needed.
   setSignedOut();
 
   function setSignedOut() {
