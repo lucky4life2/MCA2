@@ -135,7 +135,7 @@ body {
 
 /* ── NAV ── */
 nav {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  position: fixed; top: 0; left: 0; right: 0; z-index: 500;
   background: var(--white); border-bottom: 1px solid var(--border);
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 2.5rem; height: 58px;
@@ -739,7 +739,7 @@ footer {
   nav {
     padding: 0 1.25rem;
     position: fixed;
-    z-index: 200;
+    z-index: 500;
   }
 
   .nav-hamburger { display: flex; }
@@ -755,7 +755,7 @@ footer {
     align-items: stretch;
     padding: 0.5rem 0 1rem;
     box-shadow: 0 8px 24px rgba(0,0,0,0.08);
-    z-index: 199;
+    z-index: 499;
   }
 
   .nav-links.open { display: flex; }
