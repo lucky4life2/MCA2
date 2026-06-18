@@ -439,11 +439,13 @@ async function injectNav() {
     await new Promise(r => document.addEventListener('DOMContentLoaded', r, { once: true }));
   }
 
-  // Wait for config (discord URL etc) before injecting nav so links are correct.
-  await Promise.race([_configReady, new Promise(r => setTimeout(r, 1500))]);
-
-  // Inject nav
+  // Inject nav immediately — don't wait for config so the nav appears at once.
   document.body.insertAdjacentHTML('afterbegin', NAV_HTML());
+
+  // Update Discord links once config resolves (in the background).
+  Promise.race([_configReady, new Promise(r => setTimeout(r, 1500))]).then(() => {
+    document.querySelectorAll('a[data-discord]').forEach(a => { a.href = DISCORD_URL; });
+  });
 
   // Init nav auth (must run after nav is in DOM)
   initNavAuth();
@@ -582,9 +584,11 @@ function copyEmail(el) {
 async function initNavAuth() {
   const accountEl  = document.getElementById('nav-account');
 
-
   if (!accountEl) return;
 
+  // Render a placeholder immediately so the button appears at once.
+  // Auth resolution will swap it out below.
+  setSignedOut();
 
   function setSignedOut() {
     const returnPage = encodeURIComponent(window.location.pathname.split('/').pop() || 'index.html');
@@ -625,7 +629,7 @@ async function initNavAuth() {
       try {
         const permResult = await Promise.race([
           mod.supabase.rpc('user_has_permission', { perm: 'can_publish_news' }),
-          new Promise(r => setTimeout(() => r({ data: null }), 2000))
+          new Promise(r => setTimeout(() => r({ data: null }), 1000))
         ]);
         if (permResult?.data) canPublishNews = true;
       } catch(e) {}
@@ -668,7 +672,7 @@ async function initNavAuth() {
     mod = await import('./supabase.js');
     const { data: { user } } = await Promise.race([
       mod.supabase.auth.getUser(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('auth timeout')), 6000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('auth timeout')), 3000))
     ]);
     if (user) {
       await setSignedIn(user);

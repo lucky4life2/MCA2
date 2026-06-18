@@ -345,11 +345,14 @@
     let identifier = document.getElementById('signin-email').value.trim();
     const password  = document.getElementById('signin-password').value;
     const errEl     = document.getElementById('signin-error');
+    const btn       = document.getElementById('btn-email-signin');
     errEl.style.display = 'none';
     if (!identifier) {
       errEl.textContent = 'Please enter your email or username.';
       errEl.style.display = 'block'; return;
     }
+    btn.textContent = 'Signing in…'; btn.disabled = true;
+    try {
     // If it doesn't look like an email, treat it as a username and look up the email
     if (!identifier.includes('@')) {
       // Try profiles.email first, fall back to RPC lookup via auth.users
@@ -371,16 +374,19 @@
 
       if (!resolved) {
         errEl.textContent   = 'No account found with that username.';
-        errEl.style.display = 'block'; return;
+        errEl.style.display = 'block';
+        btn.textContent = 'Sign In'; btn.disabled = false;
+        return;
       }
       identifier = resolved;
     }
     errEl.style.display = 'none';
     if (!identifier || !password) {
       errEl.textContent = 'Please enter your email or username and password.';
-      errEl.style.display = 'block'; return;
+      errEl.style.display = 'block';
+      btn.textContent = 'Sign In'; btn.disabled = false;
+      return;
     }
-    try {
       // Route through edge function so the revoke check is enforced server-side
       const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/sign-in-with-email', {
         method: 'POST',
@@ -390,7 +396,9 @@
       const json = await res.json();
       if (!res.ok) {
         errEl.textContent = json.error || 'Sign in failed.';
-        errEl.style.display = 'block'; return;
+        errEl.style.display = 'block';
+        btn.textContent = 'Sign In'; btn.disabled = false;
+        return;
       }
       // Set the session from the tokens returned by the edge function
       const { error: sessionErr } = await supabase.auth.setSession({
@@ -402,6 +410,7 @@
     } catch(e) {
       errEl.textContent   = e.message || 'Sign in failed.';
       errEl.style.display = 'block';
+      btn.textContent = 'Sign In'; btn.disabled = false;
     }
   });
 
