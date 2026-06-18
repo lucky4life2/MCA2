@@ -4,7 +4,20 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL = 'https://hjaywokvgdzhvsoygctc.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNzA2NTQsImV4cCI6MjA5NTg0NjY1NH0.nFqlc20iUDwE1sXLRi2Pev181v2RJKx_S6UcTkGgPWU';
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+// `lock` disables supabase-js's default cross-tab Web Locks serialization for
+// auth calls (getSession/getUser/refresh). That default lock is a single named
+// lock shared across every tab of this origin — if one tab's auth call ever
+// stalls (slow network, an abandoned Promise.race timeout elsewhere in this
+// codebase, a backgrounded tab, etc.) every OTHER tab's auth calls queue up
+// behind that same lock and hang forever, since nothing ever releases it.
+// That's the exact failure mode that made admin pages flash and then go
+// permanently blank/white: nav.js's site-lock bypass check awaits
+// auth.getSession() with no timeout, so once the lock was stuck, the page
+// stayed hidden forever. Replacing it with a no-op passthrough means each
+// tab manages its own auth state independently — no shared lock, no deadlock.
+export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { lock: async (_name, _acquireTimeout, fn) => await fn() }
+});
 
 // ── Auth helpers ─────────────────────────────────────────────
 

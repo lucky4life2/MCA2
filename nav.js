@@ -95,58 +95,69 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
       return;
     }
 
-    // Check if the current user is an admin — admins bypass the lock
+    // Check if the current user is an admin — admins bypass the lock.
+    // The whole check is raced against a hard timeout so a stuck network
+    // call (or a stuck/deadlocked auth client) can never leave the page
+    // hidden forever — it will always fall back to the lock screen instead.
+    let isAdminBypass = false;
     try {
-      const { supabase: _sb } = await import('./supabase.js');
-      const { data: { session } } = await _sb.auth.getSession();
-      const token = session?.access_token;
-      if (token) {
-        // Check legacy profiles.role
-        const profileRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/profiles?select=role&id=eq.${session.user.id}`,
-          {
-            headers: {
-              'apikey': SUPABASE_ANON,
-              'Authorization': `Bearer ${token}`,
-            }
-          }
-        );
-        if (profileRes.ok) {
-          const profiles = await profileRes.json();
-          const role = profiles?.[0]?.role;
-          if (role === 'admin' || role === 'super_admin' || role === 'owner') {
-            document.documentElement.style.visibility = '';
-            _lockCheckResolve();
-            injectNav();
-            return;
-          }
-        }
-        // Check new roles system via RPC
-        const rpcRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/rpc/user_has_permission`,
-          {
-            method: 'POST',
-            headers: {
-              'apikey': SUPABASE_ANON,
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ perm: 'can_view_admin' }),
-          }
-        );
-        if (rpcRes.ok) {
-          const hasAccess = await rpcRes.json();
-          if (hasAccess === true) {
-            document.documentElement.style.visibility = '';
-            _lockCheckResolve();
-            injectNav();
-            return;
-          }
-        }
-      }
-    } catch(e) {}
+      isAdminBypass = await Promise.race([
+        (async () => {
+          const { supabase: _sb } = await import('./supabase.js');
+          const { data: { session } } = await _sb.auth.getSession();
+          const token = session?.access_token;
+          if (!token) return false;
 
-    // Site is locked and user is not an admin
+          // Check legacy profiles.role
+          const profileRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/profiles?select=role&id=eq.${session.user.id}`,
+            {
+              headers: {
+                'apikey': SUPABASE_ANON,
+                'Authorization': `Bearer ${token}`,
+              }
+            }
+          );
+          if (profileRes.ok) {
+            const profiles = await profileRes.json();
+            const role = profiles?.[0]?.role;
+            if (role === 'admin' || role === 'super_admin' || role === 'owner') return true;
+          }
+
+          // Check new roles system via RPC
+          const rpcRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/rpc/user_has_permission`,
+            {
+              method: 'POST',
+              headers: {
+                'apikey': SUPABASE_ANON,
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ perm: 'can_view_admin' }),
+            }
+          );
+          if (rpcRes.ok) {
+            const hasAccess = await rpcRes.json();
+            if (hasAccess === true) return true;
+          }
+
+          return false;
+        })(),
+        new Promise(resolve => setTimeout(() => resolve(false), 6000)),
+      ]);
+    } catch(e) {
+      isAdminBypass = false;
+    }
+
+    if (isAdminBypass) {
+      document.documentElement.style.visibility = '';
+      _lockCheckResolve();
+      injectNav();
+      return;
+    }
+
+    // Site is locked and user is not an admin (or the admin check timed out)
     _siteLocked = true;
     _lockCheckResolve();
 
