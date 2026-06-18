@@ -619,6 +619,42 @@ async function initNavAuth() {
     let label = user.email?.split('@')[0] || 'Account';
     let isAdmin = false;
     let canPublishNews = false;
+
+    // Render immediately with what we have so the nav never disappears during async fetches
+    function render() {
+      accountEl.innerHTML = `
+      <div class="nav-account-wrap" id="nav-account-wrap">
+        <button class="nav-account-btn nav-account-user" id="nav-account-user-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          ${label}
+        </button>
+        <div class="nav-account-dropdown" id="nav-account-dropdown">
+          <a class="nav-account-dropdown-item" href="shop.html">Shop</a>
+          <a class="nav-account-dropdown-item" href="account.html">My Account</a>
+          ${isAdmin ? `<a class="nav-account-dropdown-item" href="admin.html">Admin</a>` : ''}
+          ${canPublishNews ? `<a class="nav-account-dropdown-item" href="news-publish.html">Publish News</a>` : ''}
+          <button class="nav-account-dropdown-item" id="nav-signout-btn">Sign Out</button>
+        </div>
+      </div>`;
+
+      document.getElementById('nav-account-user-btn').addEventListener('click', e => {
+        e.stopPropagation();
+        document.getElementById('nav-account-dropdown').classList.toggle('open');
+      });
+      document.addEventListener('click', () => {
+        document.getElementById('nav-account-dropdown')?.classList.remove('open');
+      });
+      document.getElementById('nav-signout-btn').addEventListener('click', async () => {
+        try {
+          const mod = await import('./supabase.js');
+          await mod.signOut();
+        } catch(e) {}
+        window.location.href = 'login.html';
+      });
+    }
+
+    render(); // show nav immediately
+
     try {
       const mod = await import('./supabase.js');
       const { data } = await mod.supabase.from('profiles').select('display_name, username, role').eq('id', user.id).single();
@@ -636,35 +672,7 @@ async function initNavAuth() {
       if (isAdmin) canPublishNews = true;
     } catch(e) {}
 
-    accountEl.innerHTML = `
-      <div class="nav-account-wrap" id="nav-account-wrap">
-        <button class="nav-account-btn nav-account-user" id="nav-account-user-btn">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          ${label}
-        </button>
-        <div class="nav-account-dropdown" id="nav-account-dropdown">
-          <a class="nav-account-dropdown-item" href="shop.html">Shop</a>
-          <a class="nav-account-dropdown-item" href="account.html">My Account</a>
-          ${isAdmin ? `<a class="nav-account-dropdown-item" href="admin.html">Admin</a>` : ''}
-          ${canPublishNews ? `<a class="nav-account-dropdown-item" href="news-publish.html">Publish News</a>` : ''}
-          <button class="nav-account-dropdown-item" id="nav-signout-btn">Sign Out</button>
-        </div>
-      </div>`;
-
-    document.getElementById('nav-account-user-btn').addEventListener('click', e => {
-      e.stopPropagation();
-      document.getElementById('nav-account-dropdown').classList.toggle('open');
-    });
-    document.addEventListener('click', () => {
-      document.getElementById('nav-account-dropdown')?.classList.remove('open');
-    });
-    document.getElementById('nav-signout-btn').addEventListener('click', async () => {
-      try {
-        const mod = await import('./supabase.js');
-        await mod.signOut();
-      } catch(e) {}
-      window.location.href = 'login.html';
-    });
+    render(); // re-render with full data (name, admin link, etc.)
   }
 
   let mod;
@@ -685,11 +693,21 @@ async function initNavAuth() {
 
   try {
     if (!mod) mod = await import('./supabase.js');
+    let _lastSignedIn = false;
     mod.supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED' || event === 'EMAIL_CHANGE') {
-        if (session?.user) await setSignedIn(session.user);
-        else setSignedOut();
+        if (session?.user) { _lastSignedIn = true; await setSignedIn(session.user); }
+        else { _lastSignedIn = false; setSignedOut(); }
       } else if (event === 'SIGNED_OUT') {
+        // TOKEN_REFRESHED can emit a transient SIGNED_OUT before SIGNED_IN —
+        // wait one tick and only sign out if still no active session.
+        const wasSignedIn = _lastSignedIn;
+        if (wasSignedIn) {
+          await new Promise(r => setTimeout(r, 200));
+          const { data: { session: check } } = await mod.supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (check) return; // session restored — ignore the transient event
+        }
+        _lastSignedIn = false;
         setSignedOut();
       }
     });
