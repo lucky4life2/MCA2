@@ -60,8 +60,9 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
   }
 
   // Admin pages are never locked — admins need access to turn the lock off
+  // Cloudflare Pages strips .html extensions, so /admin.html is served at /admin
   const currentPage = window.location.pathname.split('/').pop() || 'index.html';
-  if (currentPage === 'admin.html') {
+  if (currentPage === 'admin.html' || currentPage === 'admin') {
     document.documentElement.style.visibility = '';
     _lockCheckResolve();
     injectNav();
@@ -678,25 +679,16 @@ async function initNavAuth() {
   let mod;
   try {
     mod = await import('./supabase.js');
-    const { data: { user } } = await Promise.race([
-      mod.supabase.auth.getUser(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('auth timeout')), 3000))
-    ]);
-    if (user) {
-      await setSignedIn(user);
-    } else {
-      setSignedOut();
-    }
-  } catch(e) {
-    setSignedOut();
-  }
 
-  try {
-    if (!mod) mod = await import('./supabase.js');
+    // Register onAuthStateChange BEFORE getUser() so we never miss INITIAL_SESSION.
+    // Supabase fires INITIAL_SESSION synchronously on the first listener registration
+    // when a cached session exists — if we awaited getUser() first, that event would
+    // already be gone by the time we subscribed.
     let _lastSignedIn = false;
+    let _authStateHandled = false;
     mod.supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED' || event === 'EMAIL_CHANGE') {
-        if (session?.user) { _lastSignedIn = true; await setSignedIn(session.user); }
+        if (session?.user) { _lastSignedIn = true; _authStateHandled = true; await setSignedIn(session.user); }
         else { _lastSignedIn = false; setSignedOut(); }
       } else if (event === 'SIGNED_OUT') {
         // TOKEN_REFRESHED can emit a transient SIGNED_OUT before SIGNED_IN —
@@ -711,5 +703,23 @@ async function initNavAuth() {
         setSignedOut();
       }
     });
-  } catch(e) {}
+
+    // Fallback: if onAuthStateChange didn't fire INITIAL_SESSION (e.g. no cached
+    // session at all), resolve the state via a direct getUser() call.
+    if (!_authStateHandled) {
+      try {
+        const { data: { user } } = await Promise.race([
+          mod.supabase.auth.getUser(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('auth timeout')), 3000))
+        ]);
+        if (!_authStateHandled) {
+          if (user) { await setSignedIn(user); } else { setSignedOut(); }
+        }
+      } catch(e) {
+        if (!_authStateHandled) setSignedOut();
+      }
+    }
+  } catch(e) {
+    setSignedOut();
+  }
 }
