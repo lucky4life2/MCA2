@@ -111,6 +111,29 @@ function renderCard(a) {
     </article>`;
 }
 
+// ── Share helper ──────────────────────────────────────────────
+async function shareArticle(article) {
+  const url = `${location.origin}/article.html?slug=${encodeURIComponent(article.slug)}`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: article.title, text: article.summary || article.title, url });
+      return;
+    } catch (e) { /* fall through to clipboard */ }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    const btn = document.getElementById('news-modal-share');
+    if (btn) {
+      const orig = btn.innerHTML;
+      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied!`;
+      btn.style.background = '#22c55e'; btn.style.color = '#fff'; btn.style.borderColor = '#22c55e';
+      setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
+    }
+  } catch {
+    prompt('Copy this link:', url);
+  }
+}
+
 // ── Article modal ─────────────────────────────────────────────
 function openArticleModal(article) {
   let overlay = document.getElementById('news-article-overlay');
@@ -144,12 +167,31 @@ function openArticleModal(article) {
         <div class="news-article-body" style="font-size:15px;line-height:1.8;color:var(--black);">
           ${renderMarkdown(article.body)}
         </div>
+        ${article.slug ? `
+        <div style="margin-top:2rem;padding-top:1.25rem;border-top:1px solid var(--border);display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
+          <button id="news-modal-share" style="
+            display:inline-flex;align-items:center;gap:7px;
+            padding:0.45rem 1rem;border-radius:6px;border:1px solid var(--border);
+            background:var(--white);color:var(--black);font-size:13px;font-weight:500;
+            cursor:pointer;transition:background .15s;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+            </svg>
+            Share
+          </button>
+          <a href="article.html?slug=${encodeURIComponent(article.slug)}" style="font-size:13px;color:var(--muted);text-decoration:none;">Open full page →</a>
+        </div>` : ''}
       </div>
     </div>`;
 
   overlay.style.display = 'flex';
   document.getElementById('news-modal-close').addEventListener('click', closeModal);
   overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+  if (article.slug) {
+    document.getElementById('news-modal-share')?.addEventListener('click', () => shareArticle(article));
+  }
   document.addEventListener('keydown', handleEsc);
 }
 

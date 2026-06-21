@@ -18,6 +18,149 @@
 </div>
 
 <script type="module" src="nav.js"></script>
-<script src="news.js"></script>
+<script type="module">
+import { supabase } from './supabase.js';
+
+function renderMarkdown(md) {
+  if (!md) return '';
+  let html = md
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^### (.+)$/gm,  '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm,   '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm,    '<h1>$1</h1>')
+    .replace(/^---+$/gm, '<hr>')
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g,     '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,         '<em>$1</em>')
+    .replace(/_(.+?)_/g,           '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;border-radius:4px;">')
+    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
+  html = html.replace(/(^[-*] .+\n?)+/gm, match => {
+    const items = match.trim().split('\n').map(l => `<li>${l.replace(/^[-*] /,'')}</li>`).join('');
+    return `<ul>${items}</ul>`;
+  });
+  html = html.replace(/(^\d+\. .+\n?)+/gm, match => {
+    const items = match.trim().split('\n').map(l => `<li>${l.replace(/^\d+\. /,'')}</li>`).join('');
+    return `<ol>${items}</ol>`;
+  });
+  html = html.split(/\n{2,}/).map(block => {
+    block = block.trim();
+    if (!block) return '';
+    if (/^<(h[1-6]|ul|ol|blockquote|hr|img)/.test(block)) return block;
+    return `<p>${block.replace(/\n/g, '<br>')}</p>`;
+  }).join('\n');
+  return html;
+}
+
+function formatDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+}
+
+async function shareArticle(article) {
+  const url = `${location.origin}/article.html?slug=${encodeURIComponent(article.slug)}`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: article.title, text: article.summary || article.title, url });
+      return;
+    } catch (e) { /* fall through to clipboard */ }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    showCopied();
+  } catch {
+    prompt('Copy this link:', url);
+  }
+}
+
+function showCopied() {
+  const btn = document.getElementById('share-btn');
+  if (!btn) return;
+  const orig = btn.innerHTML;
+  btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied!`;
+  btn.style.background = 'var(--green, #22c55e)';
+  setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 2000);
+}
+
+const loadingEl = document.getElementById('article-loading');
+const errorEl   = document.getElementById('article-error');
+const bodyEl    = document.getElementById('article-body');
+
+const params = new URLSearchParams(location.search);
+const slug   = params.get('slug');
+
+if (!slug) {
+  loadingEl.style.display = 'none';
+  errorEl.textContent = 'No article specified. Go back to the news page.';
+  errorEl.style.display = 'block';
+} else {
+  try {
+    const { data: articles, error } = await supabase
+      .from('news_articles')
+      .select('id,title,slug,summary,body,category,author_name,published_at,image_url,status')
+      .eq('status', 'published')
+      .eq('slug', slug)
+      .limit(1);
+
+    if (error) throw error;
+    const article = articles?.[0];
+
+    if (!article) {
+      loadingEl.style.display = 'none';
+      errorEl.textContent = 'Article not found.';
+      errorEl.style.display = 'block';
+    } else {
+      // Update page title + meta for sharing
+      document.title = `${article.title} — Minecraft Club of America`;
+
+      const cat = (article.category && article.category.toLowerCase() !== 'featured') ? article.category : 'General';
+      const shareUrl = `${location.origin}/article.html?slug=${encodeURIComponent(article.slug)}`;
+
+      bodyEl.innerHTML = `
+        <div style="max-width:720px;margin:0 auto;padding:2.5rem 1.5rem;">
+          ${article.image_url ? `<div style="height:320px;background:url('${article.image_url}') center/cover no-repeat;border-radius:8px;margin-bottom:2rem;"></div>` : ''}
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:1.25rem;flex-wrap:wrap;">
+            <span class="news-card-category">${cat}</span>
+            <span style="font-size:12px;color:var(--muted);">${formatDate(article.published_at)}</span>
+            ${article.author_name ? `<span style="font-size:12px;color:var(--muted);">By ${article.author_name}</span>` : ''}
+          </div>
+          <h1 style="font-family:'Times New Roman',serif;font-size:clamp(1.6rem,5vw,2.5rem);
+            color:var(--blue);font-weight:700;line-height:1.2;margin-bottom:1.5rem;">${article.title}</h1>
+          <div class="news-article-body" style="font-size:15px;line-height:1.8;color:var(--black);">
+            ${renderMarkdown(article.body)}
+          </div>
+          <div style="margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid var(--border);display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+            <button id="share-btn" onclick="window.__shareArticle()" style="
+              display:inline-flex;align-items:center;gap:8px;
+              padding:0.5rem 1.1rem;border-radius:6px;border:1px solid var(--border);
+              background:var(--white);color:var(--black);font-size:13px;font-weight:500;
+              cursor:pointer;transition:background .15s;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+              </svg>
+              Share
+            </button>
+            <a href="news.html" style="font-size:13px;color:var(--muted);text-decoration:none;">← Back to News</a>
+          </div>
+        </div>`;
+
+      // Expose share fn to inline onclick (module scope isolation)
+      window.__shareArticle = () => shareArticle(article);
+
+      loadingEl.style.display = 'none';
+      bodyEl.style.display = 'block';
+    }
+  } catch (err) {
+    loadingEl.style.display = 'none';
+    errorEl.textContent = `Failed to load article: ${err.message}`;
+    errorEl.style.display = 'block';
+  }
+}
+</script>
 </body>
 </html>
