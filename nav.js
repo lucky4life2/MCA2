@@ -61,7 +61,9 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
 
   // Admin pages are never locked — admins need access to turn the lock off
   // Cloudflare Pages strips .html extensions, so /admin.html is served at /admin
-  const currentPage = window.location.pathname.split('/').pop() || 'index.html';
+  // Strip trailing slash before splitting so /admin/ doesn't produce an empty segment
+  const _rawPath = window.location.pathname.replace(/\/$/, '') || '/';
+  const currentPage = _rawPath.split('/').pop() || 'index.html';
   if (currentPage === 'admin.html' || currentPage === 'admin') {
     document.documentElement.style.visibility = '';
     _lockCheckResolve();
@@ -500,7 +502,7 @@ async function injectNav() {
   }
 
   // Highlight active nav link
-  const current = window.location.pathname.split('/').pop() || 'index.html';
+  const current = (window.location.pathname.replace(/\/$/, '') || '/').split('/').pop() || 'index.html';
   const page = current.replace('.html', '') || 'index';
   const activeLink = document.querySelector(`.nav-links a[data-page="${page}"]`);
   if (activeLink) {
@@ -592,7 +594,7 @@ async function initNavAuth() {
   setSignedOut();
 
   function setSignedOut() {
-    const returnPage = encodeURIComponent(window.location.pathname.split('/').pop() || 'index.html');
+    const returnPage = encodeURIComponent((window.location.pathname.replace(/\/$/, '') || '/').split('/').pop() || 'index.html');
     accountEl.innerHTML = `
       <div class="nav-account-wrap" id="nav-account-wrap">
         <button class="nav-account-btn nav-account-user" id="nav-account-user-btn">
