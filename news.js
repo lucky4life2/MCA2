@@ -86,7 +86,8 @@ function renderFeaturedBanner(article) {
 
   banner.addEventListener('click', e => {
     if (e.target.id === 'featured-banner-close') return;
-    openArticleModal(article);
+    if (article.slug) location.href = `article.html?slug=${encodeURIComponent(article.slug)}`;
+    else openArticleModal(article);
   });
   document.getElementById('featured-banner-close').addEventListener('click', e => {
     e.stopPropagation();
@@ -229,7 +230,11 @@ function applySearch(query) {
     if (emptyEl) emptyEl.style.display = 'none';
     indexEl.innerHTML = filtered.map(renderCard).join('');
     indexEl.querySelectorAll('.news-card').forEach((el, i) => {
-      el.addEventListener('click', () => openArticleModal(filtered[i]));
+      el.addEventListener('click', () => {
+        const a = filtered[i];
+        if (a.slug) location.href = `article.html?slug=${encodeURIComponent(a.slug)}`;
+        else openArticleModal(a);
+      });
     });
   }
 }
