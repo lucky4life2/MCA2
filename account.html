@@ -420,10 +420,12 @@ async function renderPage() {
   document.getElementById('section-password').style.display = hasEmailIdentity ? '' : 'none';
 }
 
-async function renderConnectedAccounts() {
-  // Always fetch fresh user from server so identity list is never stale
-  const { data: { user: fresh } } = await supabase.auth.getUser();
-  if (fresh) _user = fresh;
+async function renderConnectedAccounts(skipFetch = false) {
+  // Fetch fresh user unless the caller just updated _user optimistically
+  if (!skipFetch) {
+    const { data: { user: fresh } } = await supabase.auth.getUser();
+    if (fresh) _user = fresh;
+  }
   const el = document.getElementById('connected-accounts-body');
   const identities = _user.identities || [];
   const hasDiscord = identities.some(i => i.provider === 'discord') || !!_profile.discord_id;
@@ -493,19 +495,20 @@ async function renderConnectedAccounts() {
         // Identity not in Supabase auth (linked via discord_id only) — just clear the profile field
         await supabase.from('profiles').update({ discord_id: null }).eq('id', _user.id);
         _profile.discord_id = null;
-        await renderConnectedAccounts();
+        await renderConnectedAccounts(true);
         return;
       }
       const { error } = await supabase.auth.unlinkIdentity(discordIdentity);
       if (error) { alert('Could not unlink Discord: ' + error.message); if (btn) { btn.disabled = false; btn.textContent = 'Unlink'; } return; }
       await supabase.from('profiles').update({ discord_id: null }).eq('id', _user.id);
       _profile.discord_id = null;
-      // Optimistically strip the Discord identity so re-render is immediate
+      // Strip Discord identity BEFORE re-rendering so the stale getUser() fetch
+      // doesn't overwrite our optimistic state.
       _user = {
         ..._user,
         identities: (_user.identities || []).filter(i => i.provider !== 'discord'),
       };
-      await renderConnectedAccounts();
+      await renderConnectedAccounts(true);
     });
   }
   if (canUnlinkEmail) {
@@ -524,17 +527,15 @@ async function renderConnectedAccounts() {
       // Clear email from auth.users and profiles table
       const { error: cleanupError } = await supabase.rpc('clear_user_email');
       if (cleanupError) console.warn('Email cleanup warning:', cleanupError.message);
-      // Optimistically strip the email identity from _user so renderConnectedAccounts
-      // renders the correct state even if getUser() inside it still returns stale data
-      // on the first call after unlinkIdentity(). Without this the button re-renders
-      // as Unlink again and appears to do nothing.
+      // Strip email identity BEFORE re-rendering so the fresh getUser() fetch inside
+      // renderConnectedAccounts doesn't overwrite our optimistic state with stale data.
       _user = {
         ..._user,
         email: null,
         identities: (_user.identities || []).filter(i => i.provider !== 'email'),
       };
       _profile = { ..._profile, email: null };
-      await renderConnectedAccounts();
+      await renderConnectedAccounts(true);
     });
   }
   if (!hasEmail) {
