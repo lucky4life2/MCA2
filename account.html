@@ -430,6 +430,14 @@ async function renderConnectedAccounts(skipFetch = false) {
   const identities = _user.identities || [];
   const hasDiscord = identities.some(i => i.provider === 'discord') || !!_profile.discord_id;
   const hasEmail   = identities.some(i => i.provider === 'email');
+
+  // If auth.users still has an email but no email identity exists, Discord OAuth
+  // re-synced the email on session refresh. Clean it up silently.
+  if (!hasEmail && _user.email) {
+    await supabase.rpc('clear_user_email');
+    _user = { ..._user, email: null };
+    _profile = { ..._profile, email: null };
+  }
   // Only allow unlink if user has more than one login method
   const canUnlinkDiscord = hasDiscord && hasEmail;
   const canUnlinkEmail   = hasEmail && hasDiscord;
@@ -502,8 +510,7 @@ async function renderConnectedAccounts(skipFetch = false) {
       if (error) { alert('Could not unlink Discord: ' + error.message); if (btn) { btn.disabled = false; btn.textContent = 'Unlink'; } return; }
       await supabase.from('profiles').update({ discord_id: null }).eq('id', _user.id);
       _profile.discord_id = null;
-      // Strip Discord identity BEFORE re-rendering so the stale getUser() fetch
-      // doesn't overwrite our optimistic state.
+      // Strip _user BEFORE re-rendering so the stale getUser() fetch doesn't overwrite.
       _user = {
         ..._user,
         identities: (_user.identities || []).filter(i => i.provider !== 'discord'),
@@ -527,8 +534,8 @@ async function renderConnectedAccounts(skipFetch = false) {
       // Clear email from auth.users and profiles table
       const { error: cleanupError } = await supabase.rpc('clear_user_email');
       if (cleanupError) console.warn('Email cleanup warning:', cleanupError.message);
-      // Strip email identity BEFORE re-rendering so the fresh getUser() fetch inside
-      // renderConnectedAccounts doesn't overwrite our optimistic state with stale data.
+      // Strip _user BEFORE re-rendering so the stale getUser() fetch doesn't overwrite
+      // our optimistic state with the old email.
       _user = {
         ..._user,
         email: null,
