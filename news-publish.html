@@ -212,6 +212,19 @@
           </div>
         </div>
 
+        <div class="col2-grid">
+          <div class="form-group">
+            <label class="form-label">Publishing As</label>
+            <input type="text" id="np-author-name" class="form-input" placeholder="Display name…">
+            <div class="form-hint">Leave blank to use your account name.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Publish Date &amp; Time</label>
+            <input type="datetime-local" id="np-published-at" class="form-input">
+            <div class="form-hint">Leave blank to use the current date &amp; time when published.</div>
+          </div>
+        </div>
+
         <div class="form-group">
           <label class="form-label">Summary / Excerpt</label>
           <textarea id="np-summary" class="form-input" rows="2" placeholder="A short description shown in article listings (1–2 sentences)…"></textarea>
@@ -476,6 +489,8 @@ function clearEditor() {
   document.getElementById('np-image').value      = '';
   document.getElementById('np-summary').value    = '';
   document.getElementById('np-body').value       = '';
+  document.getElementById('np-author-name').value    = '';
+  document.getElementById('np-published-at').value   = '';
   document.getElementById('editor-heading').textContent = 'New Article';
   document.getElementById('np-summary-count').textContent = '0 / 280';
   document.getElementById('np-body-count').textContent = '0 chars';
@@ -493,6 +508,13 @@ window.loadIntoEditor = async (id) => {
   document.getElementById('np-image').value      = a.image_url || '';
   document.getElementById('np-summary').value    = a.summary  || '';
   document.getElementById('np-body').value       = a.body     || '';
+  document.getElementById('np-author-name').value = a.author_name || '';
+  if (a.published_at) {
+    const d = new Date(a.published_at);
+    document.getElementById('np-published-at').value = d.toISOString().slice(0, 16);
+  } else {
+    document.getElementById('np-published-at').value = '';
+  }
   document.getElementById('editor-heading').textContent = 'Editing: ' + a.title;
   updateCharCounts();
   updatePreview();
@@ -510,7 +532,14 @@ async function saveArticle(forcedStatus) {
   if (!title) { toast('Please enter a headline.', true); return; }
 
   const status    = forcedStatus || 'draft';
-  const authorName = _profile?.display_name || _profile?.username || _user.email;
+  const defaultAuthorName = _profile?.display_name || _profile?.username || _user.email;
+  const overrideAuthor = document.getElementById('np-author-name').value.trim();
+  const authorName = overrideAuthor || defaultAuthorName;
+
+  const publishedAtInput = document.getElementById('np-published-at').value;
+  const publishedAt = publishedAtInput
+    ? new Date(publishedAtInput).toISOString()
+    : (status === 'published' ? new Date().toISOString() : undefined);
 
   const payload = {
     title,
@@ -519,7 +548,8 @@ async function saveArticle(forcedStatus) {
     image_url:   document.getElementById('np-image').value.trim() || null,
     summary:     document.getElementById('np-summary').value.trim() || null,
     status,
-    published_at: status === 'published' ? new Date().toISOString() : undefined,
+    author_name: authorName,
+    published_at: publishedAt,
   };
 
   let error;

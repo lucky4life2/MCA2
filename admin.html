@@ -674,6 +674,10 @@
           </select>
         </div>
       </div>
+      <div class="col2-grid">
+        <div class="form-group"><label class="form-label">Author Name</label><input type="text" id="nm2-author-name" class="form-input" placeholder="Display name…"></div>
+        <div class="form-group"><label class="form-label">Publish Date</label><input type="datetime-local" id="nm2-published-at" class="form-input"></div>
+      </div>
       <div class="form-group"><label class="form-label">Summary / Excerpt</label><textarea id="nm2-summary" class="form-input" rows="2" placeholder="Short description shown in article listings..." style="resize:vertical;"></textarea></div>
       <div class="form-group"><label class="form-label">Hero Image URL (optional)</label><input type="text" id="nm2-image" class="form-input" placeholder="https://..."></div>
       <div class="form-group">
@@ -1276,6 +1280,13 @@ function openNewsModal(article = null) {
   document.getElementById('nm2-title-input').value   = article?.title || '';
   document.getElementById('nm2-category').value      = article?.category || '';
   document.getElementById('nm2-status').value        = article?.status || 'draft';
+  document.getElementById('nm2-author-name').value   = article?.author_name || '';
+  if (article?.published_at) {
+    const d = new Date(article.published_at);
+    document.getElementById('nm2-published-at').value = d.toISOString().slice(0, 16);
+  } else {
+    document.getElementById('nm2-published-at').value = '';
+  }
   document.getElementById('nm2-summary').value       = article?.summary || '';
   document.getElementById('nm2-image').value         = article?.image_url || '';
   document.getElementById('nm2-body').value          = article?.body || '';
@@ -1299,20 +1310,30 @@ async function saveArticle(forceStatus = null) {
   const status = forceStatus || document.getElementById('nm2-status').value;
   const { data: { user } } = await supabase.auth.getUser();
   const { data: profile }  = await supabase.from('profiles').select('display_name,username').eq('id', user.id).single();
-  const authorName = profile?.display_name || profile?.username || 'Unknown';
+  const defaultAuthorName = profile?.display_name || profile?.username || 'Unknown';
+
+  // Use whatever is in the Author Name field; fall back to current user's name for new articles
+  const overrideAuthor = document.getElementById('nm2-author-name').value.trim();
+  const authorName = overrideAuthor || defaultAuthorName;
+
+  // Use the custom publish date if set, otherwise default to now when publishing
+  const publishedAtInput = document.getElementById('nm2-published-at').value;
+  const publishedAt = publishedAtInput
+    ? new Date(publishedAtInput).toISOString()
+    : (status === 'published' ? new Date().toISOString() : undefined);
 
   const payload = {
     title,
-    category:    document.getElementById('nm2-category').value.trim() || 'General',
+    category:     document.getElementById('nm2-category').value.trim() || 'General',
     status,
-    summary:     document.getElementById('nm2-summary').value.trim() || null,
-    image_url:   document.getElementById('nm2-image').value.trim() || null,
-    body:        document.getElementById('nm2-body').value.trim(),
-    author_name: id ? undefined : authorName,
-    author_id:   id ? undefined : user.id,
-    published_at: status === 'published' ? new Date().toISOString() : undefined,
+    summary:      document.getElementById('nm2-summary').value.trim() || null,
+    image_url:    document.getElementById('nm2-image').value.trim() || null,
+    body:         document.getElementById('nm2-body').value.trim(),
+    author_name:  authorName,
+    published_at: publishedAt,
   };
-  if (id) { delete payload.author_name; delete payload.author_id; }
+  // author_id is only set on insert (new articles), not on update
+  if (id) { delete payload.author_id; }
 
   let error;
   if (id) {
