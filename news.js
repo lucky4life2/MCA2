@@ -100,8 +100,9 @@ function renderFeaturedBanner(article) {
 function renderCard(a) {
   const excerpt = a.summary || truncate(a.body, 160);
   const cat = (a.category && a.category.toLowerCase() !== 'featured') ? a.category : 'General';
+  const href = a.slug ? `article.html?slug=${encodeURIComponent(a.slug)}` : '#';
   return `
-    <article class="news-card" data-id="${a.id}" style="cursor:pointer;">
+    <a href="${href}" class="news-card" data-id="${a.id}" style="cursor:pointer;display:block;text-decoration:none;color:inherit;">
       <div class="news-card-meta">
         <span class="news-card-category">${cat}</span>
         <span class="news-card-date">${formatDate(a.published_at)}</span>
@@ -109,7 +110,7 @@ function renderCard(a) {
       <div class="news-card-title">${a.title}</div>
       ${excerpt ? `<div class="news-card-summary">${excerpt}</div>` : ''}
       ${a.author_name ? `<div class="news-card-byline">By ${a.author_name}</div>` : ''}
-    </article>`;
+    </a>`;
 }
 
 // ── Share helper ──────────────────────────────────────────────
@@ -229,13 +230,6 @@ function applySearch(query) {
   } else {
     if (emptyEl) emptyEl.style.display = 'none';
     indexEl.innerHTML = filtered.map(renderCard).join('');
-    indexEl.querySelectorAll('.news-card').forEach((el, i) => {
-      el.addEventListener('click', () => {
-        const a = filtered[i];
-        if (a.slug) location.href = `article.html?slug=${encodeURIComponent(a.slug)}`;
-        else openArticleModal(a);
-      });
-    });
   }
 }
 

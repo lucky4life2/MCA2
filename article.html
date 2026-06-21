@@ -70,19 +70,16 @@ async function shareArticle(article) {
   }
   try {
     await navigator.clipboard.writeText(url);
-    showCopied();
+    const btn = document.getElementById('share-btn');
+    if (btn) {
+      const orig = btn.innerHTML;
+      btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied!`;
+      btn.style.background = 'var(--green, #22c55e)'; btn.style.color = '#fff'; btn.style.borderColor = 'transparent';
+      setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
+    }
   } catch {
     prompt('Copy this link:', url);
   }
-}
-
-function showCopied() {
-  const btn = document.getElementById('share-btn');
-  if (!btn) return;
-  const orig = btn.innerHTML;
-  btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied!`;
-  btn.style.background = 'var(--green, #22c55e)';
-  setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 2000);
 }
 
 const loadingEl = document.getElementById('article-loading');
@@ -94,7 +91,7 @@ const slug   = params.get('slug');
 
 if (!slug) {
   loadingEl.style.display = 'none';
-  errorEl.textContent = 'No article specified. Go back to the news page.';
+  errorEl.textContent = 'No article specified.';
   errorEl.style.display = 'block';
 } else {
   try {
@@ -113,31 +110,20 @@ if (!slug) {
       errorEl.textContent = 'Article not found.';
       errorEl.style.display = 'block';
     } else {
-      // Update page title + meta for sharing
       document.title = `${article.title} — Minecraft Club of America`;
-
       const cat = (article.category && article.category.toLowerCase() !== 'featured') ? article.category : 'General';
-      const shareUrl = `${location.origin}/article.html?slug=${encodeURIComponent(article.slug)}`;
 
       bodyEl.innerHTML = `
         <div style="max-width:720px;margin:0 auto;padding:2.5rem 1.5rem;">
-          ${article.image_url ? `<div style="height:320px;background:url('${article.image_url}') center/cover no-repeat;border-radius:8px;margin-bottom:2rem;"></div>` : ''}
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:1.25rem;flex-wrap:wrap;">
-            <span class="news-card-category">${cat}</span>
-            <span style="font-size:12px;color:var(--muted);">${formatDate(article.published_at)}</span>
-            ${article.author_name ? `<span style="font-size:12px;color:var(--muted);">By ${article.author_name}</span>` : ''}
-          </div>
-          <h1 style="font-family:'Times New Roman',serif;font-size:clamp(1.6rem,5vw,2.5rem);
-            color:var(--blue);font-weight:700;line-height:1.2;margin-bottom:1.5rem;">${article.title}</h1>
-          <div class="news-article-body" style="font-size:15px;line-height:1.8;color:var(--black);">
-            ${renderMarkdown(article.body)}
-          </div>
-          <div style="margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid var(--border);display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
-            <button id="share-btn" onclick="window.__shareArticle()" style="
+
+          <!-- Top bar: back link + share button -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2rem;gap:1rem;flex-wrap:wrap;">
+            <a href="news.html" style="font-size:13px;color:var(--muted);text-decoration:none;">← Back to News</a>
+            <button id="share-btn" style="
               display:inline-flex;align-items:center;gap:8px;
-              padding:0.5rem 1.1rem;border-radius:6px;border:1px solid var(--border);
+              padding:0.45rem 1.1rem;border-radius:6px;border:1px solid var(--border);
               background:var(--white);color:var(--black);font-size:13px;font-weight:500;
-              cursor:pointer;transition:background .15s;">
+              cursor:pointer;transition:background .15s,color .15s;">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
                 <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
@@ -145,12 +131,25 @@ if (!slug) {
               </svg>
               Share
             </button>
-            <a href="news.html" style="font-size:13px;color:var(--muted);text-decoration:none;">← Back to News</a>
+          </div>
+
+          ${article.image_url ? `<div style="height:320px;background:url('${article.image_url}') center/cover no-repeat;border-radius:8px;margin-bottom:2rem;"></div>` : ''}
+
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:1.25rem;flex-wrap:wrap;">
+            <span class="news-card-category">${cat}</span>
+            <span style="font-size:12px;color:var(--muted);">${formatDate(article.published_at)}</span>
+            ${article.author_name ? `<span style="font-size:12px;color:var(--muted);">By ${article.author_name}</span>` : ''}
+          </div>
+
+          <h1 style="font-family:'Times New Roman',serif;font-size:clamp(1.6rem,5vw,2.5rem);
+            color:var(--blue);font-weight:700;line-height:1.2;margin-bottom:1.5rem;">${article.title}</h1>
+
+          <div class="news-article-body" style="font-size:15px;line-height:1.8;color:var(--black);">
+            ${renderMarkdown(article.body)}
           </div>
         </div>`;
 
-      // Expose share fn to inline onclick (module scope isolation)
-      window.__shareArticle = () => shareArticle(article);
+      document.getElementById('share-btn').addEventListener('click', () => shareArticle(article));
 
       loadingEl.style.display = 'none';
       bodyEl.style.display = 'block';
