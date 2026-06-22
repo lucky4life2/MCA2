@@ -82,6 +82,13 @@
       <p style="font-size:14.5px;">The World Court hears disputes between nations, server rule violations, constitutional interpretations, and impeachment proceedings. All members have the right to a fair trial, to present evidence, to representation by another player, and to appeal. Any player placed on Administrative Hold must receive a hearing within 72 hours.</p>
     </div>
 
+    <div class="section" id="club-presidents-section" style="display:none;">
+      <div class="section-label">Clubs</div>
+      <h2>Club Presidents</h2>
+      <p>Student leaders who serve as Club President at their respective school or organization, representing MCA membership at the local level.</p>
+      <table class="leader-table" id="club-presidents-table"><tr><td colspan="2" style="color:var(--muted);">Loading...</td></tr></table>
+    </div>
+
     <div class="section">
       <div class="section-label">Article VIII</div>
       <h2>Checks &amp; Balances</h2>
@@ -138,5 +145,26 @@
       if (el) el.innerHTML = '<tr><td colspan="2" style="color:var(--muted);">Could not load data.</td></tr>';
     });
   }
+
+  // Club Presidents
+  try {
+    const cpRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/club_presidents?select=*&order=region.asc,name.asc`,
+      { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } }
+    );
+    if (cpRes.ok) {
+      const presidents = await cpRes.json();
+      if (presidents.length) {
+        document.getElementById('club-presidents-section').style.display = '';
+        const table = document.getElementById('club-presidents-table');
+        table.innerHTML = presidents.map(p =>
+          `<tr>
+            <td>${p.name}${p.username ? `<br><span style="font-size:12px;color:var(--muted);">@${p.username}</span>` : ''}</td>
+            <td>${p.club_name}${p.region ? `<br><span style="font-size:12px;color:var(--muted);">${p.region}</span>` : ''}</td>
+          </tr>`
+        ).join('');
+      }
+    }
+  } catch(e) { /* Club presidents table may not exist yet */ }
 })();
 </script>
