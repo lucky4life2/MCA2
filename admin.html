@@ -303,6 +303,7 @@
         <div class="admin-tab-group-menu">
           <button class="admin-tab-group-item" data-tab="news">News</button>
           <button class="admin-tab-group-item" data-tab="leadership">Leadership</button>
+          <button class="admin-tab-group-item" data-tab="club-presidents">Club Presidents</button>
           <button class="admin-tab-group-item" data-tab="nations">Nations</button>
         </div>
       </div>
@@ -543,6 +544,19 @@
       </div>
     </div>
 
+    <!-- ── CLUB PRESIDENTS ──────────────────────────────── -->
+    <div class="admin-panel" id="tab-club-presidents">
+      <div class="admin-section">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Club Presidents</div>
+          <button class="btn btn-primary" id="btn-add-club-president" style="font-size:12px;padding:7px 16px;">+ Add Club President</button>
+        </div>
+        <div id="club-presidents-admin-list" style="padding:0.5rem 0;min-height:60px;">
+          <div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">Loading...</div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── NATIONS ───────────────────────────────────────── -->
     <div class="admin-panel" id="tab-nations">
       <div class="admin-section">
@@ -664,6 +678,28 @@
     <div style="padding:0 1.5rem 1.5rem;display:flex;gap:10px;justify-content:flex-end;">
       <button id="lm-cancel" style="background:transparent;color:var(--muted);font-size:13px;font-weight:600;padding:9px 18px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">Cancel</button>
       <button id="lm-save" style="background:var(--blue);color:#fff;font-size:13px;font-weight:600;padding:9px 18px;border:none;border-radius:4px;cursor:pointer;">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Club President modal -->
+<div id="cp-modal" style="display:none;position:fixed;inset:0;background:rgba(10,15,30,.5);z-index:400;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:var(--white);border-radius:8px;border:1px solid var(--border);width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(10,15,30,.2);">
+    <div style="padding:1.5rem 1.5rem 0;display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-family:'Times New Roman',serif;font-size:1.3rem;color:var(--blue);font-weight:normal;" id="cp-modal-title">Add Club President</div>
+      <button id="cp-close" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:20px;line-height:1;padding:4px;">✕</button>
+    </div>
+    <div class="col2-grid" style="padding:1.5rem;">
+      <input type="hidden" id="cp-id">
+      <div style="grid-column:1/-1;"><label class="form-label">Name *</label><input type="text" id="cp-name" class="form-input" placeholder="Full name"></div>
+      <div style="grid-column:1/-1;"><label class="form-label">School / Club Name *</label><input type="text" id="cp-club-name" class="form-input" placeholder="e.g. Lincoln High School"></div>
+      <div><label class="form-label">Username</label><input type="text" id="cp-username" class="form-input" placeholder="@username"></div>
+      <div><label class="form-label">Region / State</label><input type="text" id="cp-region" class="form-input" placeholder="e.g. Texas"></div>
+    </div>
+    <div id="cp-error" style="font-size:13px;color:#c0392b;padding:0 1.5rem .5rem;display:none;"></div>
+    <div style="padding:0 1.5rem 1.5rem;display:flex;gap:10px;justify-content:flex-end;">
+      <button id="cp-cancel" style="background:transparent;color:var(--muted);font-size:13px;font-weight:600;padding:9px 18px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">Cancel</button>
+      <button id="cp-save" style="background:var(--blue);color:#fff;font-size:13px;font-weight:600;padding:9px 18px;border:none;border-radius:4px;cursor:pointer;">Save</button>
     </div>
   </div>
 </div>
@@ -1767,6 +1803,76 @@ document.getElementById('lm-save').addEventListener('click', async () => {
 });
 window.deleteLeader = async (id) => { if (!confirm('Remove this person?')) return; await supabase.from('leadership').delete().eq('id',id); await loadLeadershipAdmin(); };
 
+// ── Club Presidents ───────────────────────────────────────────
+let _clubPresidents = [];
+
+async function loadClubPresidentsAdmin() {
+  const el = document.getElementById('club-presidents-admin-list');
+  const { data, error } = await supabase.from('club_presidents').select('*').order('region', { ascending: true });
+  if (error) {
+    el.innerHTML = `<div style="text-align:center;padding:2rem;color:#c0392b;font-size:13px;">Error: ${error.message}</div>`;
+    return;
+  }
+  _clubPresidents = data || [];
+  el.innerHTML = _clubPresidents.length
+    ? _clubPresidents.map(p => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 1.5rem;border-bottom:1px solid var(--border);">
+        <div>
+          <div style="font-weight:600;font-size:14px;">${p.name}${p.username ? ` <span style="font-size:12px;color:var(--muted);font-weight:400;">@${p.username}</span>` : ''}</div>
+          <div style="font-size:12px;color:var(--muted);">${p.club_name}${p.region ? ' · ' + p.region : ''}</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-outline btn-sm" onclick="openCPModal('${p.id}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteClubPresident('${p.id}')">Delete</button>
+        </div>
+      </div>`).join('')
+    : '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">No club presidents yet.</div>';
+}
+
+window.openCPModal = (id) => {
+  const p = id ? _clubPresidents.find(x => x.id === id) : null;
+  document.getElementById('cp-id').value        = p?.id || '';
+  document.getElementById('cp-name').value      = p?.name || '';
+  document.getElementById('cp-club-name').value = p?.club_name || '';
+  document.getElementById('cp-username').value  = p?.username || '';
+  document.getElementById('cp-region').value    = p?.region || '';
+  document.getElementById('cp-error').style.display = 'none';
+  document.getElementById('cp-modal-title').textContent = p ? 'Edit Club President' : 'Add Club President';
+  document.getElementById('cp-modal').style.display = 'flex';
+};
+
+function closeCPModal() { document.getElementById('cp-modal').style.display = 'none'; }
+document.getElementById('cp-close').addEventListener('click',  closeCPModal);
+document.getElementById('cp-cancel').addEventListener('click', closeCPModal);
+document.getElementById('btn-add-club-president').addEventListener('click', () => openCPModal(null));
+
+document.getElementById('cp-save').addEventListener('click', async () => {
+  const name      = document.getElementById('cp-name').value.trim();
+  const club_name = document.getElementById('cp-club-name').value.trim();
+  const errEl     = document.getElementById('cp-error');
+  errEl.style.display = 'none';
+  if (!name || !club_name) { errEl.textContent = 'Name and School/Club Name are required.'; errEl.style.display = 'block'; return; }
+  const id = document.getElementById('cp-id').value;
+  const payload = {
+    name,
+    club_name,
+    username: document.getElementById('cp-username').value.trim() || null,
+    region:   document.getElementById('cp-region').value.trim()   || null,
+  };
+  const { error } = id
+    ? await supabase.from('club_presidents').update(payload).eq('id', id)
+    : await supabase.from('club_presidents').insert(payload);
+  if (error) { errEl.textContent = 'Error: ' + error.message; errEl.style.display = 'block'; return; }
+  closeCPModal();
+  await loadClubPresidentsAdmin();
+});
+
+window.deleteClubPresident = async (id) => {
+  if (!confirm('Remove this club president?')) return;
+  await supabase.from('club_presidents').delete().eq('id', id);
+  await loadClubPresidentsAdmin();
+};
+
 // ── Tabs ──────────────────────────────────────────────────────
 function switchTab(tabName) {
   // Deactivate all flat tabs and group items
@@ -1796,8 +1902,9 @@ function switchTab(tabName) {
   if (tabName === 'news')       loadNewsAdmin();
   if (tabName === 'roles')      renderRoles();
   if (tabName === 'messages')   loadMessages();
-  if (tabName === 'leadership') loadLeadershipAdmin();
-  if (tabName === 'nations')    loadNationsAdmin();
+  if (tabName === 'leadership')      loadLeadershipAdmin();
+  if (tabName === 'club-presidents') loadClubPresidentsAdmin();
+  if (tabName === 'nations')         loadNationsAdmin();
 }
 
 // Flat tabs
