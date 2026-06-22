@@ -910,7 +910,9 @@ async function render2FA() {
       errEl.style.display = 'none';
 
       try {
-        const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Authenticator App' });
+        const { data: userData } = await supabase.auth.getUser();
+        const accountName = userData?.user?.user_metadata?.full_name || userData?.user?.user_metadata?.custom_username || userData?.user?.email || userData?.user?.id || 'MCA Account';
+        const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Authenticator App', issuer: 'Minecraft Club of America', accountName });
         if (error) throw error;
 
         const { id: factorId, totp } = data;
