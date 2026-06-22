@@ -321,8 +321,9 @@
   }
 
   // Pending email addresses for the code-entry steps below
-  let _pendingSignupEmail = null;
-  let _pendingResetEmail  = null;
+  let _pendingSignupEmail  = null;
+  let _pendingSignupUserId = null;
+  let _pendingResetEmail   = null;
   let _pendingMfaFactorId = null;
 
   // ── Tab switching ─────────────────────────────────────────────
@@ -659,13 +660,24 @@
       errEl.textContent   = 'Password must contain at least one lowercase letter.';
       errEl.style.display = 'block'; return;
     }
-    const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: null } });
-    if (error) {
-      errEl.textContent   = error.message || 'Sign up failed.';
+    const btn = document.getElementById('btn-email-signup');
+    btn.textContent = 'Sending…'; btn.disabled = true;
+    const SUPABASE_URL = supabase.supabaseUrl;
+    const ANON_KEY = supabase.supabaseKey;
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/signup-with-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
+      body: JSON.stringify({ email, password }),
+    });
+    const json = await res.json();
+    btn.textContent = 'Create Account'; btn.disabled = false;
+    if (!res.ok || json.error) {
+      errEl.textContent   = json.error || 'Sign up failed.';
       errEl.style.display = 'block'; return;
     }
     // Show code-entry confirmation panel
     _pendingSignupEmail = email;
+    _pendingSignupUserId = json.userId;
     document.getElementById('signup-code').value = '';
     document.getElementById('confirm-error').style.display = 'none';
     tabs.forEach(t => t.classList.remove('active'));
@@ -680,16 +692,29 @@
   document.getElementById('btn-verify-signup').addEventListener('click', async () => {
     const code  = document.getElementById('signup-code').value.trim();
     const errEl = document.getElementById('confirm-error');
+    const btn   = document.getElementById('btn-verify-signup');
     errEl.style.display = 'none';
     if (!code) {
       errEl.textContent = 'Enter the code from your email.';
       errEl.style.display = 'block'; return;
     }
-    const { error } = await supabase.auth.verifyOtp({ email: _pendingSignupEmail, token: code, type: 'signup' });
-    if (error) {
-      errEl.textContent = error.message || 'Invalid or expired code.';
-      errEl.style.display = 'block'; return;
+    btn.textContent = 'Verifying…'; btn.disabled = true;
+    const SUPABASE_URL = supabase.supabaseUrl;
+    const ANON_KEY = supabase.supabaseKey;
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/verify-signup-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
+      body: JSON.stringify({ userId: _pendingSignupUserId, code }),
+    });
+    const json = await res.json();
+    if (!res.ok || json.error) {
+      errEl.textContent = json.error || 'Invalid or expired code.';
+      errEl.style.display = 'block';
+      btn.textContent = 'Verify & Continue'; btn.disabled = false;
+      return;
     }
+    // Set the session manually from the tokens returned
+    await supabase.auth.setSession({ access_token: json.access_token, refresh_token: json.refresh_token });
     window.location.replace(returnTo);
   });
 
@@ -701,6 +726,8 @@
   // Back to sign in from confirmation
   document.getElementById('confirm-back').addEventListener('click', e => {
     e.preventDefault();
+    _pendingSignupEmail  = null;
+    _pendingSignupUserId = null;
     document.getElementById('login-tabs').style.display = '';
     document.getElementById('login-card-footer').style.display = '';
     switchTab('signin');
