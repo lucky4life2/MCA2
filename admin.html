@@ -19,12 +19,41 @@
     .admin-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
     .admin-tab:hover:not(.active) { color: var(--black); }
     .admin-tab.hidden { display: none; }
+
+    /* Tab groups (dropdown) */
+    .admin-tab-group { position: relative; display: inline-block; }
+    .admin-tab-group-trigger { display: flex; align-items: center; gap: 5px; }
+    .admin-tab-group-trigger svg { transition: transform .15s; flex-shrink: 0; }
+    .admin-tab-group.open .admin-tab-group-trigger svg { transform: rotate(180deg); }
+    .admin-tab-group-trigger.active { color: var(--blue); border-bottom-color: var(--blue); }
+    .admin-tab-group-menu {
+      display: none; position: absolute; top: calc(100% + 2px); left: 0;
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: 6px; box-shadow: 0 6px 20px rgba(10,15,30,.1);
+      min-width: 140px; z-index: 200; overflow: hidden; padding: 4px 0;
+    }
+    .admin-tab-group.open .admin-tab-group-menu { display: block; }
+    .admin-tab-group-item {
+      display: flex; align-items: center; gap: 8px;
+      width: 100%; padding: 9px 16px; text-align: left;
+      font-size: 12px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase;
+      background: none; border: none; cursor: pointer; color: var(--mid);
+      white-space: nowrap; transition: background .12s, color .12s;
+    }
+    .admin-tab-group-item:hover { background: var(--bg); color: var(--blue); }
+    .admin-tab-group-item.active { color: var(--blue); }
+    .admin-tab-group-badge { background: #c0392b; color: #fff; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; }
     .admin-panel { display: none; }
     .admin-panel.active { display: block; }
 
     .admin-section { border: 1px solid var(--border); border-radius: 6px; background: var(--white); margin-bottom: 1.25rem; overflow: hidden; }
     .admin-section-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
     .admin-section-title { font-family: 'Times New Roman', serif; font-size: 1.1rem; color: var(--blue); font-weight: normal; }
+
+    /* Config stat compact rows */
+    .stat-cfg-row { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 10px; padding: 10px 1.5rem; border-bottom: 1px solid var(--border); align-items: end; }
+    .stat-cfg-row:last-of-type { border-bottom: none; }
+    .stat-cfg-label { font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 6px; }
 
     /* Members table */
     .members-table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -182,6 +211,8 @@
 
       /* Stats row — 2 columns */
       .stats-row { grid-template-columns: 1fr 1fr; }
+      .stat-cfg-row { grid-template-columns: 1fr 1fr; }
+      .stat-cfg-row input:last-child { grid-column: 1 / -1; }
 
       /* Members table — hide less-critical columns, allow horizontal scroll */
       .members-table-wrap { font-size: 12px; }
@@ -252,12 +283,33 @@
 
     <div class="admin-tabs">
       <button class="admin-tab active" data-tab="overview">Overview</button>
-      <button class="admin-tab" data-tab="members">Members</button>
-      <button class="admin-tab" data-tab="roles" id="tab-btn-roles">Roles</button>
-      <button class="admin-tab" data-tab="news">News</button>
+
+      <!-- Members group -->
+      <div class="admin-tab-group" id="tabgrp-members">
+        <button class="admin-tab admin-tab-group-trigger" id="tabgrp-members-trigger">
+          Members <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="admin-tab-group-menu">
+          <button class="admin-tab-group-item" data-tab="members">All Members</button>
+          <button class="admin-tab-group-item" data-tab="roles" id="tab-btn-roles">Roles</button>
+          <button class="admin-tab-group-item" data-tab="messages" id="tab-btn-messages">Messages <span id="messages-unread-badge" style="display:none" class="admin-tab-group-badge"></span></button>
+        </div>
+      </div>
+
+      <!-- Content group -->
+      <div class="admin-tab-group" id="tabgrp-content">
+        <button class="admin-tab admin-tab-group-trigger" id="tabgrp-content-trigger">
+          Content <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="admin-tab-group-menu">
+          <button class="admin-tab-group-item" data-tab="news">News</button>
+          <button class="admin-tab-group-item" data-tab="leadership">Leadership</button>
+          <button class="admin-tab-group-item" data-tab="nations">Nations</button>
+        </div>
+      </div>
+
       <button class="admin-tab" data-tab="minecraft">Minecraft</button>
       <button class="admin-tab" data-tab="shop">Shop</button>
-      <button class="admin-tab" data-tab="messages" id="tab-btn-messages">Messages <span id="messages-unread-badge" style="display:none;background:#c0392b;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:middle;"></span></button>
       <button class="admin-tab" data-tab="config">Config</button>
     </div>
 
@@ -479,7 +531,8 @@
     </div>
 
     <!-- ── CONFIG ────────────────────────────────────────── -->
-    <div class="admin-panel" id="tab-config">
+    <!-- ── LEADERSHIP ────────────────────────────────────── -->
+    <div class="admin-panel" id="tab-leadership">
       <div class="admin-section">
         <div class="admin-section-header">
           <div class="admin-section-title">Leadership</div>
@@ -489,6 +542,10 @@
           <div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">Loading...</div>
         </div>
       </div>
+    </div>
+
+    <!-- ── NATIONS ───────────────────────────────────────── -->
+    <div class="admin-panel" id="tab-nations">
       <div class="admin-section">
         <div class="admin-section-header">
           <div class="admin-section-title">Nations</div>
@@ -498,30 +555,45 @@
           <div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">Loading nations...</div>
         </div>
       </div>
+    </div>
+
+    <!-- ── CONFIG ────────────────────────────────────────── -->
+    <div class="admin-panel" id="tab-config">
       <div class="admin-section">
         <div class="admin-section-header">
           <div class="admin-section-title">Site Config</div>
           <span id="cfg-save-badge" class="badge badge-unlinked" style="display:none;">Saved</span>
         </div>
-        <div class="col2-grid" style="padding:1.25rem 1.5rem;">
-          <div style="grid-column:1/-1;">
-            <label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Discord Invite URL</label>
-            <input type="text" id="cfg-discord-url" class="search-input" placeholder="https://discord.gg/..." style="width:100%;box-sizing:border-box;">
-          </div>
-          <div><label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 1 Label</label><input type="text" id="cfg-stat1-label" class="search-input" placeholder="Members" style="width:100%;box-sizing:border-box;"></div>
-          <div><label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 1 Value</label><input type="text" id="cfg-stat1-value" class="search-input" placeholder="60+" style="width:100%;box-sizing:border-box;"></div>
-          <div style="grid-column:1/-1;"><label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 1 Subtitle</label><input type="text" id="cfg-stat1-sub" class="search-input" placeholder="Across Utah..." style="width:100%;box-sizing:border-box;"></div>
-          <div><label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 2 Label</label><input type="text" id="cfg-stat2-label" class="search-input" style="width:100%;box-sizing:border-box;"></div>
-          <div><label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 2 Value</label><input type="text" id="cfg-stat2-value" class="search-input" style="width:100%;box-sizing:border-box;"></div>
-          <div style="grid-column:1/-1;"><label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 2 Subtitle</label><input type="text" id="cfg-stat2-sub" class="search-input" style="width:100%;box-sizing:border-box;"></div>
-          <div><label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 3 Label</label><input type="text" id="cfg-stat3-label" class="search-input" style="width:100%;box-sizing:border-box;"></div>
-          <div><label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 3 Value</label><input type="text" id="cfg-stat3-value" class="search-input" style="width:100%;box-sizing:border-box;"></div>
-          <div style="grid-column:1/-1;"><label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 3 Subtitle</label><input type="text" id="cfg-stat3-sub" class="search-input" style="width:100%;box-sizing:border-box;"></div>
-          <div><label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 4 Label</label><input type="text" id="cfg-stat4-label" class="search-input" style="width:100%;box-sizing:border-box;"></div>
-          <div><label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 4 Value</label><input type="text" id="cfg-stat4-value" class="search-input" style="width:100%;box-sizing:border-box;"></div>
-          <div style="grid-column:1/-1;"><label style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;">Stat 4 Subtitle</label><input type="text" id="cfg-stat4-sub" class="search-input" style="width:100%;box-sizing:border-box;"></div>
+        <div style="padding:1.25rem 1.5rem 1rem;">
+          <label class="stat-cfg-label">Discord Invite URL</label>
+          <input type="text" id="cfg-discord-url" class="search-input" placeholder="https://discord.gg/..." style="width:100%;box-sizing:border-box;">
         </div>
-        <div style="padding:0 1.5rem 1.25rem;display:flex;gap:10px;align-items:center;">
+        <div style="padding:0 1.5rem .5rem;">
+          <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:10px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:0;">
+            <span>Label</span><span>Value</span><span>Subtitle</span>
+          </div>
+        </div>
+        <div class="stat-cfg-row">
+          <input type="text" id="cfg-stat1-label" class="search-input" placeholder="e.g. Members" style="width:100%;box-sizing:border-box;">
+          <input type="text" id="cfg-stat1-value" class="search-input" placeholder="60+" style="width:100%;box-sizing:border-box;">
+          <input type="text" id="cfg-stat1-sub" class="search-input" placeholder="Subtitle..." style="width:100%;box-sizing:border-box;">
+        </div>
+        <div class="stat-cfg-row">
+          <input type="text" id="cfg-stat2-label" class="search-input" style="width:100%;box-sizing:border-box;">
+          <input type="text" id="cfg-stat2-value" class="search-input" style="width:100%;box-sizing:border-box;">
+          <input type="text" id="cfg-stat2-sub" class="search-input" style="width:100%;box-sizing:border-box;">
+        </div>
+        <div class="stat-cfg-row">
+          <input type="text" id="cfg-stat3-label" class="search-input" style="width:100%;box-sizing:border-box;">
+          <input type="text" id="cfg-stat3-value" class="search-input" style="width:100%;box-sizing:border-box;">
+          <input type="text" id="cfg-stat3-sub" class="search-input" style="width:100%;box-sizing:border-box;">
+        </div>
+        <div class="stat-cfg-row">
+          <input type="text" id="cfg-stat4-label" class="search-input" style="width:100%;box-sizing:border-box;">
+          <input type="text" id="cfg-stat4-value" class="search-input" style="width:100%;box-sizing:border-box;">
+          <input type="text" id="cfg-stat4-sub" class="search-input" style="width:100%;box-sizing:border-box;">
+        </div>
+        <div style="padding:1rem 1.5rem;display:flex;gap:10px;align-items:center;border-top:1px solid var(--border);">
           <button class="btn btn-primary" id="btn-save-config" style="font-size:12px;padding:7px 16px;">Save Config</button>
           <span id="cfg-status" style="font-size:12px;color:var(--muted);"></span>
         </div>
@@ -1592,7 +1664,7 @@ window.adminEditProduct = async (id) => { const { data } = await supabase.from('
 window.adminDeleteProduct = async (id) => { if (!confirm('Delete this product?')) return; await supabase.from('products').delete().eq('id',id); loadAdminProducts(); };
 
 // ── Config ────────────────────────────────────────────────────
-async function loadConfigTab() { await Promise.all([loadSiteConfig(), loadNationsAdmin(), loadLeadershipAdmin()]); }
+async function loadConfigTab() { await loadSiteConfig(); }
 async function loadSiteConfig() {
   const { data } = await supabase.from('settings').select('value').eq('key','site_config').single();
   let cfg = {}; if (data?.value) { try { cfg = JSON.parse(data.value); } catch(e) {} }
@@ -1697,21 +1769,64 @@ document.getElementById('lm-save').addEventListener('click', async () => {
 window.deleteLeader = async (id) => { if (!confirm('Remove this person?')) return; await supabase.from('leadership').delete().eq('id',id); await loadLeadershipAdmin(); };
 
 // ── Tabs ──────────────────────────────────────────────────────
-document.querySelectorAll('.admin-tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById('tab-'+tab.dataset.tab).classList.add('active');
-    if (tab.dataset.tab === 'shop')   loadAdminProducts();
-    if (tab.dataset.tab === 'config') loadConfigTab();
-    if (tab.dataset.tab === 'news')   loadNewsAdmin();
-    if (tab.dataset.tab === 'roles')    renderRoles();
-    if (tab.dataset.tab === 'messages') loadMessages();
+function switchTab(tabName) {
+  // Deactivate all flat tabs and group items
+  document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.admin-tab-group-trigger').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.admin-tab-group-item').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+  // Close all groups
+  document.querySelectorAll('.admin-tab-group').forEach(g => g.classList.remove('open'));
+
+  // Activate the panel
+  const panel = document.getElementById('tab-' + tabName);
+  if (panel) panel.classList.add('active');
+
+  // Mark the right trigger active
+  const flatTab = document.querySelector(`.admin-tab[data-tab="${tabName}"]`);
+  if (flatTab) { flatTab.classList.add('active'); }
+  const groupItem = document.querySelector(`.admin-tab-group-item[data-tab="${tabName}"]`);
+  if (groupItem) {
+    groupItem.classList.add('active');
+    groupItem.closest('.admin-tab-group')?.querySelector('.admin-tab-group-trigger').classList.add('active');
+  }
+
+  // Lazy-load hooks
+  if (tabName === 'shop')       loadAdminProducts();
+  if (tabName === 'config')     loadConfigTab();
+  if (tabName === 'news')       loadNewsAdmin();
+  if (tabName === 'roles')      renderRoles();
+  if (tabName === 'messages')   loadMessages();
+  if (tabName === 'leadership') loadLeadershipAdmin();
+  if (tabName === 'nations')    loadNationsAdmin();
+}
+
+// Flat tabs
+document.querySelectorAll('.admin-tab:not(.admin-tab-group-trigger)').forEach(tab => {
+  tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+});
+
+// Group items
+document.querySelectorAll('.admin-tab-group-item').forEach(item => {
+  item.addEventListener('click', () => switchTab(item.dataset.tab));
+});
+
+// Group triggers — toggle dropdown, close others
+document.querySelectorAll('.admin-tab-group-trigger').forEach(trigger => {
+  trigger.addEventListener('click', e => {
+    e.stopPropagation();
+    const grp = trigger.closest('.admin-tab-group');
+    const wasOpen = grp.classList.contains('open');
+    document.querySelectorAll('.admin-tab-group').forEach(g => g.classList.remove('open'));
+    if (!wasOpen) grp.classList.add('open');
   });
 });
+document.addEventListener('click', () => {
+  document.querySelectorAll('.admin-tab-group').forEach(g => g.classList.remove('open'));
+});
+
 const _hashTab = window.location.hash.replace('#','');
-if (_hashTab) { const b = document.querySelector(`.admin-tab[data-tab="${_hashTab}"]`); if (b) b.click(); }
+if (_hashTab) switchTab(_hashTab);
 
 // ── Admin Messages ────────────────────────────────────────────
 let _messages = [];
