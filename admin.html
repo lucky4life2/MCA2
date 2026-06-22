@@ -14,7 +14,7 @@
     .admin-hero h1 { font-family: 'Times New Roman', serif; font-size: clamp(28px, 4vw, 42px); font-weight: 700; color: var(--blue); line-height: 1.15; }
     .admin-hero-meta { font-size: 12px; color: var(--muted); margin-top: 8px; }
 
-    .admin-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 2rem; overflow-x: auto; }
+    .admin-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 2rem; position: relative; flex-wrap: wrap; }
     .admin-tab { padding: 10px 20px; font-size: 12px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; color: var(--muted); transition: color .15s, border-color .15s; margin-bottom: -1px; white-space: nowrap; }
     .admin-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
     .admin-tab:hover:not(.active) { color: var(--black); }
@@ -199,8 +199,7 @@
       .admin-hero { padding-bottom: 1.5rem; margin-bottom: 1.5rem; }
 
       /* Tabs — scrollable strip */
-      .admin-tabs { gap: 0; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-      .admin-tabs::-webkit-scrollbar { display: none; }
+      .admin-tabs { gap: 0; flex-wrap: wrap; }
       .admin-tab { padding: 10px 14px; font-size: 11px; }
 
       /* Section headers — stack on small screens */
