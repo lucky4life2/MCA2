@@ -721,7 +721,19 @@ function renderMinecraft() {
         </div>
         <div class="mc-username-display">${_profile.minecraft_username}</div>
       </div>
-      <p class="form-hint">Your Minecraft account is verified. Contact an admin if you need to change it.</p>`;
+      <p class="form-hint">Your Minecraft account is verified.</p>
+      <button class="btn btn-danger" id="btn-remove-mc" style="margin-top:8px;">Remove Verification</button>
+      <div class="form-error" id="mc-remove-error" style="margin-top:8px;"></div>`;
+    document.getElementById('btn-remove-mc').addEventListener('click', async () => {
+      if (!confirm('Remove your Minecraft verification? You will need to re-verify in-game.')) return;
+      const errEl = document.getElementById('mc-remove-error');
+      const { error } = await supabase.from('profiles').update({ minecraft_username: null, minecraft_verified: false }).eq('id', _user.id);
+      if (error) { errEl.textContent = 'Error: ' + error.message; errEl.style.display = 'block'; return; }
+      _profile.minecraft_username = null;
+      _profile.minecraft_verified = false;
+      _verifyCode = null;
+      renderMinecraft();
+    });
     return;
   }
 
