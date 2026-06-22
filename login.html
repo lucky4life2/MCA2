@@ -302,9 +302,23 @@
   const params   = new URLSearchParams(window.location.search);
   const returnTo = params.get('return') || 'account.html';
 
-  // If already signed in, skip the login page entirely
+  // If already signed in, skip the login page entirely —
+  // unless this is an MFA challenge redirect (mfa=1), in which case we need
+  // to show the MFA panel to satisfy the AAL2 requirement.
   const { data: { session } } = await supabase.auth.getSession();
-  if (session) window.location.replace(returnTo);
+  if (session) {
+    if (params.get('mfa') === '1') {
+      // Check if MFA is actually still needed; if it's already satisfied, just redirect.
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (!aal || aal.currentLevel === aal.nextLevel) {
+        // Already at required level — nothing to do.
+        window.location.replace(returnTo);
+      }
+      // Otherwise fall through: the MFA panel will be shown below after init.
+    } else {
+      window.location.replace(returnTo);
+    }
+  }
 
   // Pending email addresses for the code-entry steps below
   let _pendingSignupEmail = null;
@@ -357,7 +371,35 @@
   document.getElementById('btn-discord-signin').addEventListener('click', discordLogin);
   document.getElementById('btn-discord-signup').addEventListener('click', discordLogin);
 
-  // ── Email sign in ─────────────────────────────────────────────
+  // ── MFA challenge on page load (redirected from a protected page) ─────────
+  // When the user arrives with ?mfa=1 they already have a valid aal1 session;
+  // we just need to issue a TOTP challenge against it.
+  if (params.get('mfa') === '1' && session) {
+    try {
+      const { data: factorData } = await supabase.auth.mfa.listFactors();
+      const totpFactor = factorData?.totp?.find(f => f.status === 'verified');
+      if (totpFactor) {
+        _pendingMfaFactorId = totpFactor.id;
+        document.getElementById('mfa-code').value = '';
+        document.getElementById('mfa-error').style.display = 'none';
+        tabs.forEach(t => t.classList.remove('active'));
+        panels.forEach(p => p.classList.remove('active'));
+        document.getElementById('panel-mfa').classList.add('active');
+        document.getElementById('login-tabs').style.display = 'none';
+        document.getElementById('login-card-footer').style.display = 'none';
+        cardTitle.textContent = 'Two-Factor Authentication';
+        document.getElementById('mfa-code').focus();
+      } else {
+        // No verified factor found — just go to the destination.
+        window.location.replace(returnTo);
+      }
+    } catch(e) {
+      // On error, redirect rather than leaving user stuck.
+      window.location.replace(returnTo);
+    }
+  }
+
+
   document.getElementById('btn-email-signin').addEventListener('click', async () => {
     let identifier = document.getElementById('signin-email').value.trim();
     const password  = document.getElementById('signin-password').value;
