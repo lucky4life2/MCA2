@@ -435,16 +435,17 @@
     }
   }, 6000);
 
+  // Use onAuthStateChange only for live sign-in/out events after initial load.
+  // INITIAL_SESSION is intentionally NOT handled here — nav.js registers its
+  // listener first and consumes that event before shop's script runs, so
+  // listening for it here causes a silent miss that leaves _initialized false
+  // and the admin bar permanently hidden.
   supabase.auth.onAuthStateChange(async (event, session) => {
-    if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && !_initialized) {
+    if (event === 'SIGNED_IN' && !_initialized) {
       _initialized = true;
-      await new Promise(r => setTimeout(r, 50)); // let nav.js auth listener fire first
       await init(session?.user || null, session?.access_token || null);
-    } else if (event === 'TOKEN_REFRESHED') {
-      // Re-init with fresh token so isAdmin/products don't break after expiry
-      _initialized = false;
+    } else if (event === 'TOKEN_REFRESHED' && _initialized) {
       await init(session?.user || null, session?.access_token || null);
-      _initialized = true;
     } else if (event === 'SIGNED_OUT') {
       _initialized = false; _isAdmin = false; _isLoggedIn = false; _userId = null;
       elLoading.style.display = 'none'; elShop.style.display = 'block';
@@ -452,14 +453,15 @@
     }
   });
 
-  // Fallback: INITIAL_SESSION may have fired before this listener registered
-  // (nav.js initialises the Supabase client first). Init manually if needed.
+  // Bootstrap via getUser() — a verified server round-trip that is immune to the
+  // INITIAL_SESSION race. getSession() reads from storage and can return null
+  // before hydration completes; getUser() always reflects the real server state.
   if (!_initialized) {
     try {
-      const { data: { session } } = await withTimeout(supabase.auth.getSession(), 6000);
+      const { data: { user } } = await withTimeout(supabase.auth.getUser(), 6000);
       if (!_initialized) {
         _initialized = true;
-        await init(session?.user || null, session?.access_token || null);
+        await init(user || null, null);
       }
     } catch(e) {
       if (!_initialized) {

@@ -328,13 +328,15 @@ async function init() {
     return;
   }
 
-  // Normal load
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) {
+  // Normal load — use getUser() (server-verified) instead of getSession()
+  // (storage read that can return stale/null before hydration and requires a
+  // separate network call anyway to validate). One fewer round-trip = faster load.
+  const { data: { user: initialUser }, error: userErr } = await supabase.auth.getUser();
+  if (!initialUser) {
     window.location.replace('login.html?return=account.html');
     return;
   }
-  _user = session.user;
+  _user = initialUser;
   await loadProfile();
 
   // Block frozen/terminated accounts
