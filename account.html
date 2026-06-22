@@ -975,7 +975,7 @@ async function render2FA() {
         });
 
       } catch(e) {
-        errEl.textContent = e.message || 'Could not start 2FA setup.';
+        errEl.textContent = e.message || e.error_description || e.msg || (typeof e === 'object' ? JSON.stringify(e) : String(e)) || 'Could not start 2FA setup.';
         errEl.style.display = 'block';
         btn.disabled = false; btn.textContent = 'Set Up Authenticator';
       }
