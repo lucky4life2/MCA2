@@ -422,10 +422,12 @@
 
   elLoading.style.display = 'flex'; elShop.style.display = 'none';
 
-  // Hard fallback — if nothing has initialised after 6s, force the shop visible
+  // Hard fallback — if nothing has initialised after 6s, force the shop visible.
+  // This only unsticks the loading spinner; it must NOT set _initialized, or a
+  // slow-but-still-in-flight auth/admin check would be permanently skipped by
+  // the `!_initialized` guards below once it resolves.
   setTimeout(() => {
     if (elLoading.style.display !== 'none') {
-      _initialized = true;
       elLoading.style.display = 'none';
       elShop.style.display = 'block';
       loadProducts();
