@@ -98,7 +98,8 @@ function renderFeaturedBanner(article) {
 
 // ── Card renderer ─────────────────────────────────────────────
 function renderCard(a) {
-  const excerpt = a.summary || truncate(a.body, 160);
+  const rawExcerpt = a.summary || (a.body || '').replace(/^#+\s+.+$/gm,'').replace(/[*_`#>\[\]]/g,'').replace(/\s+/g,' ').trim();
+  const excerpt = truncate(rawExcerpt, 160);
   const cat = (a.category && a.category.toLowerCase() !== 'featured') ? a.category : 'General';
   const href = a.slug ? `article.html?slug=${encodeURIComponent(a.slug)}` : '#';
   return `

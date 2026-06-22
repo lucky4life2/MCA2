@@ -113,39 +113,34 @@ if (!slug) {
       document.title = `${article.title} — Minecraft Club of America`;
       const cat = (article.category && article.category.toLowerCase() !== 'featured') ? article.category : 'General';
 
+      // Strip leading # Title from body if it duplicates the article title
+      const bodyMd = (article.body || '').replace(/^#\s+.+\n?/, '').trim();
+
       bodyEl.innerHTML = `
-        <div style="max-width:720px;margin:0 auto;padding:2.5rem 1.5rem;">
-
-          <!-- Top bar: back link + share button -->
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2rem;gap:1rem;flex-wrap:wrap;">
-            <a href="news.html" style="font-size:13px;color:var(--muted);text-decoration:none;">← Back to News</a>
-            <button id="share-btn" style="
-              display:inline-flex;align-items:center;gap:8px;
-              padding:0.45rem 1.1rem;border-radius:6px;border:1px solid var(--border);
-              background:var(--white);color:var(--black);font-size:13px;font-weight:500;
-              cursor:pointer;transition:background .15s,color .15s;">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-              </svg>
-              Share
-            </button>
+        <div class="article-hero">
+          <div class="article-hero-inner">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;gap:1rem;flex-wrap:wrap;">
+              <a href="news.html" class="article-back">← Back to News</a>
+              <button id="share-btn" style="display:inline-flex;align-items:center;gap:8px;padding:0.45rem 1.1rem;border-radius:6px;border:1px solid var(--border);background:var(--white);color:var(--black);font-size:13px;font-weight:500;cursor:pointer;transition:background .15s,color .15s;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                Share
+              </button>
+            </div>
+            ${article.image_url ? `<div class="article-image" style="margin-bottom:2rem;"><img src="${article.image_url}" alt="${article.title}"></div>` : ''}
+            <div class="article-meta-top">
+              <span class="news-card-category">${cat}</span>
+              <span style="font-size:12px;color:var(--muted);">${formatDate(article.published_at)}</span>
+              ${article.author_name ? `<span style="font-size:12px;color:var(--muted);">By ${article.author_name}</span>` : ''}
+            </div>
+            <h1 class="article-title">${article.title}</h1>
+            ${article.summary ? `<p class="article-summary">${article.summary}</p>` : ''}
           </div>
-
-          ${article.image_url ? `<div style="height:320px;background:url('${article.image_url}') center/cover no-repeat;border-radius:8px;margin-bottom:2rem;"></div>` : ''}
-
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:1.25rem;flex-wrap:wrap;">
-            <span class="news-card-category">${cat}</span>
-            <span style="font-size:12px;color:var(--muted);">${formatDate(article.published_at)}</span>
-            ${article.author_name ? `<span style="font-size:12px;color:var(--muted);">By ${article.author_name}</span>` : ''}
-          </div>
-
-          <h1 style="font-family:'Times New Roman',serif;font-size:clamp(1.6rem,5vw,2.5rem);
-            color:var(--blue);font-weight:700;line-height:1.2;margin-bottom:1.5rem;">${article.title}</h1>
-
-          <div class="news-article-body" style="font-size:15px;line-height:1.8;color:var(--black);">
-            ${renderMarkdown(article.body)}
+        </div>
+        <div class="content article-content">
+          <div class="article-hero-inner">
+            <div class="article-body">
+              ${renderMarkdown(bodyMd)}
+            </div>
           </div>
         </div>`;
 
