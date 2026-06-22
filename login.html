@@ -234,6 +234,22 @@
           <a href="#" class="login-back-link" id="confirm-back">← Back to sign in</a>
         </div>
 
+        <!-- MFA Challenge panel (shown when 2FA is required) -->
+        <div class="login-panel" id="panel-mfa">
+          <div class="login-success">
+            <div class="login-success-icon">🔒</div>
+            <div class="login-success-title">Two-Factor Required</div>
+            <p class="login-success-text">Open your authenticator app and enter the 6-digit code to continue.</p>
+          </div>
+          <div class="login-form-group">
+            <label class="login-form-label" for="mfa-code">Authenticator Code</label>
+            <input type="text" id="mfa-code" class="login-form-input" placeholder="123456" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+          </div>
+          <div class="login-error" id="mfa-error"></div>
+          <button class="btn-login-submit" id="btn-mfa-verify">Verify</button>
+          <a href="#" class="login-back-link" id="mfa-back">← Use a different account</a>
+        </div>
+
         <!-- Forgot password panel -->
         <div class="login-panel" id="panel-forgot">
           <div id="forgot-step-email">
@@ -293,6 +309,7 @@
   // Pending email addresses for the code-entry steps below
   let _pendingSignupEmail = null;
   let _pendingResetEmail  = null;
+  let _pendingMfaFactorId = null;
 
   // ── Tab switching ─────────────────────────────────────────────
   const tabs     = document.querySelectorAll('.login-tab');
@@ -406,6 +423,29 @@
         refresh_token: json.refresh_token,
       });
       if (sessionErr) throw sessionErr;
+
+      // Check if MFA is required
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aal && aal.nextLevel === 'aal2' && aal.nextLevel !== aal.currentLevel) {
+        // MFA challenge needed — find the TOTP factor
+        const { data: factorData } = await supabase.auth.mfa.listFactors();
+        const totpFactor = factorData?.totp?.find(f => f.status === 'verified');
+        if (totpFactor) {
+          _pendingMfaFactorId = totpFactor.id;
+          document.getElementById('mfa-code').value = '';
+          document.getElementById('mfa-error').style.display = 'none';
+          tabs.forEach(t => t.classList.remove('active'));
+          panels.forEach(p => p.classList.remove('active'));
+          document.getElementById('panel-mfa').classList.add('active');
+          document.getElementById('login-tabs').style.display = 'none';
+          document.getElementById('login-card-footer').style.display = 'none';
+          cardTitle.textContent = 'Two-Factor Authentication';
+          btn.textContent = 'Sign In'; btn.disabled = false;
+          document.getElementById('mfa-code').focus();
+          return;
+        }
+      }
+
       window.location.replace(returnTo);
     } catch(e) {
       errEl.textContent   = e.message || 'Sign in failed.';
@@ -512,6 +552,47 @@
   // Enter key on reset password field
   document.getElementById('forgot-new-password').addEventListener('keydown', e => {
     if (e.key === 'Enter') document.getElementById('btn-reset-password').click();
+  });
+
+  // ── MFA challenge ─────────────────────────────────────────────
+  document.getElementById('btn-mfa-verify').addEventListener('click', async () => {
+    const code  = document.getElementById('mfa-code').value.trim();
+    const errEl = document.getElementById('mfa-error');
+    const btn   = document.getElementById('btn-mfa-verify');
+    errEl.style.display = 'none';
+    if (!/^\d{6}$/.test(code)) {
+      errEl.textContent = 'Enter the 6-digit code from your authenticator app.';
+      errEl.style.display = 'block'; return;
+    }
+    btn.textContent = 'Verifying…'; btn.disabled = true;
+    try {
+      const { data: challengeData, error: challengeErr } = await supabase.auth.mfa.challenge({ factorId: _pendingMfaFactorId });
+      if (challengeErr) throw challengeErr;
+      const { error: verifyErr } = await supabase.auth.mfa.verify({
+        factorId: _pendingMfaFactorId,
+        challengeId: challengeData.id,
+        code,
+      });
+      if (verifyErr) throw verifyErr;
+      window.location.replace(returnTo);
+    } catch(e) {
+      errEl.textContent = e.message || 'Invalid code. Try again.';
+      errEl.style.display = 'block';
+      btn.textContent = 'Verify'; btn.disabled = false;
+    }
+  });
+
+  document.getElementById('mfa-code').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('btn-mfa-verify').click();
+  });
+
+  document.getElementById('mfa-back').addEventListener('click', async e => {
+    e.preventDefault();
+    await supabase.auth.signOut();
+    _pendingMfaFactorId = null;
+    document.getElementById('login-tabs').style.display = '';
+    document.getElementById('login-card-footer').style.display = '';
+    switchTab('signin');
   });
 
   // ── Email sign up ─────────────────────────────────────────────

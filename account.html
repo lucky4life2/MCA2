@@ -128,6 +128,19 @@
       .account-hero h1 { font-size: 1.6rem; }
     }
 
+    /* 2FA */
+    .twofa-status-row { display: flex; align-items: center; gap: 12px; margin-bottom: 1rem; }
+    .twofa-status-icon { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 16px; }
+    .twofa-enabled-icon { background: #e8f8e8; }
+    .twofa-disabled-icon { background: var(--bg); border: 1px solid var(--border); }
+    .twofa-status-label { font-size: 14px; font-weight: 600; color: var(--black); }
+    .twofa-status-sub { font-size: 12px; color: var(--muted); }
+    .twofa-qr-wrap { text-align: center; margin: 1.25rem 0 1rem; }
+    .twofa-qr-wrap img { border: 1px solid var(--border); border-radius: 4px; width: 180px; height: 180px; }
+    .twofa-secret-box { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 10px 14px; font-family: monospace; font-size: 13px; letter-spacing: 2px; text-align: center; margin-bottom: 1rem; word-break: break-all; color: var(--blue); }
+    .twofa-setup-steps { font-size: 13px; color: var(--muted); line-height: 1.7; margin-bottom: 1.25rem; }
+    .twofa-setup-steps ol { padding-left: 1.25rem; margin: 0; }
+
     /* Contact admin + delete account modals */
     .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 1rem; }
     .modal-backdrop.hidden { display: none; }
@@ -244,6 +257,17 @@
       </div>
     </div>
 
+    <!-- Two-Factor Authentication -->
+    <div class="account-section" id="section-2fa">
+      <div class="account-section-header">
+        <div class="account-section-title">Two-Factor Authentication</div>
+        <span class="account-section-badge" id="twofa-badge">Loading</span>
+      </div>
+      <div class="account-section-body" id="twofa-body">
+        <!-- injected -->
+      </div>
+    </div>
+
     <!-- Sign Out -->
     <div class="account-section">
       <div class="account-section-header">
@@ -337,6 +361,17 @@ async function init() {
     return;
   }
   _user = initialUser;
+
+  // If MFA is enrolled but not yet satisfied for this session, redirect to login for challenge
+  try {
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aal && aal.nextLevel === 'aal2' && aal.nextLevel !== aal.currentLevel) {
+      await supabase.auth.signOut();
+      window.location.replace('login.html?return=account.html&mfa=1');
+      return;
+    }
+  } catch(e) {}
+
   await loadProfile();
 
   // Block frozen/terminated accounts
@@ -415,6 +450,9 @@ async function renderPage() {
 
   // Minecraft
   renderMinecraft();
+
+  // 2FA section
+  await render2FA();
 
   // Password section — show if user has an email identity, OR if this is a recovery session
   const identitiesForPw = _user.identities || [];
@@ -804,7 +842,148 @@ function generateCode() {
   return code;
 }
 
-// ── Profile save ─────────────────────────────────────────────
+// ── Two-Factor Authentication ─────────────────────────────────
+async function render2FA() {
+  const badge = document.getElementById('twofa-badge');
+  const body  = document.getElementById('twofa-body');
+  if (!badge || !body) return;
+
+  let factors = [];
+  try {
+    const { data } = await supabase.auth.mfa.listFactors();
+    factors = (data?.totp || []).filter(f => f.status === 'verified');
+  } catch(e) {}
+
+  const isEnabled = factors.length > 0;
+
+  if (isEnabled) {
+    badge.textContent = 'Enabled';
+    badge.className = 'account-section-badge badge-verified';
+    body.innerHTML = `
+      <div class="twofa-status-row">
+        <div class="twofa-status-icon twofa-enabled-icon">🔒</div>
+        <div>
+          <div class="twofa-status-label">Authenticator app active</div>
+          <div class="twofa-status-sub">Your account is protected with a time-based one-time password.</div>
+        </div>
+      </div>
+      <div class="form-error" id="twofa-disable-error" style="display:none;margin-bottom:8px;"></div>
+      <button class="btn btn-danger" id="btn-disable-2fa">Remove 2FA</button>`;
+
+    document.getElementById('btn-disable-2fa').addEventListener('click', async () => {
+      if (!confirm('Remove two-factor authentication? Your account will only be protected by your password.')) return;
+      const btn = document.getElementById('btn-disable-2fa');
+      const errEl = document.getElementById('twofa-disable-error');
+      btn.disabled = true; btn.textContent = 'Removing…';
+      try {
+        for (const f of factors) {
+          const { error } = await supabase.auth.mfa.unenroll({ factorId: f.id });
+          if (error) throw error;
+        }
+        await render2FA();
+      } catch(e) {
+        errEl.textContent = e.message || 'Could not remove 2FA.';
+        errEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Remove 2FA';
+      }
+    });
+  } else {
+    badge.textContent = 'Disabled';
+    badge.className = 'account-section-badge badge-unlinked';
+    body.innerHTML = `
+      <div class="twofa-status-row">
+        <div class="twofa-status-icon twofa-disabled-icon">🔓</div>
+        <div>
+          <div class="twofa-status-label">Not enabled</div>
+          <div class="twofa-status-sub">Add an authenticator app for extra account security.</div>
+        </div>
+      </div>
+      <div class="form-error" id="twofa-setup-error" style="display:none;margin-bottom:8px;"></div>
+      <div id="twofa-setup-area"></div>
+      <button class="btn btn-primary" id="btn-enable-2fa">Set Up Authenticator</button>`;
+
+    document.getElementById('btn-enable-2fa').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-enable-2fa');
+      const errEl = document.getElementById('twofa-setup-error');
+      const setupArea = document.getElementById('twofa-setup-area');
+      btn.disabled = true; btn.textContent = 'Loading…';
+      errEl.style.display = 'none';
+
+      try {
+        const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Authenticator App' });
+        if (error) throw error;
+
+        const { id: factorId, totp } = data;
+        btn.style.display = 'none';
+
+        setupArea.innerHTML = `
+          <div class="twofa-setup-steps">
+            <ol>
+              <li>Open your authenticator app (Google Authenticator, Authy, etc.).</li>
+              <li>Scan the QR code below, or enter the key manually.</li>
+              <li>Enter the 6-digit code your app shows to confirm setup.</li>
+            </ol>
+          </div>
+          <div class="twofa-qr-wrap">
+            <img src="${totp.qr_code}" alt="2FA QR Code">
+          </div>
+          <div style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:8px;">Or enter manually:</div>
+          <div class="twofa-secret-box">${totp.secret}</div>
+          <div class="form-group">
+            <label class="form-label" for="twofa-verify-code">Verification Code</label>
+            <input type="text" id="twofa-verify-code" class="form-input" placeholder="123456" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+            <div class="form-hint">Enter the 6-digit code from your authenticator app.</div>
+          </div>
+          <div class="form-error" id="twofa-verify-error" style="display:none;margin-bottom:8px;"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-primary" id="btn-verify-2fa">Verify & Enable</button>
+            <button class="btn btn-outline" id="btn-cancel-2fa">Cancel</button>
+          </div>`;
+
+        document.getElementById('btn-verify-2fa').addEventListener('click', async () => {
+          const code = document.getElementById('twofa-verify-code').value.trim();
+          const vErrEl = document.getElementById('twofa-verify-error');
+          const vBtn = document.getElementById('btn-verify-2fa');
+          vErrEl.style.display = 'none';
+          if (!/^\d{6}$/.test(code)) {
+            vErrEl.textContent = 'Enter the 6-digit code from your app.';
+            vErrEl.style.display = 'block'; return;
+          }
+          vBtn.disabled = true; vBtn.textContent = 'Verifying…';
+          const { data: challengeData, error: challengeErr } = await supabase.auth.mfa.challenge({ factorId });
+          if (challengeErr) {
+            vErrEl.textContent = challengeErr.message || 'Challenge failed.';
+            vErrEl.style.display = 'block';
+            vBtn.disabled = false; vBtn.textContent = 'Verify & Enable'; return;
+          }
+          const { error: verifyErr } = await supabase.auth.mfa.verify({ factorId, challengeId: challengeData.id, code });
+          if (verifyErr) {
+            vErrEl.textContent = verifyErr.message || 'Invalid code. Try again.';
+            vErrEl.style.display = 'block';
+            vBtn.disabled = false; vBtn.textContent = 'Verify & Enable'; return;
+          }
+          await render2FA();
+        });
+
+        document.getElementById('btn-cancel-2fa').addEventListener('click', async () => {
+          await supabase.auth.mfa.unenroll({ factorId }).catch(() => {});
+          await render2FA();
+        });
+
+        document.getElementById('twofa-verify-code').addEventListener('keydown', e => {
+          if (e.key === 'Enter') document.getElementById('btn-verify-2fa').click();
+        });
+
+      } catch(e) {
+        errEl.textContent = e.message || 'Could not start 2FA setup.';
+        errEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Set Up Authenticator';
+      }
+    });
+  }
+}
+
+
 document.getElementById('btn-save-profile').addEventListener('click', async () => {
   const display_name = document.getElementById('field-display-name').value.trim();
   const username     = document.getElementById('field-username').value.trim();
