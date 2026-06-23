@@ -404,19 +404,11 @@
     document.body.classList.toggle('admin-mode', _isAdmin);
   }
 
-  async function init(user, accessToken) {
+  async function init(user, accessToken, isAdmin) {
     _isLoggedIn = !!user; _userId = user?.id || null;
-    // Show shop immediately — don't wait for isAdmin
+    _isAdmin = !!isAdmin;
     elLoading.style.display = 'none'; elShop.style.display = 'block';
     loadProducts(); updateFloatCart();
-    // Resolve admin status in background, then re-apply state
-    if (_isLoggedIn) {
-      try {
-        const { data } = await withTimeout(supabase.from('profiles').select('role').eq('id', _userId).single(), 6000);
-        const role = data?.role;
-        _isAdmin = role === 'admin' || role === 'owner';
-      } catch(e) { _isAdmin = false; }
-    }
     applyState();
   }
 
@@ -439,18 +431,18 @@
   // round-trip). Awaiting _mcaAuthReady means we get the correct session on
   // the very first render with zero duplicate network calls.
   try {
-    const { user, session } = await withTimeout(
+    const { user, session, isAdmin } = await withTimeout(
       Promise.resolve(window._mcaAuthReady),
       6000
     );
     if (!_initialized) {
       _initialized = true;
-      await init(user || null, session?.access_token || null);
+      await init(user || null, session?.access_token || null, isAdmin);
     }
   } catch(e) {
     if (!_initialized) {
       _initialized = true;
-      await init(null, null);
+      await init(null, null, false);
     }
   }
 
@@ -458,7 +450,14 @@
   // (e.g. user signs in from another tab, token refresh, explicit sign-out).
   supabase.auth.onAuthStateChange(async (event, session) => {
     if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && _initialized) {
-      await init(session?.user || null, session?.access_token || null);
+      let isAdmin = false;
+      if (session?.user) {
+        try {
+          const { data } = await withTimeout(supabase.from('profiles').select('role').eq('id', session.user.id).single(), 6000);
+          isAdmin = data?.role === 'admin' || data?.role === 'owner';
+        } catch(e) { isAdmin = false; }
+      }
+      await init(session?.user || null, session?.access_token || null, isAdmin);
     } else if (event === 'SIGNED_OUT') {
       _initialized = false; _isAdmin = false; _isLoggedIn = false; _userId = null;
       elLoading.style.display = 'none'; elShop.style.display = 'block';

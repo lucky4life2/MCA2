@@ -627,6 +627,18 @@ async function initNavAuth(_authReadyResolve) {
     let isAdmin = false;
     let canPublishNews = false;
 
+    // Resolve role BEFORE the first render so other page scripts awaiting
+    // _mcaAuthReady get the correct isAdmin status immediately, instead of
+    // each page having to make its own duplicate (slow) profiles query.
+    try {
+      const mod0 = await import('./supabase.js');
+      const { data: roleData } = await mod0.supabase.from('profiles').select('display_name, username, role').eq('id', user.id).single();
+      if (roleData) {
+        label = roleData.display_name || roleData.username || label;
+        isAdmin = roleData.role === 'admin' || roleData.role === 'owner';
+      }
+    } catch(e) {}
+
     // Render immediately with what we have so the nav never disappears during async fetches
     function render() {
       accountEl.innerHTML = `
@@ -664,11 +676,6 @@ async function initNavAuth(_authReadyResolve) {
 
     try {
       const mod = await import('./supabase.js');
-      const { data } = await mod.supabase.from('profiles').select('display_name, username, role').eq('id', user.id).single();
-      if (data) {
-        label = data.display_name || data.username || label;
-        isAdmin = data.role === 'admin' || data.role === 'owner';
-      }
       try {
         const permResult = await Promise.race([
           mod.supabase.rpc('user_has_permission', { perm: 'can_publish_news' }),
@@ -680,6 +687,7 @@ async function initNavAuth(_authReadyResolve) {
     } catch(e) {}
 
     render(); // re-render with full data (name, admin link, etc.)
+    return { isAdmin, canPublishNews };
   }
 
   let mod;
@@ -696,11 +704,11 @@ async function initNavAuth(_authReadyResolve) {
       if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED' || event === 'EMAIL_CHANGE') {
         if (session?.user) {
           _lastSignedIn = true; _authStateHandled = true;
-          if (_authReadyResolve) { _authReadyResolve({ user: session.user, session }); _authReadyResolve = null; }
-          await setSignedIn(session.user);
+          const { isAdmin, canPublishNews } = await setSignedIn(session.user);
+          if (_authReadyResolve) { _authReadyResolve({ user: session.user, session, isAdmin, canPublishNews }); _authReadyResolve = null; }
         } else {
           _lastSignedIn = false;
-          if (_authReadyResolve) { _authReadyResolve({ user: null, session: null }); _authReadyResolve = null; }
+          if (_authReadyResolve) { _authReadyResolve({ user: null, session: null, isAdmin: false, canPublishNews: false }); _authReadyResolve = null; }
           setSignedOut();
         }
       } else if (event === 'SIGNED_OUT') {
@@ -713,7 +721,7 @@ async function initNavAuth(_authReadyResolve) {
           if (check) return; // session restored — ignore the transient event
         }
         _lastSignedIn = false;
-        if (_authReadyResolve) { _authReadyResolve({ user: null, session: null }); _authReadyResolve = null; }
+        if (_authReadyResolve) { _authReadyResolve({ user: null, session: null, isAdmin: false, canPublishNews: false }); _authReadyResolve = null; }
         setSignedOut();
       }
     });
@@ -727,18 +735,23 @@ async function initNavAuth(_authReadyResolve) {
           new Promise((_, reject) => setTimeout(() => reject(new Error('auth timeout')), 3000))
         ]);
         if (!_authStateHandled) {
-          if (_authReadyResolve) { _authReadyResolve({ user: user || null, session: null }); _authReadyResolve = null; }
-          if (user) { await setSignedIn(user); } else { setSignedOut(); }
+          if (user) {
+            const { isAdmin, canPublishNews } = await setSignedIn(user);
+            if (_authReadyResolve) { _authReadyResolve({ user, session: null, isAdmin, canPublishNews }); _authReadyResolve = null; }
+          } else {
+            if (_authReadyResolve) { _authReadyResolve({ user: null, session: null, isAdmin: false, canPublishNews: false }); _authReadyResolve = null; }
+            setSignedOut();
+          }
         }
       } catch(e) {
         if (!_authStateHandled) {
-          if (_authReadyResolve) { _authReadyResolve({ user: null, session: null }); _authReadyResolve = null; }
+          if (_authReadyResolve) { _authReadyResolve({ user: null, session: null, isAdmin: false, canPublishNews: false }); _authReadyResolve = null; }
           setSignedOut();
         }
       }
     }
   } catch(e) {
-    if (_authReadyResolve) { _authReadyResolve({ user: null, session: null }); _authReadyResolve = null; }
+    if (_authReadyResolve) { _authReadyResolve({ user: null, session: null, isAdmin: false, canPublishNews: false }); _authReadyResolve = null; }
     setSignedOut();
   }
 }

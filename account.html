@@ -584,6 +584,7 @@ async function renderConnectedAccounts(skipFetch = false) {
       };
       _profile = { ..._profile, email: null };
       await renderConnectedAccounts(true);
+      window.location.reload();
     });
   }
   if (!hasEmail) {
