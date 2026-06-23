@@ -120,7 +120,7 @@ const FOOTER_HTML = () => {
   <div class="footer-disclaimer">
     Not affiliated with, endorsed by, or associated with Mojang Studios or Microsoft.
     Minecraft is a trademark of Mojang Studios.
-    <span class="footer-version">v2.5.0</span>
+    <span class="footer-version">v2.5.67</span>
   </div>
 </footer>
 `; }; // end FOOTER_HTML
@@ -444,8 +444,13 @@ async function injectNav() {
   // Inject nav immediately without waiting for config.
   document.body.insertAdjacentHTML('afterbegin', NAV_HTML());
 
+  // Expose a promise other page scripts can await to get the resolved auth state
+  // without making their own duplicate network round-trip.
+  let _mcaAuthResolve;
+  window._mcaAuthReady = new Promise(r => { _mcaAuthResolve = r; });
+
   // Init nav auth immediately (must run after nav is in DOM).
-  initNavAuth();
+  initNavAuth(_mcaAuthResolve);
 
   // Update Discord links once config resolves in the background.
   Promise.race([_configReady, new Promise(r => setTimeout(r, 1500))]).then(() => {
@@ -583,7 +588,7 @@ function copyEmail(el) {
 }
 
 // ── Nav auth + cart ───────────────────────────────────────────
-async function initNavAuth() {
+async function initNavAuth(_authReadyResolve) {
   const accountEl  = document.getElementById('nav-account');
 
   if (!accountEl) return;
@@ -689,8 +694,15 @@ async function initNavAuth() {
     let _authStateHandled = false;
     mod.supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED' || event === 'EMAIL_CHANGE') {
-        if (session?.user) { _lastSignedIn = true; _authStateHandled = true; await setSignedIn(session.user); }
-        else { _lastSignedIn = false; setSignedOut(); }
+        if (session?.user) {
+          _lastSignedIn = true; _authStateHandled = true;
+          if (_authReadyResolve) { _authReadyResolve({ user: session.user, session }); _authReadyResolve = null; }
+          await setSignedIn(session.user);
+        } else {
+          _lastSignedIn = false;
+          if (_authReadyResolve) { _authReadyResolve({ user: null, session: null }); _authReadyResolve = null; }
+          setSignedOut();
+        }
       } else if (event === 'SIGNED_OUT') {
         // TOKEN_REFRESHED can emit a transient SIGNED_OUT before SIGNED_IN —
         // wait one tick and only sign out if still no active session.
@@ -701,6 +713,7 @@ async function initNavAuth() {
           if (check) return; // session restored — ignore the transient event
         }
         _lastSignedIn = false;
+        if (_authReadyResolve) { _authReadyResolve({ user: null, session: null }); _authReadyResolve = null; }
         setSignedOut();
       }
     });
@@ -714,13 +727,18 @@ async function initNavAuth() {
           new Promise((_, reject) => setTimeout(() => reject(new Error('auth timeout')), 3000))
         ]);
         if (!_authStateHandled) {
+          if (_authReadyResolve) { _authReadyResolve({ user: user || null, session: null }); _authReadyResolve = null; }
           if (user) { await setSignedIn(user); } else { setSignedOut(); }
         }
       } catch(e) {
-        if (!_authStateHandled) setSignedOut();
+        if (!_authStateHandled) {
+          if (_authReadyResolve) { _authReadyResolve({ user: null, session: null }); _authReadyResolve = null; }
+          setSignedOut();
+        }
       }
     }
   } catch(e) {
+    if (_authReadyResolve) { _authReadyResolve({ user: null, session: null }); _authReadyResolve = null; }
     setSignedOut();
   }
 }
