@@ -64,7 +64,7 @@ async function shareArticle(article) {
   const url = `${location.origin}/article.html?slug=${encodeURIComponent(article.slug)}`;
   if (navigator.share) {
     try {
-      await navigator.share({ title: article.title, text: article.summary || article.title, url });
+      await navigator.share({ title: article.title || article.title, url });
       return;
     } catch (e) { /* fall through to clipboard */ }
   }
