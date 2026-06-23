@@ -1054,9 +1054,7 @@ function renderMembers(members) {
       : `<span class="badge badge-unlinked">No Discord</span>`;
     const statusBadge = accountStatus === 'frozen'
       ? `<span class="badge" style="background:#fff8e1;color:#b07d00;">⏸ Frozen</span>`
-      : accountStatus === 'terminated'
-        ? `<span class="badge" style="background:#fdecea;color:#c0392b;">✕ Terminated</span>`
-        : '';
+      : '';
 
     const mcBadge = m.minecraft_verified
       ? `<span class="badge badge-verified">Verified</span>`
@@ -1076,8 +1074,8 @@ function renderMembers(members) {
       ? `<button class="btn btn-outline btn-sm" onclick="freezeAccount('${m.id}')">Freeze</button>` : '';
     const unfreezeBtn = accountStatus === 'frozen' && _myPermissions.can_manage_users
       ? `<button class="btn btn-success btn-sm" onclick="unfreezeAccount('${m.id}')">Unfreeze</button>` : '';
-    const terminateBtn = accountStatus !== 'terminated' && _myPermissions.can_manage_users
-      ? `<button class="btn btn-danger btn-sm" onclick="terminateAccount('${m.id}')">Terminate</button>` : '';
+    const deleteBtn = _myPermissions.can_manage_users && !['owner','super_admin'].includes(m.role)
+      ? `<button class="btn btn-danger btn-sm" onclick="deleteAccount('${m.id}')">Delete</button>` : '';
 
     return `<tr>
       <td>
@@ -1097,7 +1095,7 @@ function renderMembers(members) {
           ${m.minecraft_verified && _myPermissions.can_manage_minecraft
             ? `<button class="btn btn-danger btn-sm" onclick="revokeMC('${m.id}')">Revoke MC</button>` : ''}
           ${allowEmailBtn}${revokeEmailBtn}${repealEmailBtn}${revokeDiscordBtn}
-          ${freezeBtn}${unfreezeBtn}${terminateBtn}
+          ${freezeBtn}${unfreezeBtn}${deleteBtn}
         </div>
       </td>
     </tr>`;
@@ -1594,12 +1592,14 @@ window.unfreezeAccount = async (id) => {
   if (error) { alert('Error: ' + error.message); return; }
   await loadAll();
 };
-window.terminateAccount = async (id) => {
+window.deleteAccount = async (id) => {
   const member = _allMembers.find(m => m.id === id);
   const name = member?.display_name || member?.username || 'this account';
-  const input = prompt(`Type TERMINATE to permanently terminate ${name}'s account. This cannot be undone.`);
-  if (input !== 'TERMINATE') return;
-  const { error } = await supabase.rpc('terminate_account', { user_id: id });
+  if (!confirm(`⚠️ DELETE ACCOUNT\n\nYou are about to permanently delete ${name}'s account. All their data will be erased.\n\nAre you sure you want to proceed?`)) return;
+  if (!confirm(`⚠️ SECOND CONFIRMATION\n\nDeleting ${name} is irreversible. There is no undo, no recovery, no way back.\n\nDo you still want to delete this account?`)) return;
+  const input = prompt(`⚠️ FINAL CONFIRMATION\n\nType the username or display name of the account to confirm deletion:\n\nExpected: "${name}"`);
+  if (input?.trim() !== name) { alert('Name did not match. Deletion cancelled.'); return; }
+  const { error } = await supabase.rpc('delete_account', { user_id: id });
   if (error) { alert('Error: ' + error.message); return; }
   await loadAll();
 };
