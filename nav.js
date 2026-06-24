@@ -730,6 +730,9 @@ async function initNavAuth(_authReadyResolve) {
 
     // Fallback: if onAuthStateChange didn't fire INITIAL_SESSION (e.g. no cached
     // session at all), resolve the state via a direct getUser() call.
+    // Wait a tick first — INITIAL_SESSION fires asynchronously, so we must yield
+    // before checking _authStateHandled or we'll always race it.
+    await new Promise(r => setTimeout(r, 0));
     if (!_authStateHandled) {
       try {
         const { data: { user } } = await Promise.race([
