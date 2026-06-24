@@ -629,9 +629,16 @@
       <input type="hidden" id="pm-id">
       <div class="form-group"><label class="form-label">Product Name</label><input type="text" id="pm-name" class="form-input" placeholder="e.g. MCA Logo T-Shirt"></div>
       <div class="form-group"><label class="form-label">Description</label><textarea id="pm-desc" class="form-input" rows="3" style="resize:vertical;"></textarea></div>
+      <div class="form-group">
+        <label class="form-label">Product Type</label>
+        <select id="pm-product-type" class="form-input" onchange="toggleInventoryField()">
+          <option value="physical">Physical — tracks inventory</option>
+          <option value="subscription">Subscription / Digital — no inventory</option>
+        </select>
+      </div>
       <div class="col2-grid">
         <div class="form-group"><label class="form-label">Price (USD)</label><input type="number" id="pm-price" class="form-input" step="0.01" min="0"></div>
-        <div class="form-group"><label class="form-label">Inventory</label><input type="number" id="pm-inventory" class="form-input" min="0"></div>
+        <div class="form-group" id="pm-inventory-group"><label class="form-label">Inventory</label><input type="number" id="pm-inventory" class="form-input" min="0"></div>
       </div>
       <div class="col2-grid">
         <div class="form-group"><label class="form-label">Category</label><input type="text" id="pm-category" class="form-input"></div>
@@ -1660,7 +1667,7 @@ async function loadAdminProducts() {
       <div style="display:flex;align-items:center;gap:12px;min-width:0;">
         ${p.image_url ? `<img src="${p.image_url}" alt="${p.name}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;flex-shrink:0;">` : `<div style="width:40px;height:40px;background:var(--bg);border:1px solid var(--border);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;">📦</div>`}
         <div><div style="font-weight:600;font-size:14px;color:var(--black);">${p.name}</div>
-        <div style="font-size:12px;color:var(--muted);">$${Number(p.price).toFixed(2)} · ${p.inventory} in stock · <span style="color:${p.active?'#2d7d2f':'#c0392b'}">${p.active?'Active':'Inactive'}</span></div></div>
+        <div style="font-size:12px;color:var(--muted);">$${Number(p.price).toFixed(2)} · ${p.product_type === 'subscription' ? '<span style="color:#7c5cbf">Subscription</span>' : p.inventory + ' in stock'} · <span style="color:${p.active?'#2d7d2f':'#c0392b'}">${p.active?'Active':'Inactive'}</span></div></div>
       </div>
       <div style="display:flex;gap:8px;flex-shrink:0;">
         <button class="btn btn-outline btn-sm" onclick="adminEditProduct('${p.id}')">Edit</button>
@@ -1668,15 +1675,21 @@ async function loadAdminProducts() {
       </div>
     </div>`).join('');
 }
+function toggleInventoryField() {
+  const type = document.getElementById('pm-product-type').value;
+  document.getElementById('pm-inventory-group').style.display = type === 'subscription' ? 'none' : '';
+}
 function openProductModal(product = null) {
   ['id','name','desc','price','inventory','category','image','image2','weight','dimensions','material','sizes','colors','sku','notes'].forEach(k => {
     const el = document.getElementById('pm-'+k);
     if (el) el.value = product?.[k === 'desc' ? 'description' : k === 'image' ? 'image_url' : k === 'image2' ? 'image_url2' : k === 'notes' ? 'admin_notes' : k] || '';
   });
+  document.getElementById('pm-product-type').value = product?.product_type || 'physical';
   document.getElementById('pm-active').value = product ? String(product.active) : 'true';
   document.getElementById('pm-cart-enabled').checked = product ? (product.cart_enabled !== false) : true;
   document.getElementById('pm-error').style.display = 'none';
   document.getElementById('pm-title').textContent = product ? 'Edit Product' : 'Add Product';
+  toggleInventoryField();
   document.getElementById('product-modal').style.display = 'flex';
 }
 function closeProductModal() { document.getElementById('product-modal').style.display = 'none'; }
@@ -1687,10 +1700,14 @@ document.getElementById('pm-save').addEventListener('click', async () => {
   const id = document.getElementById('pm-id').value;
   const name = document.getElementById('pm-name').value.trim();
   const price = parseFloat(document.getElementById('pm-price').value);
-  const inventory = parseInt(document.getElementById('pm-inventory').value, 10);
+  const productType = document.getElementById('pm-product-type').value;
+  const isSubscription = productType === 'subscription';
+  const inventoryRaw = document.getElementById('pm-inventory').value;
+  const inventory = isSubscription ? null : parseInt(inventoryRaw, 10);
   const errEl = document.getElementById('pm-error');
-  if (!name || isNaN(price) || isNaN(inventory)) { errEl.textContent = 'Name, price, and inventory are required.'; errEl.style.display = 'block'; return; }
-  const payload = { name, description: document.getElementById('pm-desc').value.trim()||null, price, inventory, category: document.getElementById('pm-category').value.trim()||null, active: document.getElementById('pm-active').value==='true', image_url: document.getElementById('pm-image').value.trim()||null, image_url2: document.getElementById('pm-image2').value.trim()||null, weight: document.getElementById('pm-weight').value.trim()||null, dimensions: document.getElementById('pm-dimensions').value.trim()||null, material: document.getElementById('pm-material').value.trim()||null, sizes: document.getElementById('pm-sizes').value.trim()||null, colors: document.getElementById('pm-colors').value.trim()||null, sku: document.getElementById('pm-sku').value.trim()||null, admin_notes: document.getElementById('pm-notes').value.trim()||null, cart_enabled: document.getElementById('pm-cart-enabled').checked };
+  if (!name || isNaN(price)) { errEl.textContent = 'Name and price are required.'; errEl.style.display = 'block'; return; }
+  if (!isSubscription && isNaN(inventory)) { errEl.textContent = 'Inventory is required for physical products.'; errEl.style.display = 'block'; return; }
+  const payload = { name, description: document.getElementById('pm-desc').value.trim()||null, price, inventory, product_type: productType, category: document.getElementById('pm-category').value.trim()||null, active: document.getElementById('pm-active').value==='true', image_url: document.getElementById('pm-image').value.trim()||null, image_url2: document.getElementById('pm-image2').value.trim()||null, weight: document.getElementById('pm-weight').value.trim()||null, dimensions: document.getElementById('pm-dimensions').value.trim()||null, material: document.getElementById('pm-material').value.trim()||null, sizes: document.getElementById('pm-sizes').value.trim()||null, colors: document.getElementById('pm-colors').value.trim()||null, sku: document.getElementById('pm-sku').value.trim()||null, admin_notes: document.getElementById('pm-notes').value.trim()||null, cart_enabled: document.getElementById('pm-cart-enabled').checked };
   const { error } = id ? await supabase.from('products').update(payload).eq('id',id) : await supabase.from('products').insert(payload);
   if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
   closeProductModal(); loadAdminProducts();

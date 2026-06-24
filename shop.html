@@ -359,7 +359,10 @@
     if (showCart) {
       if (_isLoggedIn) {
         const prod = JSON.stringify({id:p.id,name:p.name,price:p.price,image_url:p.image_url||null}).replace(/"/g,'&quot;');
-        cartBtn = `<button class="btn-detail-cart" ${p.inventory===0?'disabled':''} onclick='shopAddToCart(${prod});closeDetail();'>${p.inventory===0?'Out of Stock':'Add to Cart'}</button>`;
+        const isSubDetail = p.product_type === 'subscription';
+        const isOOSDetail = !isSubDetail && p.inventory === 0;
+        const detailLabel = isSubDetail ? 'Subscribe' : (isOOSDetail ? 'Out of Stock' : 'Add to Cart');
+        cartBtn = `<button class="btn-detail-cart" ${isOOSDetail?'disabled':''} onclick='shopAddToCart(${prod});closeDetail();'>${detailLabel}</button>`;
       } else {
         cartBtn = `<a class="btn-detail-cart sign-in" href="login.html?return=shop.html">Sign In to Add to Cart</a>`;
       }
@@ -375,8 +378,8 @@
           </div>
           <button class="detail-modal-close" onclick="closeDetail()">✕</button>
         </div>
-        <div class="detail-modal-price">$${Number(p.price).toFixed(2)}</div>
-        <div class="detail-modal-stock ${p.inventory===0?'out':p.inventory<5?'low':''}">${p.inventory===0?'Out of stock':`${p.inventory} in stock`}</div>
+        <div class="detail-modal-price">${p.product_type === 'subscription' ? '$'+`${Number(p.price).toFixed(2)}/mo` : '$'+`${Number(p.price).toFixed(2)}`}</div>
+        ${p.product_type === 'subscription' ? '<div class="detail-modal-stock" style="color:var(--green);font-weight:600;">Recurring subscription</div>' : `<div class="detail-modal-stock ${p.inventory===0?'out':p.inventory<5?'low':''}">` + (p.inventory===0 ? 'Out of stock' : p.inventory+' in stock') + '</div>'}
         ${p.description ? `<div class="detail-modal-desc">${p.description}</div>` : ''}
         ${specs.length ? `
           <div class="detail-modal-specs">
@@ -479,7 +482,9 @@
       if (cartAllowed) {
         if (_isLoggedIn) {
           const prod = JSON.stringify({id:p.id,name:p.name,price:p.price,image_url:p.image_url||null}).replace(/"/g,'&quot;');
-          cartBtn = `<button class="btn-add-to-cart" ${p.inventory===0?'disabled':''} onclick='event.stopPropagation();shopAddToCart(${prod})'>${p.inventory===0?'Out of Stock':'Add to Cart'}</button>`;
+          const isOutOfStock = p.product_type !== 'subscription' && p.inventory === 0;
+          const btnLabel = p.product_type === 'subscription' ? 'Subscribe' : (isOutOfStock ? 'Out of Stock' : 'Add to Cart');
+          cartBtn = `<button class="btn-add-to-cart" ${isOutOfStock?'disabled':''} onclick='event.stopPropagation();shopAddToCart(${prod})'>${btnLabel}</button>`;
         } else {
           cartBtn = `<a class="btn-add-to-cart sign-in-prompt" href="login.html?return=shop.html" onclick="event.stopPropagation()">Sign In to Add to Cart</a>`;
         }
@@ -492,7 +497,9 @@
           ${p.description ? `<div class="product-card-desc">${p.description}</div>` : ''}
           <div class="product-card-footer">
             <div class="product-card-price">$${Number(p.price).toFixed(2)}</div>
-            <div class="product-card-stock ${p.inventory===0?'out':p.inventory<5?'low':''}">${p.inventory===0?'Out of stock':`${p.inventory} in stock`}</div>
+            ${p.product_type === 'subscription'
+              ? '<div class="product-card-stock" style="color:var(--green);font-weight:600;">Subscription</div>'
+              : `<div class="product-card-stock ${p.inventory===0?'out':p.inventory<5?'low':''}">${p.inventory===0?'Out of stock':`${p.inventory} in stock`}</div>`}
           </div>
           ${cartBtn}
 
