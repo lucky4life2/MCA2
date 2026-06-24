@@ -436,6 +436,13 @@ function showLockScreen(cfg) {
 }
 
 
+// Expose _mcaAuthReady at the top level immediately so page scripts can
+// await it before injectNav() has even been called. Without this, shop.html's
+// `Promise.resolve(window._mcaAuthReady)` resolves to `undefined` and the
+// page falls through to the 6 s hard timeout on every load.
+let _mcaAuthResolve;
+window._mcaAuthReady = new Promise(r => { _mcaAuthResolve = r; });
+
 async function injectNav() {
   if (document.readyState === 'loading') {
     await new Promise(r => document.addEventListener('DOMContentLoaded', r, { once: true }));
@@ -443,11 +450,6 @@ async function injectNav() {
 
   // Inject nav immediately without waiting for config.
   document.body.insertAdjacentHTML('afterbegin', NAV_HTML());
-
-  // Expose a promise other page scripts can await to get the resolved auth state
-  // without making their own duplicate network round-trip.
-  let _mcaAuthResolve;
-  window._mcaAuthReady = new Promise(r => { _mcaAuthResolve = r; });
 
   // Init nav auth immediately (must run after nav is in DOM).
   initNavAuth(_mcaAuthResolve);

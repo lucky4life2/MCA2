@@ -412,52 +412,40 @@
     applyState();
   }
 
-  elLoading.style.display = 'flex'; elShop.style.display = 'none';
+  // Show the shop immediately in a signed-out state — no spinner wait.
+  // Auth will upgrade the UI once _mcaAuthReady resolves (usually <500 ms).
+  elLoading.style.display = 'none'; elShop.style.display = 'block';
+  loadProducts(); updateFloatCart();
 
-  // Hard fallback — if nav.js hasn't resolved auth after 7s, force the shop
-  // visible in a signed-out state so the page never stays stuck.
-  setTimeout(() => {
-    if (elLoading.style.display !== 'none') {
-      _initialized = true;
-      elLoading.style.display = 'none';
-      elShop.style.display = 'block';
-      loadProducts();
-      updateFloatCart();
-    }
-  }, 7000);
-
-  // Bootstrap: wait for nav.js to finish resolving auth (it already owns the
-  // onAuthStateChange / INITIAL_SESSION listener and performs the getUser()
-  // round-trip). Awaiting _mcaAuthReady means we get the correct session on
-  // the very first render with zero duplicate network calls.
+  // Bootstrap: wait for nav.js to finish resolving auth. nav.js now creates
+  // window._mcaAuthReady at module evaluation time (before injectNav) so it
+  // is always defined by the time we reach this line — no more
+  // Promise.resolve(undefined) falling through to the 6 s hard timeout.
   try {
-    const { user, session, isAdmin } = await withTimeout(
-      Promise.resolve(window._mcaAuthReady),
-      6000
-    );
+    const authResult = await withTimeout(window._mcaAuthReady, 6000);
+    const { user, session, isAdmin } = authResult || {};
     if (!_initialized) {
       _initialized = true;
-      await init(user || null, session?.access_token || null, isAdmin);
+      if (user) await init(user, session?.access_token || null, !!isAdmin);
+      // If no user, already rendered signed-out above — just mark done.
     }
   } catch(e) {
-    if (!_initialized) {
-      _initialized = true;
-      await init(null, null, false);
-    }
+    if (!_initialized) _initialized = true;
   }
 
-  // Listen for live sign-in/out events that happen AFTER the initial load
-  // (e.g. user signs in from another tab, token refresh, explicit sign-out).
+  // Listen for live sign-in/out/refresh events. Also handles INITIAL_SESSION
+  // to guarantee the admin bar is applied even if _mcaAuthReady beat us here.
   supabase.auth.onAuthStateChange(async (event, session) => {
-    if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && _initialized) {
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+      if (!session?.user) return;
       let isAdmin = false;
-      if (session?.user) {
-        try {
-          const { data } = await withTimeout(supabase.from('profiles').select('role').eq('id', session.user.id).single(), 6000);
-          isAdmin = data?.role === 'admin' || data?.role === 'owner';
-        } catch(e) { isAdmin = false; }
-      }
-      await init(session?.user || null, session?.access_token || null, isAdmin);
+      try {
+        const { data } = await withTimeout(supabase.from('profiles').select('role').eq('id', session.user.id).single(), 6000);
+        isAdmin = data?.role === 'admin' || data?.role === 'owner';
+      } catch(e) { isAdmin = false; }
+      // Re-init to apply correct admin bar / product visibility state.
+      _initialized = true;
+      await init(session.user, session.access_token || null, isAdmin);
     } else if (event === 'SIGNED_OUT') {
       _initialized = false; _isAdmin = false; _isLoggedIn = false; _userId = null;
       elLoading.style.display = 'none'; elShop.style.display = 'block';
