@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Countdown to Noon June 25, 2026</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin-top: 50px;
+    }
+    #countdown {
+      font-size: 2em;
+      font-weight: bold;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Countdown to announcement</h1>
+<div id="countdown">Loading...</div>
+
+<script>
+(function() {
+    // Target date: June 25, 2026 at 12:00 PM local time
+    const targetDate = new Date(2026, 5, 25, 12, 0, 0); // Month is 0-indexed (5 = June)
+
+    function updateCountdown() {
+        const now = new Date();
+        const diff = targetDate - now;
+
+        // If the countdown is over
+        if (diff <= 0) {
+            document.getElementById("countdown").textContent = "Countdown Complete!";
+            clearInterval(timer);
+            return;
+        }
+
+        // Calculate time components
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+        // Display result
+        document.getElementById("countdown").textContent =
+            `${days}d ${hours}h ${minutes}m ${seconds}s`;
+    }
+
+    // Update every second
+    const timer = setInterval(updateCountdown, 1000);
+    updateCountdown(); // Initial call
+})();
+</script>
+
+</body>
+</html>
