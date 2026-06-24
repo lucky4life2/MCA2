@@ -708,6 +708,12 @@ async function initNavAuth(_authReadyResolve) {
           _lastSignedIn = true; _authStateHandled = true;
           const { isAdmin, canPublishNews } = await setSignedIn(session.user);
           if (_authReadyResolve) { _authReadyResolve({ user: session.user, session, isAdmin, canPublishNews }); _authReadyResolve = null; }
+        } else if (event === 'INITIAL_SESSION') {
+          // INITIAL_SESSION with null session means the token may be expired and
+          // TOKEN_REFRESHED is on its way. Mark handled but don't resolve yet —
+          // the fallback getUser() below will settle things if TOKEN_REFRESHED
+          // never arrives (truly no session).
+          _authStateHandled = true;
         } else {
           _lastSignedIn = false;
           if (_authReadyResolve) { _authReadyResolve({ user: null, session: null, isAdmin: false, canPublishNews: false }); _authReadyResolve = null; }
@@ -728,31 +734,27 @@ async function initNavAuth(_authReadyResolve) {
       }
     });
 
-    // Fallback: if onAuthStateChange didn't fire INITIAL_SESSION (e.g. no cached
-    // session at all), resolve the state via a direct getUser() call.
-    // Wait a tick first — INITIAL_SESSION fires asynchronously, so we must yield
-    // before checking _authStateHandled or we'll always race it.
-    await new Promise(r => setTimeout(r, 0));
-    if (!_authStateHandled) {
+    // Fallback: resolve auth state via getUser() if _authReadyResolve is still
+    // pending. This handles two cases:
+    // 1. No cached session at all (INITIAL_SESSION never fired).
+    // 2. INITIAL_SESSION fired with null session (expired token, TOKEN_REFRESHED
+    //    incoming) — we still need to settle _authReadyReady if it hasn't yet.
+    if (_authReadyResolve) {
       try {
         const { data: { user } } = await Promise.race([
           mod.supabase.auth.getUser(),
           new Promise((_, reject) => setTimeout(() => reject(new Error('auth timeout')), 3000))
         ]);
-        if (!_authStateHandled) {
-          if (user) {
-            const { isAdmin, canPublishNews } = await setSignedIn(user);
-            if (_authReadyResolve) { _authReadyResolve({ user, session: null, isAdmin, canPublishNews }); _authReadyResolve = null; }
-          } else {
-            if (_authReadyResolve) { _authReadyResolve({ user: null, session: null, isAdmin: false, canPublishNews: false }); _authReadyResolve = null; }
-            setSignedOut();
-          }
-        }
-      } catch(e) {
-        if (!_authStateHandled) {
+        if (user) {
+          const { isAdmin, canPublishNews } = await setSignedIn(user);
+          if (_authReadyResolve) { _authReadyResolve({ user, session: null, isAdmin, canPublishNews }); _authReadyResolve = null; }
+        } else {
           if (_authReadyResolve) { _authReadyResolve({ user: null, session: null, isAdmin: false, canPublishNews: false }); _authReadyResolve = null; }
           setSignedOut();
         }
+      } catch(e) {
+        if (_authReadyResolve) { _authReadyResolve({ user: null, session: null, isAdmin: false, canPublishNews: false }); _authReadyResolve = null; }
+        setSignedOut();
       }
     }
   } catch(e) {
