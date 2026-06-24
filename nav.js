@@ -42,6 +42,11 @@ const NAV_HTML = () => {
     <img src="${wideLogo}" alt="Minecraft Club of America" class="nav-logo-img" id="nav-logo-img">
   </a>
   <div class="nav-right">
+    <div class="nav-account nav-account-desktop" id="nav-account"></div>
+    <button class="nav-theme-toggle" id="nav-theme-toggle" aria-label="Toggle dark mode">
+      <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    </button>
     <button class="nav-hamburger" id="nav-hamburger" aria-label="Toggle menu">
       <span></span><span></span><span></span>
     </button>
@@ -61,11 +66,11 @@ const NAV_HTML = () => {
     <li><a href="news.html"       data-page="news">News</a></li>
     <li><a href="${DISCORD_URL}" data-discord target="_blank" class="nav-discord">Discord</a></li>
     <li class="nav-theme-item">
-      <button class="nav-theme-toggle" id="nav-theme-toggle" aria-label="Toggle dark mode">
+      <button class="nav-theme-toggle nav-theme-toggle-mobile" aria-label="Toggle dark mode">
         <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
       </button>
-      <div class="nav-account nav-account-mobile" id="nav-account"></div>
+      <div class="nav-account nav-account-mobile" id="nav-account-mobile"></div>
     </li>
   </ul>
 </nav>
@@ -490,10 +495,9 @@ async function injectNav() {
   // Set logos on initial load
   applyLogoTheme(document.documentElement.getAttribute('data-theme') === 'dark');
 
-  // Dark mode toggle
-  const themeToggle = document.getElementById('nav-theme-toggle');
-  if (themeToggle) {
-    themeToggle.addEventListener('click', () => {
+  // Dark mode toggle — handles both desktop (#nav-theme-toggle) and mobile (.nav-theme-toggle-mobile)
+  document.querySelectorAll('#nav-theme-toggle, .nav-theme-toggle-mobile').forEach(btn => {
+    btn.addEventListener('click', () => {
       const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
       if (isDark) {
         document.documentElement.removeAttribute('data-theme');
@@ -505,7 +509,7 @@ async function injectNav() {
         applyLogoTheme(true);
       }
     });
-  }
+  });
 
   // Highlight active nav link
   const current = window.location.pathname.split('/').pop() || 'index.html';
@@ -591,17 +595,17 @@ function copyEmail(el) {
 
 // ── Nav auth + cart ───────────────────────────────────────────
 async function initNavAuth(_authReadyResolve) {
-  const accountEl  = document.getElementById('nav-account');
+  const accountEl       = document.getElementById('nav-account');
+  const accountElMobile = document.getElementById('nav-account-mobile');
 
-  if (!accountEl) return;
+  if (!accountEl && !accountElMobile) return;
 
   // Render the button immediately so it appears without any async wait.
-  // Auth resolution below will upgrade it to the signed-in state if needed.
   setSignedOut();
 
   function setSignedOut() {
     const returnPage = encodeURIComponent(window.location.pathname.split('/').pop() || 'index.html');
-    accountEl.innerHTML = `
+    const html = `
       <div class="nav-account-wrap" id="nav-account-wrap">
         <button class="nav-account-btn nav-account-user" id="nav-account-user-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -614,13 +618,19 @@ async function initNavAuth(_authReadyResolve) {
         </div>
       </div>`;
 
+    if (accountEl) accountEl.innerHTML = html;
+    if (accountElMobile) accountElMobile.innerHTML = html;
 
-    document.getElementById('nav-account-user-btn').addEventListener('click', e => {
-      e.stopPropagation();
-      document.getElementById('nav-account-dropdown').classList.toggle('open');
+    // Attach listeners to whichever buttons are present
+    document.querySelectorAll('#nav-account-user-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        // Toggle the dropdown nearest to this button
+        btn.nextElementSibling?.classList.toggle('open');
+      });
     });
     document.addEventListener('click', () => {
-      document.getElementById('nav-account-dropdown')?.classList.remove('open');
+      document.querySelectorAll('.nav-account-dropdown').forEach(d => d.classList.remove('open'));
     });
   }
 
@@ -643,7 +653,7 @@ async function initNavAuth(_authReadyResolve) {
 
     // Render immediately with what we have so the nav never disappears during async fetches
     function render() {
-      accountEl.innerHTML = `
+      const html = `
       <div class="nav-account-wrap" id="nav-account-wrap">
         <button class="nav-account-btn nav-account-user" id="nav-account-user-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -658,19 +668,26 @@ async function initNavAuth(_authReadyResolve) {
         </div>
       </div>`;
 
-      document.getElementById('nav-account-user-btn').addEventListener('click', e => {
-        e.stopPropagation();
-        document.getElementById('nav-account-dropdown').classList.toggle('open');
+      if (accountEl) accountEl.innerHTML = html;
+      if (accountElMobile) accountElMobile.innerHTML = html;
+
+      document.querySelectorAll('#nav-account-user-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          btn.nextElementSibling?.classList.toggle('open');
+        });
       });
       document.addEventListener('click', () => {
-        document.getElementById('nav-account-dropdown')?.classList.remove('open');
+        document.querySelectorAll('.nav-account-dropdown').forEach(d => d.classList.remove('open'));
       });
-      document.getElementById('nav-signout-btn').addEventListener('click', async () => {
-        try {
-          const mod = await import('./supabase.js');
-          await mod.signOut();
-        } catch(e) {}
-        window.location.href = 'login.html';
+      document.querySelectorAll('#nav-signout-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          try {
+            const mod = await import('./supabase.js');
+            await mod.signOut();
+          } catch(e) {}
+          window.location.href = 'login.html';
+        });
       });
     }
 

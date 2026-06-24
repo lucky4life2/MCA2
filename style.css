@@ -213,8 +213,14 @@ nav {
   display: flex; align-items: center; gap: 4px; flex-shrink: 0;
 }
 
+/* Theme toggle in nav-right (desktop) */
+.nav-right .nav-theme-toggle { display: flex; }
+
 /* Account button */
 .nav-account { display: flex; align-items: center; }
+/* Desktop account visible by default; mobile account hidden until hamburger menu opens */
+.nav-account-mobile { display: none; }
+.nav-account-desktop { display: flex; }
 .nav-account-btn {
   font-size: 12px; font-weight: 600; letter-spacing: 0.5px;
   color: var(--muted); background: none; border: 1px solid var(--border);
@@ -743,6 +749,11 @@ footer {
   }
 
   .nav-hamburger { display: flex; }
+
+  /* On mobile: hide desktop account/theme, show mobile account in nav-links */
+  .nav-account-desktop { display: none !important; }
+  .nav-right .nav-theme-toggle { display: none; }
+  .nav-account-mobile { display: flex !important; }
 
   .nav-links {
     display: none;
