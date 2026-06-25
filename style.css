@@ -137,7 +137,7 @@ body {
 nav {
   position: fixed; top: 0; left: 0; right: 0; z-index: 500;
   background: var(--white); border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center;
   padding: 0 2.5rem; height: 58px;
 }
 .nav-logo {
@@ -145,12 +145,13 @@ nav {
   font-size: 16px; font-weight: 700;
   color: var(--blue); text-decoration: none;
   display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0;
 }
 .nav-dot {
   width: 8px; height: 8px; background: var(--green);
   border-radius: 50%; flex-shrink: 0;
 }
-.nav-links { display: flex; align-items: center; list-style: none; }
+.nav-links { display: flex; align-items: center; list-style: none; margin-left: auto; }
 .nav-links a {
   font-size: 12px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase;
   color: var(--muted); text-decoration: none; padding: 6px 14px;
@@ -166,6 +167,7 @@ nav {
 }
 .nav-discord:hover { background: #4752c4 !important; color: white !important; border-bottom-color: transparent !important; }
 .nav-theme-item { display: flex; align-items: center; margin-left: 8px; }
+.nav-theme-item-mobile { display: none; }
 .nav-account-item { display: flex; align-items: center; margin-left: 4px; }
 
 /* ── NAV DROPDOWN ── */
@@ -797,41 +799,14 @@ footer {
     border-radius: 4px !important;
   }
 
-  /* Theme toggle + account button — centered row at bottom of menu */
-  .nav-theme-item,
-  .nav-account-item {
-    width: auto !important;
+  /* Account button at bottom of mobile menu */
+  .nav-theme-item-mobile {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0;
-  }
-
-  .nav-theme-item {
-    margin-left: 0;
-  }
-
-  /* Group them together in a centered flex row */
-  .nav-links li.nav-theme-item,
-  .nav-links li.nav-account-item {
-    display: inline-flex;
-  }
-
-  /* Wrap the two items in a centered row using a pseudo-container trick via adjacent sibling */
-  .nav-links li.nav-theme-item {
     border-top: 1px solid var(--border);
     margin-top: 0.5rem;
-    padding-top: 0.75rem;
-    padding-bottom: 0.25rem;
-    display: flex;
+    padding: 0.75rem 1.25rem 0.25rem;
     justify-content: center;
     align-items: center;
-    gap: 12px;
-  }
-
-  /* Hide account item as a separate row — it gets merged into theme-item row via JS flex trick */
-  .nav-links li.nav-account-item {
-    display: none;
   }
 
   .nav-logo-img { height: 28px; }
