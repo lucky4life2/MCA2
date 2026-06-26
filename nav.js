@@ -591,15 +591,21 @@ function copyEmail(el) {
 
 // ── Nav auth + cart ───────────────────────────────────────────
 async function initNavAuth(_authReadyResolve) {
-  const accountEl       = document.getElementById('nav-account');
-  const accountElMobile = document.getElementById('nav-account-mobile');
+  if (!document.getElementById('nav-account') && !document.getElementById('nav-account-mobile')) return;
 
-  if (!accountEl && !accountElMobile) return;
+  // Always re-query elements so stale closure refs never cause silent no-ops
+  function getAccountEls() {
+    return {
+      el:       document.getElementById('nav-account'),
+      elMobile: document.getElementById('nav-account-mobile'),
+    };
+  }
 
   // Render the button immediately so it appears without any async wait.
   setSignedOut();
 
   function setSignedOut() {
+    const { el: accountEl, elMobile: accountElMobile } = getAccountEls();
     const returnPage = encodeURIComponent(window.location.pathname.split('/').pop() || 'index.html');
     const html = `
       <div class="nav-account-wrap" id="nav-account-wrap">
@@ -649,6 +655,7 @@ async function initNavAuth(_authReadyResolve) {
 
     // Render immediately with what we have so the nav never disappears during async fetches
     function render() {
+      const { el: accountEl, elMobile: accountElMobile } = getAccountEls();
       const html = `
       <div class="nav-account-wrap" id="nav-account-wrap">
         <button class="nav-account-btn nav-account-user" id="nav-account-user-btn">
