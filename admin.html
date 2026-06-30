@@ -14,8 +14,8 @@
     .admin-hero h1 { font-family: 'Times New Roman', serif; font-size: clamp(28px, 4vw, 42px); font-weight: 700; color: var(--blue); line-height: 1.15; }
     .admin-hero-meta { font-size: 12px; color: var(--muted); margin-top: 8px; }
 
-    .admin-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 2rem; position: relative; flex-wrap: wrap; }
-    .admin-tab { padding: 10px 20px; font-size: 12px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; color: var(--muted); transition: color .15s, border-color .15s; margin-bottom: -1px; white-space: nowrap; }
+    .admin-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 2rem; position: relative; flex-wrap: wrap; touch-action: pan-x; }
+    .admin-tab { padding: 10px 20px; font-size: 12px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; color: var(--muted); transition: color .15s, border-color .15s; margin-bottom: -1px; white-space: nowrap; touch-action: manipulation; }
     .admin-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
     .admin-tab:hover:not(.active) { color: var(--black); }
     .admin-tab.hidden { display: none; }
@@ -38,7 +38,7 @@
       width: 100%; padding: 9px 16px; text-align: left;
       font-size: 12px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase;
       background: none; border: none; cursor: pointer; color: var(--mid);
-      white-space: nowrap; transition: background .12s, color .12s;
+      white-space: nowrap; transition: background .12s, color .12s; touch-action: manipulation;
     }
     .admin-tab-group-item:hover { background: var(--bg); color: var(--blue); }
     .admin-tab-group-item.active { color: var(--blue); }
