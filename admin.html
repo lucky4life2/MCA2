@@ -198,65 +198,121 @@
       /* Hero */
       .admin-hero { padding-bottom: 1.5rem; margin-bottom: 1.5rem; }
 
-      /* Tabs — scrollable strip */
-      .admin-tabs { gap: 0; flex-wrap: wrap; }
-      .admin-tab { padding: 10px 14px; font-size: 11px; }
+      /* Tabs — horizontal scroll strip */
+      .admin-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        gap: 0;
+        margin-left: -1rem;
+        margin-right: -1rem;
+        padding: 0 1rem;
+      }
+      .admin-tabs::-webkit-scrollbar { display: none; }
+      .admin-tab { padding: 10px 13px; font-size: 11px; flex-shrink: 0; }
+      .admin-tab-group { flex-shrink: 0; }
+      .admin-tab-group-menu {
+        position: fixed;
+        top: auto !important;
+        left: 0 !important;
+        right: 0;
+        bottom: 0;
+        border-radius: 12px 12px 0 0;
+        min-width: unset;
+        padding: 8px 0 env(safe-area-inset-bottom, 0);
+        box-shadow: 0 -4px 24px rgba(10,15,30,.15);
+      }
+      .admin-tab-group-item { padding: 14px 20px; font-size: 13px; }
 
-      /* Section headers — stack on small screens */
+      /* Section headers */
       .admin-section-header { flex-direction: column; align-items: flex-start; gap: 8px; }
 
-      /* All two-column grids collapse to single column */
+      /* Two-column grids collapse to one */
       .col2-grid { grid-template-columns: 1fr; }
 
       /* Stats row — 2 columns */
       .stats-row { grid-template-columns: 1fr 1fr; }
+
+      /* Config stat rows */
       .stat-cfg-row { grid-template-columns: 1fr 1fr; }
       .stat-cfg-row input:last-child { grid-column: 1 / -1; }
 
-      /* Members table — hide less-critical columns, allow horizontal scroll */
+      /* Site lock inputs */
+      #site-lock-section .col2-grid { grid-template-columns: 1fr; }
+
+      /* Members table */
       .members-table-wrap { font-size: 12px; }
       .members-table th:nth-child(2), .members-table td:nth-child(2),
+      .members-table th:nth-child(3), .members-table td:nth-child(3),
       .members-table th:nth-child(4), .members-table td:nth-child(4) { display: none; }
       .members-table th, .members-table td { padding: 10px 10px; }
       .btn-actions { flex-wrap: wrap; gap: 4px; }
-      .btn-actions .btn { font-size: 10px; padding: 4px 8px; }
+      .btn-actions .btn { font-size: 10px; padding: 5px 9px; }
 
-      /* Filter bar — stack inputs */
+      /* Filter bar */
       .filter-bar { flex-direction: column; align-items: stretch; padding: 10px 1rem; gap: 8px; }
-      .search-input-grow { min-width: unset; }
+      .search-input-grow { min-width: unset; width: 100%; }
       .filter-select { width: 100%; }
+      .filter-chip { width: 100%; text-align: center; }
 
-      /* News article rows — stack */
+      /* News article rows */
       .news-article-row { flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px 1rem; }
-      .news-article-row > div:last-child { width: 100%; justify-content: flex-start; }
+      .news-article-row > div:last-child { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
 
-      /* Verify cards — stack */
+      /* Verify cards */
       .verify-card { flex-direction: column; gap: 10px; padding: 1rem; }
-      .verify-card .btn-actions { flex-direction: row; }
+      .verify-card .btn-actions { flex-direction: row; flex-wrap: wrap; }
 
       /* Permission grid in modal */
       .perm-grid { grid-template-columns: 1fr; }
 
-      /* Modals — full-screen sheet on mobile */
+      /* Modals — bottom sheet */
       .modal-overlay > div,
-      [id$="-modal"] > div { max-width: 100% !important; max-height: 95vh !important; margin: 0 !important; border-radius: 12px 12px 0 0 !important; position: fixed !important; bottom: 0; left: 0; right: 0; }
+      [id$="-modal"] > div {
+        max-width: 100% !important;
+        max-height: 92vh !important;
+        margin: 0 !important;
+        border-radius: 16px 16px 0 0 !important;
+        position: fixed !important;
+        bottom: 0; left: 0; right: 0;
+      }
       [id$="-modal"] { align-items: flex-end !important; padding: 0 !important; }
       #product-modal { align-items: flex-end !important; padding: 0 !important; }
+      [id$="-modal"] > div > div:last-child,
+      .modal-overlay > div > div:last-child { flex-wrap: wrap; }
+      [id$="-modal"] > div > div:last-child > button,
+      .modal-overlay > div > div:last-child > button { flex: 1; min-width: 120px; }
 
       /* Role cards */
       .role-card { padding: 1rem; }
       .role-card-perms { gap: 3px; }
 
-      /* Leadership/nations rows */
+      /* Messages */
+      .msg-row { padding: 0.875rem 1rem; gap: 10px; }
+      .msg-actions { flex-direction: column; gap: 4px; }
+      .msg-actions .btn { font-size: 10px; padding: 4px 8px; }
+
+      /* Leadership / nations / club presidents rows */
       [id="leadership-admin-list"] > div,
-      [id="nations-admin-list"] > div { flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 1rem; }
+      [id="nations-admin-list"] > div,
+      [id="club-presidents-admin-list"] > div {
+        flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 1rem;
+      }
       [id="leadership-admin-list"] > div > div:last-child,
-      [id="nations-admin-list"] > div > div:last-child { display: flex; gap: 8px; }
+      [id="nations-admin-list"] > div > div:last-child,
+      [id="club-presidents-admin-list"] > div > div:last-child { display: flex; gap: 8px; flex-wrap: wrap; }
+
+      /* Permission reference grid */
+      #tab-roles > div:last-child div[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
     }
 
     @media (max-width: 420px) {
       .admin-tab { padding: 10px 10px; font-size: 10px; }
       .stat-value { font-size: 1.3rem; }
+      .admin-section-title { font-size: 1rem; }
+      .members-table th:nth-child(5), .members-table td:nth-child(5) { display: none; }
+      .btn-actions .btn { width: 100%; text-align: center; }
     }
   </style>
 </head>
