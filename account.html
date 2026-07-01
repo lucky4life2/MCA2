@@ -151,6 +151,17 @@
     .modal-close:hover { color: var(--black); }
     .modal-body { padding: 1.5rem; }
     .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+
+    /* Pending-deletion banner + delete modal */
+    .deletion-banner { background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; padding:1rem 1.25rem; margin-bottom:1.5rem; display:flex; flex-direction:column; gap:10px; }
+    .deletion-banner-title { font-size:14px; font-weight:700; color:#c0392b; }
+    .deletion-banner-text { font-size:13px; color:#7f1d1d; line-height:1.6; }
+    .deletion-banner-text strong { color:#c0392b; }
+    .del-modal-warning { background:#fef2f2; border:1px solid #fca5a5; border-radius:6px; padding:12px 14px; font-size:13px; color:#7f1d1d; line-height:1.6; margin-bottom:1.25rem; }
+    .del-modal-warning strong { color:#c0392b; }
+    .del-step-label { font-size:12px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--muted); margin:1.25rem 0 .5rem; }
+    .del-step-label:first-child { margin-top:0; }
+    .del-verified-tag { font-size:12px; color:#1a7f37; font-weight:600; display:flex; align-items:center; gap:5px; margin-top:6px; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 </head>
@@ -187,6 +198,8 @@
       <h1 id="account-hero-name">Account</h1>
       <div class="account-hero-sub" id="account-hero-sub"></div>
     </div>
+
+    <div id="deletion-banner-wrap"></div>
 
     <!-- Profile -->
     <div class="account-section">
@@ -311,7 +324,7 @@
         <div class="account-section-title" style="color:#c0392b;">Delete Account</div>
       </div>
       <div class="account-section-body">
-        <p class="danger-zone-note">Permanently delete your MCA account. You will be signed out immediately and will no longer be able to sign in. This cannot be undone.</p>
+        <p class="danger-zone-note">Deleting your account starts a <strong>7-day waiting period</strong>. Your account is deactivated immediately, but your data isn't permanently erased until 7 days have passed — you can sign back in any time before then to cancel the deletion. Because this leads to permanent, unrecoverable deletion, we'll ask you to re-verify your identity with everything on file (password, two-factor code, and an emailed code) before it's scheduled.</p>
         <button class="btn btn-danger" id="btn-delete-account">Delete My Account</button>
       </div>
     </div>
@@ -547,6 +560,52 @@ async function renderPage() {
   const identitiesForPw = _user.identities || [];
   const hasEmailIdentity = identitiesForPw.some(i => i.provider === 'email') || _isRecoverySession;
   document.getElementById('section-password').style.display = hasEmailIdentity ? '' : 'none';
+
+  // Pending-deletion banner
+  renderDeletionBanner();
+}
+
+function renderDeletionBanner() {
+  const wrap = document.getElementById('deletion-banner-wrap');
+  if (_profile.account_status !== 'pending_deletion' || !_profile.deletion_scheduled_at) {
+    wrap.innerHTML = '';
+    return;
+  }
+  const scheduledAt = new Date(_profile.deletion_scheduled_at);
+  const deleteAt = new Date(scheduledAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const msLeft = deleteAt.getTime() - Date.now();
+  const daysLeft = Math.max(0, Math.ceil(msLeft / (24 * 60 * 60 * 1000)));
+  const dateStr = deleteAt.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+
+  wrap.innerHTML = `
+    <div class="deletion-banner">
+      <div class="deletion-banner-title">Account Scheduled for Deletion</div>
+      <div class="deletion-banner-text">
+        Your account and all its data will be <strong>permanently deleted on ${dateStr}</strong>
+        (${daysLeft} day${daysLeft === 1 ? '' : 's'} left). Cancel anytime before then to keep your account.
+      </div>
+      <div class="form-error" id="cancel-del-error" style="display:none;"></div>
+      <div>
+        <button class="btn btn-primary" id="btn-cancel-deletion" style="width:auto;">Cancel Account Deletion</button>
+      </div>
+    </div>`;
+
+  document.getElementById('btn-cancel-deletion').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-cancel-deletion');
+    const errEl = document.getElementById('cancel-del-error');
+    errEl.style.display = 'none';
+    btn.disabled = true; btn.textContent = 'Cancelling...';
+    const { error } = await supabase.rpc('cancel_own_account_deletion');
+    if (error) {
+      errEl.textContent = error.message || 'Could not cancel deletion.';
+      errEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Cancel Account Deletion';
+      return;
+    }
+    _profile.account_status = 'active';
+    _profile.deletion_scheduled_at = null;
+    renderDeletionBanner();
+  });
 }
 
 async function renderConnectedAccounts(skipFetch = false) {
@@ -1185,14 +1244,156 @@ document.getElementById('btn-sign-out').addEventListener('click', async () => {
   window.location.replace('login.html');
 });
 
-// ── Delete account ────────────────────────────────────────────
-document.getElementById('btn-delete-account').addEventListener('click', async () => {
-  const input = prompt('Type DELETE to permanently delete your account. This cannot be undone.');
-  if (input !== 'DELETE') return;
-  const { error } = await supabase.rpc('terminate_own_account');
-  if (error) { alert('Error: ' + error.message); return; }
-  await signOut();
-  window.location.replace('login.html?deleted=1');
+// ── Delete account (scheduled, multi-factor re-verification) ──
+let _delHasPassword = false;
+let _delTotpFactorId = null;
+let _delEmailCodeSent = false;
+
+function resetDeleteModal() {
+  document.getElementById('del-password').value = '';
+  document.getElementById('del-2fa-code').value = '';
+  document.getElementById('del-email-code').value = '';
+  document.getElementById('del-confirm-text').value = '';
+  document.getElementById('del-error').style.display = 'none';
+  document.getElementById('del-success').style.display = 'none';
+  document.getElementById('del-email-code-wrap').style.display = 'none';
+  document.getElementById('del-email-send-wrap').style.display = '';
+  document.getElementById('del-submit').disabled = false;
+  document.getElementById('del-submit').textContent = 'Schedule Deletion';
+  _delEmailCodeSent = false;
+}
+
+async function openDeleteModal() {
+  resetDeleteModal();
+
+  const identities = _user.identities || [];
+  _delHasPassword = identities.some(i => i.provider === 'email');
+  document.getElementById('del-password-group').style.display = _delHasPassword ? '' : 'none';
+
+  _delTotpFactorId = null;
+  try {
+    const { data } = await supabase.auth.mfa.listFactors();
+    const verified = (data?.totp || []).filter(f => f.status === 'verified');
+    if (verified.length) _delTotpFactorId = verified[0].id;
+  } catch(e) {}
+  document.getElementById('del-2fa-group').style.display = _delTotpFactorId ? '' : 'none';
+
+  document.getElementById('del-email-group').style.display = _user.email ? '' : 'none';
+
+  document.getElementById('delete-modal').classList.remove('hidden');
+}
+
+function closeDeleteModal() {
+  document.getElementById('delete-modal').classList.add('hidden');
+}
+
+document.getElementById('btn-delete-account').addEventListener('click', openDeleteModal);
+document.getElementById('delete-modal-close').addEventListener('click', closeDeleteModal);
+document.getElementById('del-cancel').addEventListener('click', closeDeleteModal);
+document.getElementById('delete-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('delete-modal')) closeDeleteModal();
+});
+
+document.getElementById('del-send-code').addEventListener('click', async () => {
+  const btn = document.getElementById('del-send-code');
+  const errEl = document.getElementById('del-error');
+  errEl.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Sending...';
+  const { error } = await supabase.auth.resetPasswordForEmail(_user.email);
+  if (error) {
+    errEl.textContent = error.message || 'Could not send code.';
+    errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Send Code to My Email';
+    return;
+  }
+  _delEmailCodeSent = true;
+  document.getElementById('del-email-send-wrap').style.display = 'none';
+  document.getElementById('del-email-code-wrap').style.display = '';
+  document.getElementById('del-email-sent-hint').textContent = 'Code sent to ' + _user.email + ' — check your inbox.';
+  document.getElementById('del-email-code').focus();
+});
+
+document.getElementById('del-submit').addEventListener('click', async () => {
+  const errEl = document.getElementById('del-error');
+  const succEl = document.getElementById('del-success');
+  const submitBtn = document.getElementById('del-submit');
+  errEl.style.display = 'none'; succEl.style.display = 'none';
+
+  const confirmText = document.getElementById('del-confirm-text').value.trim();
+  if (confirmText !== 'DELETE') {
+    errEl.textContent = 'Type DELETE (all caps) to confirm.'; errEl.style.display = 'block'; return;
+  }
+
+  submitBtn.disabled = true; submitBtn.textContent = 'Verifying...';
+
+  // 1) Password re-verification
+  if (_delHasPassword) {
+    const pw = document.getElementById('del-password').value;
+    if (!pw) {
+      errEl.textContent = 'Enter your password.'; errEl.style.display = 'block';
+      submitBtn.disabled = false; submitBtn.textContent = 'Schedule Deletion'; return;
+    }
+    const { error: pwErr } = await supabase.auth.signInWithPassword({ email: _user.email, password: pw });
+    if (pwErr) {
+      errEl.textContent = 'Incorrect password.'; errEl.style.display = 'block';
+      submitBtn.disabled = false; submitBtn.textContent = 'Schedule Deletion'; return;
+    }
+  }
+
+  // 2) 2FA re-verification
+  if (_delTotpFactorId) {
+    const code = document.getElementById('del-2fa-code').value.trim();
+    if (!/^\d{6}$/.test(code)) {
+      errEl.textContent = 'Enter your 6-digit authenticator code.'; errEl.style.display = 'block';
+      submitBtn.disabled = false; submitBtn.textContent = 'Schedule Deletion'; return;
+    }
+    try {
+      const { data: challenge, error: chErr } = await supabase.auth.mfa.challenge({ factorId: _delTotpFactorId });
+      if (chErr) throw chErr;
+      const { error: verErr } = await supabase.auth.mfa.verify({ factorId: _delTotpFactorId, challengeId: challenge.id, code });
+      if (verErr) throw verErr;
+    } catch(e) {
+      errEl.textContent = 'Invalid authenticator code.'; errEl.style.display = 'block';
+      submitBtn.disabled = false; submitBtn.textContent = 'Schedule Deletion'; return;
+    }
+  }
+
+  // 3) Email code re-verification
+  if (_user.email) {
+    if (!_delEmailCodeSent) {
+      errEl.textContent = 'Click "Send Code to My Email" and enter the code first.'; errEl.style.display = 'block';
+      submitBtn.disabled = false; submitBtn.textContent = 'Schedule Deletion'; return;
+    }
+    const emailCode = document.getElementById('del-email-code').value.trim();
+    if (!/^\d{6}$/.test(emailCode)) {
+      errEl.textContent = 'Enter the 6-digit code from your email.'; errEl.style.display = 'block';
+      submitBtn.disabled = false; submitBtn.textContent = 'Schedule Deletion'; return;
+    }
+    const { error: otpErr } = await supabase.auth.verifyOtp({ email: _user.email, token: emailCode, type: 'recovery' });
+    if (otpErr) {
+      errEl.textContent = 'Invalid or expired email code.'; errEl.style.display = 'block';
+      submitBtn.disabled = false; submitBtn.textContent = 'Schedule Deletion'; return;
+    }
+  }
+
+  // All verification passed — schedule the deletion
+  submitBtn.textContent = 'Scheduling...';
+  const { data: deleteAt, error } = await supabase.rpc('schedule_own_account_deletion');
+  if (error) {
+    errEl.textContent = error.message || 'Could not schedule deletion.'; errEl.style.display = 'block';
+    submitBtn.disabled = false; submitBtn.textContent = 'Schedule Deletion'; return;
+  }
+
+  const dateStr = new Date(new Date(deleteAt).getTime()).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  succEl.textContent = `Your account is scheduled for permanent deletion on ${dateStr}. You can cancel anytime before then by signing back in. Signing out now...`;
+  succEl.style.display = 'block';
+  submitBtn.style.display = 'none';
+  document.getElementById('del-cancel').textContent = 'Close';
+
+  setTimeout(async () => {
+    await signOut();
+    window.location.replace('login.html?deletion_scheduled=1');
+  }, 3500);
 });
 
 // ── Contact Administrator ─────────────────────────────────────
@@ -1296,6 +1497,61 @@ init();
     <div class="modal-footer">
       <button class="btn btn-outline" id="contact-cancel">Cancel</button>
       <button class="btn btn-primary" id="contact-send">Send Message</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Account Modal -->
+<div class="modal-backdrop hidden" id="delete-modal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title" style="color:#c0392b;">Delete Account</div>
+      <button class="modal-close" id="delete-modal-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="del-modal-warning">
+        <strong>This schedules your account for deletion in 7 days.</strong><br>
+        You'll be signed out now. Sign back in anytime in the next 7 days to cancel — after that, your account and all its data are permanently erased and cannot be recovered.
+      </div>
+
+      <div id="del-password-group" style="display:none;">
+        <div class="del-step-label">Confirm Your Password</div>
+        <div class="form-group">
+          <input type="password" id="del-password" class="form-input" placeholder="Current password" autocomplete="current-password">
+        </div>
+      </div>
+
+      <div id="del-2fa-group" style="display:none;">
+        <div class="del-step-label">Two-Factor Code</div>
+        <div class="form-group">
+          <input type="text" id="del-2fa-code" class="form-input" placeholder="123456" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code">
+          <div class="form-hint">Enter the code from your authenticator app.</div>
+        </div>
+      </div>
+
+      <div id="del-email-group" style="display:none;">
+        <div class="del-step-label">Email Verification Code</div>
+        <div class="form-group" id="del-email-send-wrap">
+          <button class="btn btn-outline" id="del-send-code" type="button">Send Code to My Email</button>
+        </div>
+        <div class="form-group" id="del-email-code-wrap" style="display:none;">
+          <input type="text" id="del-email-code" class="form-input" placeholder="6-digit code" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code">
+          <div class="form-hint" id="del-email-sent-hint">Code sent — check your inbox.</div>
+        </div>
+      </div>
+
+      <div class="del-step-label">Confirm</div>
+      <div class="form-group">
+        <label class="form-label" for="del-confirm-text">Type DELETE to confirm</label>
+        <input type="text" id="del-confirm-text" class="form-input" placeholder="DELETE" autocomplete="off">
+      </div>
+
+      <div class="form-error" id="del-error"></div>
+      <div class="form-success" id="del-success"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="del-cancel">Cancel</button>
+      <button class="btn btn-danger" id="del-submit">Schedule Deletion</button>
     </div>
   </div>
 </div>

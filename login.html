@@ -172,6 +172,10 @@
 
       <div class="login-card-body">
 
+        <div id="deletion-scheduled-banner" style="display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:12px 14px;font-size:13px;color:#7f1d1d;line-height:1.6;margin-bottom:1.25rem;">
+          Your account is scheduled for permanent deletion in 7 days. Sign back in to cancel it any time before then.
+        </div>
+
         <!-- Tab switcher -->
         <div class="login-tabs" id="login-tabs">
           <button class="login-tab active" data-tab="signin">Sign In</button>
@@ -301,6 +305,11 @@
   // If the user was sent here from another page, return them there after login.
   const params   = new URLSearchParams(window.location.search);
   const returnTo = params.get('return') || 'account.html';
+
+  if (params.get('deletion_scheduled') === '1') {
+    const banner = document.getElementById('deletion-scheduled-banner');
+    if (banner) banner.style.display = 'block';
+  }
 
   // If already signed in, skip the login page entirely —
   // unless this is an MFA challenge redirect (mfa=1), in which case we need
