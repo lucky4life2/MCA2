@@ -130,6 +130,16 @@ const TOAST_HTML = `<div class="toast" id="toast">Address copied to clipboard</d
 
 const PROGRESS_HTML = `<div class="scroll-progress" id="scroll-progress"></div>`;
 
+// Declared here (before the site-lock IIFE below) because that IIFE can call
+// injectNav() synchronously on some pages (e.g. admin.html, or ?preview=key),
+// with no `await` in between — meaning it runs before the rest of this
+// script's top-level code has executed. If _mcaAuthResolve were declared
+// further down the file (as a `let`), that early synchronous call would hit
+// it while still in the temporal dead zone and throw a ReferenceError,
+// silently breaking the entire nav auth/account button on that page.
+let _mcaAuthResolve;
+window._mcaAuthReady = new Promise(r => { _mcaAuthResolve = r; });
+
 
 /* ── SITE LOCK ──────────────────────────────────────────────── */
 const PREVIEW_KEY     = 'I-pG1idLnWhIjId9i1TLAumZkBQjVcvc';
@@ -437,12 +447,8 @@ function showLockScreen(cfg) {
 }
 
 
-// Expose _mcaAuthReady at the top level immediately so page scripts can
-// await it before injectNav() has even been called. Without this, shop.html's
-// `Promise.resolve(window._mcaAuthReady)` resolves to `undefined` and the
-// page falls through to the 6 s hard timeout on every load.
-let _mcaAuthResolve;
-window._mcaAuthReady = new Promise(r => { _mcaAuthResolve = r; });
+// _mcaAuthReady / _mcaAuthResolve are declared near the top of this file
+// (before the site-lock IIFE) — see the comment there for why.
 
 async function injectNav() {
   if (document.readyState === 'loading') {
