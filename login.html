@@ -345,9 +345,7 @@
 
   function switchTab(name) {
     tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === name));
-    document.getElementById('panel-signin').classList.toggle('active', name === 'signin');
-    document.getElementById('panel-signup').classList.toggle('active', name === 'signup');
-    document.getElementById('panel-confirm').classList.remove('active');
+    panels.forEach(p => p.classList.toggle('active', p.id === `panel-${name}`));
     loginCardFooter.style.display = '';
 
     if (name === 'signin') {
@@ -552,9 +550,16 @@
       errEl.textContent = 'Please enter your email address.';
       errEl.style.display = 'block'; return;
     }
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
-    if (error) {
-      errEl.textContent = error.message || 'Could not send reset code.';
+    const SUPABASE_URL = supabase.supabaseUrl;
+    const ANON_KEY = supabase.supabaseKey;
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/request-password-reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
+      body: JSON.stringify({ email }),
+    });
+    const json = await res.json();
+    if (!res.ok || json.error) {
+      errEl.textContent = json.error || 'Could not send reset code.';
       errEl.style.display = 'block'; return;
     }
     _pendingResetEmail = email;
@@ -584,16 +589,20 @@
       errEl.style.display = 'block'; return;
     }
 
-    const { error: otpErr } = await supabase.auth.verifyOtp({ email: _pendingResetEmail, token: code, type: 'recovery' });
-    if (otpErr) {
-      errEl.textContent = otpErr.message || 'Invalid or expired code.';
+    const SUPABASE_URL = supabase.supabaseUrl;
+    const ANON_KEY = supabase.supabaseKey;
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/reset-password-with-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
+      body: JSON.stringify({ email: _pendingResetEmail, code, newPassword: newPass }),
+    });
+    const json = await res.json();
+    if (!res.ok || json.error) {
+      errEl.textContent = json.error || 'Invalid or expired code.';
       errEl.style.display = 'block'; return;
     }
-
-    const { error: updateErr } = await supabase.auth.updateUser({ password: newPass });
-    if (updateErr) {
-      errEl.textContent = updateErr.message || 'Could not update password.';
-      errEl.style.display = 'block'; return;
+    if (json.access_token && json.refresh_token) {
+      await supabase.auth.setSession({ access_token: json.access_token, refresh_token: json.refresh_token });
     }
 
     document.getElementById('forgot-step-code').style.display = 'none';

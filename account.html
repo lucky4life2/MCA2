@@ -1214,8 +1214,9 @@ document.getElementById('btn-reset-password').addEventListener('click', async ()
 
   if (!_awaitingResetCode) {
     if (!_user.email) { errEl.textContent = 'No email address on this account.'; errEl.style.display = 'block'; return; }
-    const { error } = await supabase.auth.resetPasswordForEmail(_user.email);
-    if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+    const res = await fetch(`${supabase.supabaseUrl}/functions/v1/request-password-reset`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': supabase.supabaseKey }, body: JSON.stringify({ email: _user.email }) });
+    const json = await res.json();
+    if (!res.ok || json.error) { errEl.textContent = json.error || 'Could not send code.'; errEl.style.display = 'block'; return; }
     _awaitingResetCode = true;
     codeGroup.style.display = '';
     resetBtn.textContent = 'Verify Code';
@@ -1227,8 +1228,10 @@ document.getElementById('btn-reset-password').addEventListener('click', async ()
 
   const code = codeInput.value.trim();
   if (!/^\d{6}$/.test(code)) { errEl.textContent = 'Enter the 6-digit code from your email.'; errEl.style.display = 'block'; return; }
-  const { error: otpErr } = await supabase.auth.verifyOtp({ email: _user.email, token: code, type: 'recovery' });
-  if (otpErr) { errEl.textContent = otpErr.message || 'Invalid or expired code.'; errEl.style.display = 'block'; return; }
+  const vRes = await fetch(`${supabase.supabaseUrl}/functions/v1/verify-reset-code`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': supabase.supabaseKey }, body: JSON.stringify({ email: _user.email, code }) });
+  const vJson = await vRes.json();
+  if (!vRes.ok || vJson.error) { errEl.textContent = vJson.error || 'Invalid or expired code.'; errEl.style.display = 'block'; return; }
+  if (vJson.access_token && vJson.refresh_token) await supabase.auth.setSession({ access_token: vJson.access_token, refresh_token: vJson.refresh_token });
 
   succEl.textContent = 'Code verified — enter your new password above and click Update Password.';
   succEl.style.display = 'block';
@@ -1299,9 +1302,10 @@ document.getElementById('del-send-code').addEventListener('click', async () => {
   const errEl = document.getElementById('del-error');
   errEl.style.display = 'none';
   btn.disabled = true; btn.textContent = 'Sending...';
-  const { error } = await supabase.auth.resetPasswordForEmail(_user.email);
-  if (error) {
-    errEl.textContent = error.message || 'Could not send code.';
+  const res = await fetch(`${supabase.supabaseUrl}/functions/v1/request-password-reset`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': supabase.supabaseKey }, body: JSON.stringify({ email: _user.email }) });
+  const json = await res.json();
+  if (!res.ok || json.error) {
+    errEl.textContent = json.error || 'Could not send code.';
     errEl.style.display = 'block';
     btn.disabled = false; btn.textContent = 'Send Code to My Email';
     return;
@@ -1369,8 +1373,9 @@ document.getElementById('del-submit').addEventListener('click', async () => {
       errEl.textContent = 'Enter the 6-digit code from your email.'; errEl.style.display = 'block';
       submitBtn.disabled = false; submitBtn.textContent = 'Schedule Deletion'; return;
     }
-    const { error: otpErr } = await supabase.auth.verifyOtp({ email: _user.email, token: emailCode, type: 'recovery' });
-    if (otpErr) {
+    const vRes = await fetch(`${supabase.supabaseUrl}/functions/v1/verify-reset-code`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': supabase.supabaseKey }, body: JSON.stringify({ email: _user.email, code: emailCode }) });
+    const vJson = await vRes.json();
+    if (!vRes.ok || vJson.error) {
       errEl.textContent = 'Invalid or expired email code.'; errEl.style.display = 'block';
       submitBtn.disabled = false; submitBtn.textContent = 'Schedule Deletion'; return;
     }
