@@ -356,7 +356,42 @@ async function init() {
   // Normal load — use getUser() (server-verified) instead of getSession()
   // (storage read that can return stale/null before hydration and requires a
   // separate network call anyway to validate). One fewer round-trip = faster load.
-  const { data: { user: initialUser }, error: userErr } = await supabase.auth.getUser();
+  //
+  // A single null result isn't proof the user is signed out — if the access
+  // token had expired (e.g. the tab sat idle), the client needs an extra
+  // round-trip to refresh it before getUser() can succeed. Give that refresh
+  // a real chance (listen for the auth event + retry) before bouncing to
+  // login, instead of redirecting on the very first null.
+  let initialUser = null;
+  {
+    const { data } = await supabase.auth.getUser();
+    initialUser = data?.user || null;
+  }
+
+  if (!initialUser) {
+    initialUser = await new Promise(resolve => {
+      let settled = false;
+      const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+        if (settled) return;
+        if (session?.user && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED')) {
+          settled = true;
+          sub?.subscription?.unsubscribe();
+          resolve(session.user);
+        }
+      });
+
+      setTimeout(async () => {
+        if (settled) return;
+        // Last resort: try getUser() again directly in case the token refresh
+        // finished without an auth event firing.
+        const { data } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+        settled = true;
+        sub?.subscription?.unsubscribe();
+        resolve(data?.user || null);
+      }, 8000);
+    });
+  }
+
   if (!initialUser) {
     window.location.replace('login.html?return=account.html');
     return;

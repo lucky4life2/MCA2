@@ -763,7 +763,7 @@ async function initNavAuth(_authReadyResolve) {
       try {
         const { data: { user } } = await Promise.race([
           mod.supabase.auth.getUser(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('auth timeout')), 3000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('auth timeout')), 8000))
         ]);
         if (user) {
           const { isAdmin, canPublishNews } = await setSignedIn(user);
