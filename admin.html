@@ -1368,6 +1368,7 @@ document.getElementById('rm-save').addEventListener('click', async () => {
 
 window.deleteRole = async (id) => {
   if (!confirm('Delete this role? Users with this role will lose it.')) return;
+  if (!confirm('Are you sure? This cannot be undone.')) return;
   const { error } = await supabase.from('roles').delete().eq('id', id);
   if (error) { alert(error.message); return; }
   await loadAllRoles();
@@ -1532,6 +1533,7 @@ window.unpublishArticle = async (id) => {
 };
 window.deleteArticle = async (id) => {
   if (!confirm('Delete this article? This cannot be undone.')) return;
+  if (!confirm('Are you sure? This cannot be undone.')) return;
   await supabase.from('news_articles').delete().eq('id', id);
   loadNewsAdmin();
 };
@@ -1769,7 +1771,7 @@ document.getElementById('pm-save').addEventListener('click', async () => {
   closeProductModal(); loadAdminProducts();
 });
 window.adminEditProduct = async (id) => { const { data } = await supabase.from('products').select('*').eq('id',id).single(); if (data) openProductModal(data); };
-window.adminDeleteProduct = async (id) => { if (!confirm('Delete this product?')) return; await supabase.from('products').delete().eq('id',id); loadAdminProducts(); };
+window.adminDeleteProduct = async (id) => { if (!confirm('Delete this product?')) return; if (!confirm('Are you sure? This cannot be undone.')) return; await supabase.from('products').delete().eq('id',id); loadAdminProducts(); };
 
 // ── Config ────────────────────────────────────────────────────
 async function loadConfigTab() { await loadSiteConfig(); }
@@ -1843,7 +1845,7 @@ document.getElementById('nm-save').addEventListener('click', async () => {
   if (error) { const e = document.getElementById('nm-error'); e.textContent = 'Error: ' + error.message; e.style.display = 'block'; return; }
   closeNationModal(); await loadNationsAdmin();
 });
-window.deleteNation = async (id) => { if (!confirm('Delete this nation?')) return; await supabase.from('nations').delete().eq('id',id); await loadNationsAdmin(); };
+window.deleteNation = async (id) => { if (!confirm('Delete this nation?')) return; if (!confirm('Are you sure? This cannot be undone.')) return; await supabase.from('nations').delete().eq('id',id); await loadNationsAdmin(); };
 
 document.getElementById('btn-add-leader').addEventListener('click', () => openLeaderModal(null));
 window.openLeaderModal = (id) => {
@@ -1874,7 +1876,7 @@ document.getElementById('lm-save').addEventListener('click', async () => {
   if (error) { const e = document.getElementById('lm-error'); e.textContent = 'Error: ' + error.message; e.style.display = 'block'; return; }
   closeLeaderModal(); await loadLeadershipAdmin();
 });
-window.deleteLeader = async (id) => { if (!confirm('Remove this person?')) return; await supabase.from('leadership').delete().eq('id',id); await loadLeadershipAdmin(); };
+window.deleteLeader = async (id) => { if (!confirm('Remove this person?')) return; if (!confirm('Are you sure? This cannot be undone.')) return; await supabase.from('leadership').delete().eq('id',id); await loadLeadershipAdmin(); };
 
 // ── Club Presidents ───────────────────────────────────────────
 let _clubPresidents = [];
@@ -1942,6 +1944,7 @@ document.getElementById('cp-save').addEventListener('click', async () => {
 
 window.deleteClubPresident = async (id) => {
   if (!confirm('Remove this club president?')) return;
+  if (!confirm('Are you sure? This cannot be undone.')) return;
   await supabase.from('club_presidents').delete().eq('id', id);
   await loadClubPresidentsAdmin();
 };
@@ -2080,6 +2083,7 @@ window.toggleMessageRead = async (id, read) => {
 
 window.deleteMessage = async (id) => {
   if (!confirm('Delete this message?')) return;
+  if (!confirm('Are you sure? This cannot be undone.')) return;
   await supabase.from('admin_messages').delete().eq('id', id);
   _messages = _messages.filter(x => x.id !== id);
   renderMessages();
