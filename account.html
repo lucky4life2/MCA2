@@ -167,6 +167,17 @@
     <h2>Sign in to view your account</h2>
     <p>You need to be signed in to manage your MCA account.</p>
     <a href="login.html?return=account.html" class="btn btn-primary">Sign In</a>
+
+    <div id="appeal-form-wrap" style="display:none;max-width:420px;margin:1.5rem auto 0;text-align:left;">
+      <div class="form-group">
+        <label class="form-label" for="appeal-body">Appeal Message</label>
+        <textarea id="appeal-body" class="form-input" rows="5" maxlength="2000" placeholder="Explain why you believe this decision should be reversed..." style="resize:vertical;min-height:100px;"></textarea>
+        <div class="form-hint" id="appeal-char-count" style="text-align:right;">0 / 2000</div>
+      </div>
+      <div class="form-error" id="appeal-error"></div>
+      <div class="form-success" id="appeal-success"></div>
+      <button class="btn btn-primary" id="btn-send-appeal" style="width:100%;">Submit Appeal</button>
+    </div>
   </div>
 
   <div id="account-main" class="account-wrap" style="display:none;">
@@ -255,6 +266,7 @@
       <div class="account-section-body">
         <p class="form-hint" style="margin-bottom:1rem;">Send a message to the MCA admin team. Use this to report issues, appeal decisions, or ask questions.</p>
         <button class="btn btn-outline" id="btn-contact-admin">Send Message</button>
+        <div id="my-messages-list" style="margin-top:1.25rem;"></div>
       </div>
     </div>
 
@@ -410,23 +422,24 @@ async function init() {
 
   await loadProfile();
 
-  // Block frozen/terminated accounts
+  // Block frozen/terminated accounts, but let them file an appeal before
+  // we sign them out — otherwise they have no way to reach an admin.
   if (_profile.account_status === 'frozen') {
     elLoading.style.display = 'none';
     elNotSignedIn.style.display = 'block';
     elNotSignedIn.querySelector('h2').textContent = 'Account Frozen';
-    elNotSignedIn.querySelector('p').textContent = 'Your account has been frozen by an administrator. Contact an admin to appeal.';
+    elNotSignedIn.querySelector('p').textContent = 'Your account has been frozen by an administrator. You can submit an appeal below.';
     elNotSignedIn.querySelector('a').style.display = 'none';
-    await signOut();
+    initAppealForm('Account Frozen Appeal');
     return;
   }
   if (_profile.account_status === 'terminated') {
     elLoading.style.display = 'none';
     elNotSignedIn.style.display = 'block';
     elNotSignedIn.querySelector('h2').textContent = 'Account Terminated';
-    elNotSignedIn.querySelector('p').textContent = 'This account has been terminated.';
+    elNotSignedIn.querySelector('p').textContent = 'This account has been terminated. You can submit an appeal below.';
     elNotSignedIn.querySelector('a').style.display = 'none';
-    await signOut();
+    initAppealForm('Account Terminated Appeal');
     return;
   }
 
@@ -441,6 +454,43 @@ async function init() {
     if (event === 'SIGNED_OUT') {
       window.location.replace('login.html?return=account.html');
     }
+  });
+}
+
+function initAppealForm(subjectPrefix) {
+  const wrap    = document.getElementById('appeal-form-wrap');
+  const bodyEl  = document.getElementById('appeal-body');
+  const countEl = document.getElementById('appeal-char-count');
+  const errEl   = document.getElementById('appeal-error');
+  const succEl  = document.getElementById('appeal-success');
+  const sendBtn = document.getElementById('btn-send-appeal');
+
+  wrap.style.display = 'block';
+
+  bodyEl.addEventListener('input', function() {
+    countEl.textContent = `${this.value.length} / 2000`;
+  });
+
+  sendBtn.addEventListener('click', async () => {
+    const body = bodyEl.value.trim();
+    errEl.style.display = 'none';
+    succEl.style.display = 'none';
+    if (!body) { errEl.textContent = 'Please enter a message explaining your appeal.'; errEl.style.display = 'block'; return; }
+
+    sendBtn.disabled = true;
+    const { error } = await supabase.from('admin_messages').insert({ user_id: _user.id, subject: subjectPrefix, body });
+    if (error) {
+      errEl.textContent = error.message || 'Failed to send appeal. Please try again.';
+      errEl.style.display = 'block';
+      sendBtn.disabled = false;
+      return;
+    }
+
+    succEl.textContent = 'Appeal sent. An administrator will review it and reach out.';
+    succEl.style.display = 'block';
+    bodyEl.disabled = true;
+    sendBtn.style.display = 'none';
+    await signOut();
   });
 }
 
@@ -483,6 +533,9 @@ async function renderPage() {
 
   // Connected accounts
   await renderConnectedAccounts();
+
+  // Admin messages
+  loadMyMessages();
 
   // Minecraft
   renderMinecraft();
@@ -1143,6 +1196,35 @@ document.getElementById('btn-delete-account').addEventListener('click', async ()
 });
 
 // ── Contact Administrator ─────────────────────────────────────
+async function loadMyMessages() {
+  const listEl = document.getElementById('my-messages-list');
+  if (!listEl) return;
+  const { data, error } = await supabase
+    .from('admin_messages')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error || !data || !data.length) { listEl.innerHTML = ''; return; }
+
+  listEl.innerHTML = data.map(m => {
+    const time = new Date(m.created_at).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
+    return `<div style="border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:10px;">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:2px;">${time}</div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px;">${m.subject}</div>
+      <div style="font-size:13px;color:var(--mid);white-space:pre-wrap;">${m.body}</div>
+      ${m.admin_reply ? `
+      <div style="margin-top:8px;padding:10px 12px;background:var(--bg);border-left:3px solid var(--blue);border-radius:4px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--blue);margin-bottom:4px;">Admin Reply</div>
+        <div style="font-size:13px;white-space:pre-wrap;">${m.admin_reply}</div>
+      </div>` : `<div style="font-size:12px;color:var(--muted);margin-top:6px;font-style:italic;">Awaiting reply...</div>`}
+    </div>`;
+  }).join('');
+
+  const unreadReplyIds = data.filter(m => m.admin_reply && !m.reply_read).map(m => m.id);
+  if (unreadReplyIds.length) {
+    await supabase.from('admin_messages').update({ reply_read: true }).in('id', unreadReplyIds);
+  }
+}
+
 document.getElementById('btn-contact-admin').addEventListener('click', () => {
   document.getElementById('contact-modal').classList.remove('hidden');
   document.getElementById('contact-subject').focus();
@@ -1184,6 +1266,7 @@ document.getElementById('contact-send').addEventListener('click', async () => {
   succEl.style.display = 'block';
   document.getElementById('contact-subject').value = '';
   document.getElementById('contact-body').value = '';
+  loadMyMessages();
   setTimeout(closeContactModal, 2200);
 });
 

@@ -2041,6 +2041,7 @@ function renderMessages() {
     const p = m.profiles || {};
     const sender = p.display_name || p.username || p.email || m.user_id;
     const time = new Date(m.created_at).toLocaleString(undefined, { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
+    const replyTime = m.replied_at ? new Date(m.replied_at).toLocaleString(undefined, { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' }) : '';
     return `<div class="msg-row ${m.read ? '' : 'unread'}" data-id="${m.id}">
       <div class="msg-dot"></div>
       <div class="msg-content">
@@ -2050,6 +2051,15 @@ function renderMessages() {
         </div>
         <div class="msg-subject">${m.subject}</div>
         <div class="msg-body">${m.body}</div>
+        ${m.admin_reply ? `
+        <div class="msg-reply" style="margin-top:10px;padding:10px 12px;background:var(--bg);border-left:3px solid var(--blue);border-radius:4px;">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--blue);margin-bottom:4px;">Your Reply · ${replyTime}</div>
+          <div style="font-size:13px;white-space:pre-wrap;">${m.admin_reply}</div>
+        </div>` : `
+        <div class="msg-reply-form" style="margin-top:10px;">
+          <textarea class="form-input" id="reply-input-${m.id}" rows="2" placeholder="Write a reply..." style="resize:vertical;min-height:60px;width:100%;box-sizing:border-box;"></textarea>
+          <button class="btn btn-primary btn-sm" style="margin-top:6px;" onclick="sendMessageReply('${m.id}')">Send Reply</button>
+        </div>`}
       </div>
       <div class="msg-actions">
         ${m.read
@@ -2061,6 +2071,31 @@ function renderMessages() {
     </div>`;
   }).join('');
 }
+
+window.sendMessageReply = async (id) => {
+  const input = document.getElementById(`reply-input-${id}`);
+  const reply = input?.value.trim();
+  if (!reply) return;
+  const btn = input.nextElementSibling;
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase.from('admin_messages').update({
+    admin_reply: reply,
+    replied_at: new Date().toISOString(),
+    replied_by: user?.id || null,
+    reply_read: false,
+    read: true,
+  }).eq('id', id);
+  if (error) {
+    alert(error.message || 'Failed to send reply.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Send Reply'; }
+    return;
+  }
+  const m = _messages.find(x => x.id === id);
+  if (m) { m.admin_reply = reply; m.replied_at = new Date().toISOString(); m.read = true; }
+  renderMessages();
+  updateUnreadBadge();
+};
 
 function updateUnreadBadge() {
   const unread = _messages.filter(m => !m.read).length;
