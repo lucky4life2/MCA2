@@ -580,6 +580,7 @@ function copyAddress() {
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2000);
 }
+window.copyAddress = copyAddress;
 
 // Copy email address helper (footer)
 function copyEmail(el) {
@@ -588,6 +589,7 @@ function copyEmail(el) {
   el.textContent = 'Copied!';
   setTimeout(() => { el.innerHTML = orig; }, 2000);
 }
+window.copyEmail = copyEmail;
 
 // ── Nav auth + cart ───────────────────────────────────────────
 async function initNavAuth(_authReadyResolve) {
