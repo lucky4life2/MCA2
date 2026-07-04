@@ -805,8 +805,15 @@ footer {
     border-top: 1px solid var(--border);
     margin-top: 0.5rem;
     padding: 0.75rem 1.25rem 0.25rem;
-    justify-content: center;
+    justify-content: space-between;
     align-items: center;
+    gap: 12px;
+  }
+
+  .nav-theme-toggle-mobile {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px;
   }
 
   .nav-logo-img { height: 28px; }
