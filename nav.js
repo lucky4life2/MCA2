@@ -349,6 +349,7 @@ function showLockScreen(cfg) {
       <p style="margin-top:3rem;font-size:11px;color:#aaa;letter-spacing:0.5px;" id="lock-footer-text">
         MINECRAFT CLUB OF AMERICA
       </p>
+      <button id="lock-admin-login-btn" style="margin-top:1.25rem;background:none;border:none;color:#18489e;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;text-decoration:underline;">Admin Login</button>
     </div>
     <div id="lock-login-portal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:999;align-items:center;justify-content:center;">
       <div style="background:#fff;border-radius:10px;padding:2rem;width:100%;max-width:360px;margin:1rem;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
@@ -397,6 +398,11 @@ function showLockScreen(cfg) {
   }
   _steps.forEach((_, i) => attachStep(i));
 
+  document.getElementById('lock-admin-login-btn').addEventListener('click', () => {
+    resetSeq();
+    showLockLogin();
+  });
+
   function showLockLogin() {
     const portal = document.getElementById('lock-login-portal');
     portal.style.display = 'flex';
@@ -431,11 +437,19 @@ function showLockScreen(cfg) {
         refresh_token: json.refresh_token,
       });
       if (sessionErr) throw sessionErr;
-      // Verify they're actually an admin
+      // Verify they're actually an admin — check legacy role first, then the
+      // newer permission system, matching the logic used for the lock bypass.
+      let verifiedAdmin = false;
       const { data: profile } = await _sb.from('profiles').select('role').eq('id', json.user.id).single();
-      if (!profile || !['admin'].includes(profile.role)) {
+      if (profile && ['admin', 'owner'].includes(profile.role)) {
+        verifiedAdmin = true;
+      } else {
+        const { data: hasAccess } = await _sb.rpc('user_has_permission', { perm: 'can_view_admin' });
+        if (hasAccess === true) verifiedAdmin = true;
+      }
+      if (!verifiedAdmin) {
         await _sb.auth.signOut();
-        throw new Error('You do not have admin access.');
+        throw new Error('Sorry, this site is for admins only right now.');
       }
       window.location.reload();
     } catch(err) {
