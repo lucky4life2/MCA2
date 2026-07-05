@@ -670,11 +670,22 @@ async function renderConnectedAccounts(skipFetch = false) {
     </div>`;
 
   if (!hasDiscord) {
-    document.getElementById('btn-link-discord')?.addEventListener('click', () => {
-      supabase.auth.signInWithOAuth({
+    document.getElementById('btn-link-discord')?.addEventListener('click', async () => {
+      const btn = document.getElementById('btn-link-discord');
+      if (btn) { btn.disabled = true; btn.textContent = 'Redirecting…'; }
+      // Use linkIdentity (not signInWithOAuth) so Discord is attached to the
+      // currently signed-in account instead of starting a fresh sign-in flow.
+      // signInWithOAuth ignores the existing session and, when the Discord
+      // account's email differs from the signed-in user's email, Supabase
+      // creates/signs into a brand-new user instead of linking.
+      const { error } = await supabase.auth.linkIdentity({
         provider: 'discord',
         options: { redirectTo: window.location.origin + '/account.html' }
       });
+      if (error) {
+        alert('Could not link Discord: ' + error.message);
+        if (btn) { btn.disabled = false; btn.textContent = 'Link Discord'; }
+      }
     });
   }
   if (canUnlinkDiscord) {
