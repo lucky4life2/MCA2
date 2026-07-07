@@ -258,7 +258,7 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
 
           return false;
         })(),
-        new Promise(resolve => setTimeout(() => resolve(false), 6000)),
+        new Promise(resolve => setTimeout(() => resolve(false), 15000)),
       ]);
     } catch(e) {
       isAdminBypass = false;
@@ -785,11 +785,21 @@ async function initNavAuth(_authReadyResolve) {
     // 1. No cached session at all (INITIAL_SESSION never fired).
     // 2. INITIAL_SESSION fired with null session (expired token, TOKEN_REFRESHED
     //    incoming) — we still need to settle _authReadyReady if it hasn't yet.
+    //
+    // getUser() hits the network to validate the token with the auth server.
+    // After a long break (device/browser asleep, tab suspended, etc.) the
+    // network stack can take a while to come back up — DNS/TLS reconnects
+    // from cold. A short timeout here was previously treating that slow-but-
+    // fine reconnect as "not signed in" and forcing a manual sign-in even
+    // though the session was still perfectly valid. We now give it more room,
+    // and if it does time out we fall back to the locally cached session
+    // (getSession()) instead of assuming the worst — only truly signing the
+    // user out if there is no session at all.
     if (_authReadyResolve) {
       try {
         const { data: { user } } = await Promise.race([
           mod.supabase.auth.getUser(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('auth timeout')), 8000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('auth timeout')), 15000))
         ]);
         if (user) {
           const { isAdmin, canPublishNews } = await setSignedIn(user);
@@ -799,6 +809,17 @@ async function initNavAuth(_authReadyResolve) {
           setSignedOut();
         }
       } catch(e) {
+        // getUser() timed out or errored (likely a slow/cold network after a
+        // long break). Don't give up yet — check the locally cached session
+        // before deciding the user is signed out.
+        try {
+          const { data: { session: cachedSession } } = await mod.supabase.auth.getSession();
+          if (cachedSession?.user) {
+            const { isAdmin, canPublishNews } = await setSignedIn(cachedSession.user);
+            if (_authReadyResolve) { _authReadyResolve({ user: cachedSession.user, session: cachedSession, isAdmin, canPublishNews }); _authReadyResolve = null; }
+            return;
+          }
+        } catch(e2) {}
         if (_authReadyResolve) { _authReadyResolve({ user: null, session: null, isAdmin: false, canPublishNews: false }); _authReadyResolve = null; }
         setSignedOut();
       }
