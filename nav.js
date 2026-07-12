@@ -34,7 +34,9 @@ const _configReady = new Promise(r => { _configResolve = r; });
     }
   } catch(e) {}
   _configResolve();
+  window.EMAIL_US = EMAIL_US;
 })();
+window._configReady = _configReady;
 
 const NAV_HTML = () => {
   const dark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -58,6 +60,7 @@ const NAV_HTML = () => {
     </li>
     <li><a href="nations.html"    data-page="nations">Nations</a></li>
     <li><a href="news.html"       data-page="news">News</a></li>
+    <li><a href="help.html"       data-page="help">Help</a></li>
     <li><a href="${DISCORD_URL}" data-discord target="_blank" class="nav-discord">Discord</a></li>
     <li class="nav-theme-item nav-theme-item-mobile">
       <div class="nav-account nav-account-mobile" id="nav-account-mobile"></div>
@@ -106,6 +109,7 @@ const FOOTER_HTML = () => {
         <a href="nations.html">Nations</a>
         <a href="news.html">News</a>
         <a href="archive.html">Archive</a>
+        <a href="help.html">Help</a>
       </div>
 
       <div class="footer-col">

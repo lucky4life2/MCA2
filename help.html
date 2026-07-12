@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Help &amp; Support — Minecraft Club of America</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/x-icon" href="images/icon.ico">
+  <style>
+    .btn-contact {
+      background: var(--blue); color: var(--white); font-size: 14px; font-weight: 700;
+      padding: 13px 28px; border: none; border-radius: 4px; cursor: pointer;
+      text-decoration: none; display: inline-flex; align-items: center; gap: 10px;
+      transition: background .15s, transform .1s;
+    }
+    .btn-contact:hover { background: var(--blue-dark, #123); }
+    .btn-contact:active { transform: translateY(1px); }
+
+    .faq-toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 1.75rem; }
+    .faq-search {
+      flex: 1; min-width: 200px; padding: 10px 14px; border: 1px solid var(--border);
+      border-radius: 4px; font-size: 14px; font-family: 'Open Sans', sans-serif;
+      background: var(--white); color: var(--black);
+    }
+    .faq-search:focus { outline: none; border-color: var(--blue); }
+    .faq-cat-select {
+      padding: 10px 14px; border: 1px solid var(--border); border-radius: 4px;
+      font-size: 13px; background: var(--white); color: var(--black); cursor: pointer;
+    }
+
+    .faq-group-title {
+      font-family: 'Times New Roman', serif; font-size: 1.15rem; color: var(--blue);
+      margin: 2rem 0 .75rem; font-weight: normal;
+    }
+    .faq-group-title:first-child { margin-top: 0; }
+
+    .faq-item {
+      border: 1px solid var(--border); border-radius: 6px; margin-bottom: 10px;
+      overflow: hidden; background: var(--white);
+    }
+    .faq-question {
+      width: 100%; text-align: left; padding: 14px 18px; background: none; border: none;
+      cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; font-size: 15px; font-weight: 600; color: var(--black);
+      font-family: 'Open Sans', sans-serif;
+    }
+    .faq-question:hover { background: var(--bg); }
+    .faq-chevron { flex-shrink: 0; transition: transform .2s; color: var(--muted); }
+    .faq-item.open .faq-chevron { transform: rotate(180deg); }
+    .faq-answer {
+      max-height: 0; overflow: hidden; transition: max-height .25s ease, padding .25s ease;
+      padding: 0 18px; font-size: 14px; line-height: 1.7; color: var(--mid, var(--muted));
+    }
+    .faq-item.open .faq-answer { padding: 0 18px 16px; }
+    .faq-answer p { margin: 0 0 .75em; }
+    .faq-answer p:last-child { margin-bottom: 0; }
+
+    .faq-empty, .faq-loading, .faq-error {
+      text-align: center; padding: 2.5rem 1rem; color: var(--muted); font-size: 14px;
+    }
+    .faq-error { color: #c0392b; }
+  </style>
+</head>
+<body>
+
+<!-- nav + footer injected by nav.js -->
+
+<div class="page-wrap">
+
+  <div class="hero">
+    <div class="hero-eyebrow">Support</div>
+    <h1>Help &amp;<br><em>Support</em></h1>
+    <p class="hero-sub">Find answers to common questions below, or reach out to us directly — we're happy to help.</p>
+    <div class="hero-ctas">
+      <a href="#" id="help-contact-btn" class="btn-contact">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        Contact Us
+      </a>
+      <a href="#faq" class="btn-outline">Browse FAQ ↓</a>
+    </div>
+  </div>
+
+  <div class="content" id="faq">
+
+    <div class="section">
+      <div class="section-label">Frequently Asked Questions</div>
+      <h2>Questions &amp; Answers</h2>
+      <p>Can't find what you're looking for? <a href="#" id="help-contact-inline-link">Email us</a> and we'll get back to you.</p>
+
+      <div class="faq-toolbar">
+        <input type="text" class="faq-search" id="faq-search" placeholder="Search the FAQ…">
+        <select class="faq-cat-select" id="faq-category-select">
+          <option value="">All Categories</option>
+        </select>
+      </div>
+
+      <div id="faq-loading" class="faq-loading">Loading FAQ…</div>
+      <div id="faq-error" class="faq-error" style="display:none;"></div>
+      <div id="faq-empty" class="faq-empty" style="display:none;">No questions match your search.</div>
+      <div id="faq-list"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<script type="module" src="nav.js"></script>
+<script type="module">
+import { supabase } from './supabase.js';
+
+function escapeHtml(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Very small markdown-ish renderer for answers (bold/italic/links/paragraphs only —
+// FAQ answers are meant to be short, so we keep this intentionally simple).
+function renderAnswer(md) {
+  if (!md) return '';
+  let html = escapeHtml(md)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  return html.split(/\n{2,}/).map(p => p.trim() ? `<p>${p.replace(/\n/g,'<br>')}</p>` : '').join('');
+}
+
+let _faqs = [];
+let _filter = { search: '', category: '' };
+
+async function loadFaqs() {
+  const loadingEl = document.getElementById('faq-loading');
+  const errorEl   = document.getElementById('faq-error');
+  try {
+    const { data, error } = await supabase
+      .from('faqs')
+      .select('id,question,answer,category,sort_order')
+      .eq('status', 'published')
+      .order('category', { ascending: true })
+      .order('sort_order', { ascending: true });
+    if (error) throw error;
+    _faqs = data || [];
+
+    // Populate category filter
+    const categories = [...new Set(_faqs.map(f => f.category || 'General'))];
+    const catSelect = document.getElementById('faq-category-select');
+    categories.forEach(cat => {
+      const opt = document.createElement('option');
+      opt.value = cat; opt.textContent = cat;
+      catSelect.appendChild(opt);
+    });
+
+    loadingEl.style.display = 'none';
+    renderFaqs();
+  } catch (err) {
+    loadingEl.style.display = 'none';
+    errorEl.style.display = 'block';
+    errorEl.textContent = 'Could not load the FAQ right now. ' + err.message;
+  }
+}
+
+function renderFaqs() {
+  const listEl  = document.getElementById('faq-list');
+  const emptyEl = document.getElementById('faq-empty');
+  const q = _filter.search.trim().toLowerCase();
+
+  const filtered = _faqs.filter(f => {
+    if (_filter.category && (f.category || 'General') !== _filter.category) return false;
+    if (q && !(f.question.toLowerCase().includes(q) || f.answer.toLowerCase().includes(q))) return false;
+    return true;
+  });
+
+  if (!filtered.length) {
+    listEl.innerHTML = '';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  emptyEl.style.display = 'none';
+
+  // Group by category, preserving first-seen order
+  const grouped = {};
+  const order = [];
+  filtered.forEach(f => {
+    const cat = f.category || 'General';
+    if (!grouped[cat]) { grouped[cat] = []; order.push(cat); }
+    grouped[cat].push(f);
+  });
+
+  listEl.innerHTML = order.map(cat => `
+    <div class="faq-group-title">${escapeHtml(cat)}</div>
+    ${grouped[cat].map(f => `
+      <div class="faq-item" data-id="${f.id}">
+        <button class="faq-question" onclick="toggleFaq('${f.id}')">
+          <span>${escapeHtml(f.question)}</span>
+          <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-answer">${renderAnswer(f.answer)}</div>
+      </div>`).join('')}
+  `).join('');
+}
+
+window.toggleFaq = (id) => {
+  const item = document.querySelector(`.faq-item[data-id="${id}"]`);
+  if (!item) return;
+  const answer = item.querySelector('.faq-answer');
+  const isOpen = item.classList.contains('open');
+  if (isOpen) {
+    answer.style.maxHeight = null;
+    item.classList.remove('open');
+  } else {
+    item.classList.add('open');
+    answer.style.maxHeight = answer.scrollHeight + 'px';
+  }
+};
+
+document.getElementById('faq-search').addEventListener('input', function() {
+  _filter.search = this.value;
+  renderFaqs();
+});
+document.getElementById('faq-category-select').addEventListener('change', function() {
+  _filter.category = this.value;
+  renderFaqs();
+});
+
+loadFaqs();
+
+// ── Contact Us button — opens the default mail client directly ──
+// Uses the same site-config-driven email as the footer, falling back to
+// the hardcoded default immediately so the button works before config loads.
+function buildMailto() {
+  const email = window.EMAIL_US || 'minecraftclubofamerica@gmail.com';
+  const subject = encodeURIComponent('MCA Help Request');
+  return `mailto:${email}?subject=${subject}`;
+}
+function wireContactButtons() {
+  const href = buildMailto();
+  const btn = document.getElementById('help-contact-btn');
+  const inline = document.getElementById('help-contact-inline-link');
+  if (btn) btn.href = href;
+  if (inline) inline.href = href;
+}
+wireContactButtons();
+if (window._configReady) window._configReady.then(wireContactButtons);
+</script>
+</body>
+</html>

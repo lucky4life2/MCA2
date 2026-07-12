@@ -383,6 +383,7 @@
         <div class="admin-tab-group-menu">
           <button class="admin-tab-group-item" data-tab="news">News</button>
           <button class="admin-tab-group-item" data-tab="archive">Archive</button>
+          <button class="admin-tab-group-item" data-tab="faqs">FAQs</button>
           <button class="admin-tab-group-item" data-tab="leadership">Leadership</button>
           <button class="admin-tab-group-item" data-tab="club-presidents">Club Presidents</button>
           <button class="admin-tab-group-item" data-tab="nations">Nations</button>
@@ -532,6 +533,7 @@
               <div><code style="font-family:monospace;font-size:11px;">can_manage_news</code> — Write & edit news articles</div>
               <div><code style="font-family:monospace;font-size:11px;">can_publish_news</code> — Publish/unpublish articles</div>
               <div><code style="font-family:monospace;font-size:11px;">can_manage_archive</code> — Write & edit archive documents (Congress)</div>
+              <div><code style="font-family:monospace;font-size:11px;">can_manage_faqs</code> — Write & edit the Help page FAQ</div>
               <div><code style="font-family:monospace;font-size:11px;">can_manage_shop</code> — Manage products</div>
               <div><code style="font-family:monospace;font-size:11px;">can_manage_config</code> — Edit site configuration</div>
               <div><code style="font-family:monospace;font-size:11px;">can_manage_minecraft</code> — Handle MC verifications</div>
@@ -581,6 +583,27 @@
         </div>
         <div id="archive-doc-list">
           <div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">Loading documents...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── FAQS ──────────────────────────────────────────── -->
+    <div class="admin-panel" id="tab-faqs">
+      <div class="admin-section">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Help Page FAQ</div>
+          <button class="btn btn-primary" id="btn-new-faq" style="font-size:12px;padding:7px 16px;">+ New Question</button>
+        </div>
+        <div class="filter-bar">
+          <input type="text" class="search-input search-input-grow" id="faq-admin-search" placeholder="Search questions...">
+          <select class="filter-select" id="faq-admin-filter-status">
+            <option value="">All Status</option>
+            <option value="published">Published</option>
+            <option value="draft">Draft</option>
+          </select>
+        </div>
+        <div id="faq-admin-list">
+          <div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">Loading questions...</div>
         </div>
       </div>
     </div>
@@ -982,6 +1005,47 @@
     </div>
   </div>
 </div>
+
+<!-- FAQ editor modal -->
+<div id="faq-modal" style="display:none;position:fixed;inset:0;background:rgba(10,15,30,.5);z-index:400;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:var(--white);border-radius:8px;border:1px solid var(--border);width:100%;max-width:600px;max-height:92vh;overflow-y:auto;box-shadow:0 16px 48px rgba(10,15,30,.2);">
+    <div style="padding:1.5rem 1.5rem 0;display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-family:'Times New Roman',serif;font-size:1.3rem;color:var(--blue);font-weight:normal;" id="fm-title">New Question</div>
+      <button id="fm-close" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:20px;line-height:1;padding:4px;">✕</button>
+    </div>
+    <div style="padding:1.5rem;">
+      <input type="hidden" id="fm-id">
+      <div class="form-group"><label class="form-label">Question *</label><input type="text" id="fm-question" class="form-input" placeholder="e.g. How do I join the server?"></div>
+      <div class="form-group">
+        <label class="form-label">Answer *</label>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Supports **bold**, *italic*, [links](url). Keep it short — this is an FAQ, not an article.</div>
+        <textarea id="fm-answer" class="form-input" rows="5" style="resize:vertical;"></textarea>
+      </div>
+      <div class="col2-grid">
+        <div class="form-group"><label class="form-label">Category</label><input type="text" id="fm-category" class="form-input" list="fm-category-list" placeholder="e.g. Getting Started">
+          <datalist id="fm-category-list">
+            <option value="Getting Started"><option value="How It Works"><option value="Support"><option value="General">
+          </datalist>
+        </div>
+        <div class="form-group"><label class="form-label">Status</label>
+          <select id="fm-status" class="form-input">
+            <option value="draft">Draft</option>
+            <option value="published">Published</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Sort Order</label><input type="number" id="fm-sort-order" class="form-input" value="0" style="max-width:120px;">
+        <p class="form-hint">Lower numbers show first within a category.</p>
+      </div>
+    </div>
+    <div id="fm-error" style="font-size:13px;color:#c0392b;padding:0 1.5rem .5rem;display:none;"></div>
+    <div style="padding:0 1.5rem 1.5rem;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+      <button id="fm-cancel" style="background:transparent;color:var(--muted);font-size:13px;font-weight:600;padding:9px 18px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">Cancel</button>
+      <button id="fm-save-draft" style="background:transparent;color:var(--blue);font-size:13px;font-weight:600;padding:9px 18px;border:1px solid var(--blue);border-radius:4px;cursor:pointer;">Save Draft</button>
+      <button id="fm-save-publish" style="background:var(--blue);color:#fff;font-size:13px;font-weight:600;padding:9px 18px;border:none;border-radius:4px;cursor:pointer;">Publish</button>
+    </div>
+  </div>
+</div>
 </div>
 
 <script type="module" src="nav.js"></script>
@@ -1006,6 +1070,7 @@ const ALL_PERMISSIONS = [
   { key: 'can_manage_news',      label: 'Write & Edit News',       group: 'content' },
   { key: 'can_publish_news',     label: 'Publish / Unpublish',     group: 'content' },
   { key: 'can_manage_archive',   label: 'Write & Edit Archive',    group: 'content' },
+  { key: 'can_manage_faqs',      label: 'Write & Edit FAQs',       group: 'content' },
   { key: 'can_manage_shop',      label: 'Manage Shop Products',    group: 'content' },
   { key: 'can_manage_config',    label: 'Edit Site Config',        group: 'content' },
   { key: 'can_manage_minecraft', label: 'MC Verifications',        group: 'content' },
@@ -1843,6 +1908,129 @@ window.deleteDoc = async (id) => {
   loadArchiveAdmin();
 };
 
+// ── FAQ admin ─────────────────────────────────────────────────
+let _faqs = [];
+let _faqFilter = { search: '', status: '' };
+
+async function loadFaqAdmin() {
+  const el = document.getElementById('faq-admin-list');
+  try {
+    const { data, error } = await supabase.from('faqs').select('*')
+      .order('category', { ascending: true }).order('sort_order', { ascending: true });
+    if (error) throw error;
+    _faqs = data || [];
+    renderFaqAdmin();
+  } catch(e) {
+    el.innerHTML = `<div style="padding:1.5rem;color:#c0392b;font-size:13px;">Error loading FAQ: ${e.message}</div>`;
+  }
+}
+
+function renderFaqAdmin() {
+  const el = document.getElementById('faq-admin-list');
+  const { search, status } = _faqFilter;
+  const q = search.toLowerCase();
+  const filtered = _faqs.filter(f => {
+    if (q && !f.question.toLowerCase().includes(q)) return false;
+    if (status && f.status !== status) return false;
+    return true;
+  });
+
+  if (!filtered.length) {
+    el.innerHTML = `<div style="text-align:center;padding:2.5rem;color:var(--muted);font-size:14px;">${_faqs.length ? 'No questions match your filters.' : 'No questions yet. Click "+ New Question" to get started.'}</div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.map(f => `<div class="news-article-row">
+      <div style="flex:1;min-width:0;">
+        <div class="news-article-title">
+          <span class="status-dot ${f.status}"></span>${f.question}
+        </div>
+        <div class="news-article-meta">${f.category || 'General'} · Sort ${f.sort_order} · ${f.status === 'published' ? 'Published' : 'Draft'}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;">
+        ${f.status !== 'published' ? `<button class="btn btn-success btn-sm" onclick="publishFaq('${f.id}')">Publish</button>` : `<button class="btn btn-outline btn-sm" onclick="unpublishFaq('${f.id}')">Unpublish</button>`}
+        <button class="btn btn-outline btn-sm" onclick="editFaq('${f.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteFaq('${f.id}')">Delete</button>
+      </div>
+    </div>`).join('');
+}
+
+document.getElementById('faq-admin-search').addEventListener('input', function() {
+  _faqFilter.search = this.value;
+  renderFaqAdmin();
+});
+document.getElementById('faq-admin-filter-status').addEventListener('change', function() {
+  _faqFilter.status = this.value;
+  renderFaqAdmin();
+});
+
+function openFaqModal(faq = null) {
+  document.getElementById('fm-id').value          = faq?.id || '';
+  document.getElementById('fm-question').value    = faq?.question || '';
+  document.getElementById('fm-answer').value      = faq?.answer || '';
+  document.getElementById('fm-category').value    = faq?.category || '';
+  document.getElementById('fm-status').value      = faq?.status || 'draft';
+  document.getElementById('fm-sort-order').value  = faq?.sort_order ?? 0;
+  document.getElementById('fm-error').style.display = 'none';
+  document.getElementById('fm-title').textContent = faq ? 'Edit Question' : 'New Question';
+  document.getElementById('faq-modal').style.display = 'flex';
+}
+function closeFaqModal() { document.getElementById('faq-modal').style.display = 'none'; }
+
+document.getElementById('btn-new-faq').addEventListener('click', () => openFaqModal());
+document.getElementById('fm-close').addEventListener('click', closeFaqModal);
+document.getElementById('fm-cancel').addEventListener('click', closeFaqModal);
+
+async function saveFaq(forceStatus = null) {
+  const id       = document.getElementById('fm-id').value;
+  const question = document.getElementById('fm-question').value.trim();
+  const answer   = document.getElementById('fm-answer').value.trim();
+  const errEl    = document.getElementById('fm-error');
+  errEl.style.display = 'none';
+  if (!question || !answer) { errEl.textContent = 'Question and answer are both required.'; errEl.style.display = 'block'; return; }
+
+  const status = forceStatus || document.getElementById('fm-status').value;
+  const payload = {
+    question, answer,
+    category:   document.getElementById('fm-category').value.trim() || 'General',
+    status,
+    sort_order: parseInt(document.getElementById('fm-sort-order').value, 10) || 0,
+  };
+
+  let error;
+  if (id) {
+    ({ error } = await supabase.from('faqs').update(payload).eq('id', id));
+  } else {
+    const { data: { user } } = await supabase.auth.getUser();
+    ({ error } = await supabase.from('faqs').insert({ ...payload, author_id: user.id }));
+  }
+  if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+  closeFaqModal();
+  loadFaqAdmin();
+}
+
+document.getElementById('fm-save-draft').addEventListener('click',   () => saveFaq('draft'));
+document.getElementById('fm-save-publish').addEventListener('click', () => saveFaq('published'));
+
+window.editFaq = (id) => {
+  const f = _faqs.find(x => x.id === id);
+  if (f) openFaqModal(f);
+};
+window.publishFaq = async (id) => {
+  await supabase.from('faqs').update({ status: 'published' }).eq('id', id);
+  loadFaqAdmin();
+};
+window.unpublishFaq = async (id) => {
+  await supabase.from('faqs').update({ status: 'draft' }).eq('id', id);
+  loadFaqAdmin();
+};
+window.deleteFaq = async (id) => {
+  if (!confirm('Delete this question? This cannot be undone.')) return;
+  if (!confirm('Are you sure? This cannot be undone.')) return;
+  await supabase.from('faqs').delete().eq('id', id);
+  loadFaqAdmin();
+};
+
 // ── Site Lock ─────────────────────────────────────────────────
 async function loadLockState() {
   const badge = document.getElementById('lock-status-badge');
@@ -2401,6 +2589,7 @@ function switchTab(tabName) {
   if (tabName === 'config')     loadConfigTab();
   if (tabName === 'news')       loadNewsAdmin();
   if (tabName === 'archive')    loadArchiveAdmin();
+  if (tabName === 'faqs')       loadFaqAdmin();
   if (tabName === 'roles')      renderRoles();
   if (tabName === 'messages')   loadMessages();
   if (tabName === 'leadership')      loadLeadershipAdmin();
