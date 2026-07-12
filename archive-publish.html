@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Archive Publishing — MCA</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/x-icon" href="images/icon.ico">
+  <style>
+    /* ── Layout ─────────────────────────────── */
+    .ap-wrap    { max-width: 960px; margin: 0 auto; padding: 3.5rem 2rem 6rem; }
+    .ap-hero    { border-bottom: 1px solid var(--border); padding-bottom: 2rem; margin-bottom: 2.5rem; }
+    .ap-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: var(--green); margin-bottom: .75rem; display: flex; align-items: center; gap: 10px; }
+    .ap-eyebrow::after { content: ''; display: block; height: 1px; width: 40px; background: var(--green); opacity: .6; }
+    .ap-hero h1 { font-family: 'Times New Roman', serif; font-size: clamp(1.75rem, 4vw, 2.5rem); font-weight: 700; color: var(--blue); line-height: 1.15; }
+    .ap-hero-sub { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+    /* ── Two-panel split ────────────────────── */
+    .ap-split { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .col2-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 720px) {
+      .ap-split { grid-template-columns: 1fr; }
+      .ap-wrap { padding: 2rem 1.25rem 5rem; }
+      .ap-panel-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+      .ap-panel-header .btn-row { width: 100%; }
+      .ap-panel-header .btn-row .btn { flex: 1; text-align: center; }
+      .col2-grid { grid-template-columns: 1fr; }
+      .editor-toolbar { gap: 6px; }
+      .tb-btn { padding: 6px 10px; font-size: 12px; }
+      #ap-body { min-height: 220px; font-size: 14px; }
+      .doc-row { flex-wrap: wrap; gap: 8px; padding: 12px 1rem; }
+      .doc-row .btn-row { width: 100%; justify-content: flex-start; gap: 6px; }
+      .doc-row .btn-row .btn { flex: 1; text-align: center; }
+    }
+    @media (max-width: 480px) {
+      .ap-wrap { padding: 1.5rem 1rem 5rem; }
+      .ap-hero { padding-bottom: 1.5rem; margin-bottom: 1.5rem; }
+      .ap-hero h1 { font-size: 1.6rem; }
+      .preview-tabs { margin-bottom: .75rem; }
+      #ap-summary { font-size: 14px; }
+      .form-input { font-size: 14px; padding: 10px 12px; }
+      #ap-toast { left: 1rem; right: 1rem; bottom: 1rem; max-width: unset; text-align: center; }
+      .doc-row .btn-row { display: grid; grid-template-columns: 1fr 1fr; }
+    }
+
+    /* ── Panel/card ────────────────────────── */
+    .ap-panel { border: 1px solid var(--border); border-radius: 6px; background: var(--white); overflow: hidden; }
+    .ap-panel-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .ap-panel-title { font-family: 'Times New Roman', serif; font-size: 1.1rem; color: var(--blue); font-weight: normal; }
+    .ap-panel-body { padding: 1.5rem; }
+
+    /* ── Form ─────────────────────────────── */
+    .form-group { margin-bottom: 1.1rem; }
+    .form-label { display: block; font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+    .form-input { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 4px; font-family: 'Open Sans', sans-serif; font-size: 13px; background: var(--white); color: var(--black); box-sizing: border-box; transition: border-color .15s; }
+    .form-input:focus { outline: none; border-color: var(--blue); }
+    select.form-input { cursor: pointer; }
+    textarea.form-input { resize: vertical; line-height: 1.6; }
+    .form-hint { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+
+    /* ── File upload ──────────────────────── */
+    .file-drop { border: 1px dashed var(--border); border-radius: 4px; padding: 14px; display: flex; align-items: center; gap: 12px; }
+    .file-drop input[type=file] { font-size: 12px; }
+    .file-current { font-size: 12px; color: var(--blue); }
+    .file-current a { color: var(--blue); }
+
+    /* ── Editor area ──────────────────────── */
+    .editor-wrap { position: relative; }
+    #ap-body { font-family: 'Courier New', monospace; font-size: 13px; min-height: 320px; line-height: 1.7; }
+    .editor-toolbar { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
+    .tb-btn { font-size: 11px; font-weight: 600; padding: 4px 9px; border: 1px solid var(--border); background: var(--white); color: var(--black); border-radius: 3px; cursor: pointer; transition: background .1s; font-family: monospace; }
+    .tb-btn:hover { background: var(--bg); }
+
+    /* ── Preview ──────────────────────────── */
+    #ap-preview { min-height: 200px; font-size: 14px; line-height: 1.85; color: var(--black); }
+    #ap-preview h1,#ap-preview h2,#ap-preview h3,#ap-preview h4 { font-family: 'Times New Roman', serif; color: var(--blue); margin: 1.5em 0 .5em; }
+    #ap-preview p { margin: 0 0 1em; }
+    #ap-preview ul,#ap-preview ol { padding-left: 1.5em; margin: 0 0 1em; }
+    #ap-preview li { margin: .25em 0; }
+    #ap-preview code { font-family: monospace; font-size: .9em; background: var(--bg); padding: 1px 4px; border-radius: 2px; }
+    #ap-preview a { color: var(--blue); }
+    #ap-preview hr { border: none; border-top: 1px solid var(--border); margin: 1.5em 0; }
+    #ap-preview strong { font-weight: 700; }
+    #ap-preview em { font-style: italic; }
+
+    /* ── Document list ──────────────────────── */
+    .doc-row { padding: 12px 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+    .doc-row:last-child { border-bottom: none; }
+    .doc-row-info { flex: 1; min-width: 0; }
+    .doc-row-title { font-weight: 600; font-size: 13px; color: var(--black); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .doc-row-meta  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .status-pip { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 4px; flex-shrink: 0; }
+    .status-pip.published { background: #2d7d2f; }
+    .status-pip.draft     { background: #b07d00; }
+    .status-pip.archived  { background: var(--muted); }
+
+    /* ── Buttons ───────────────────────────── */
+    .btn { font-size: 12px; font-weight: 600; padding: 8px 16px; border-radius: 4px; cursor: pointer; transition: background .15s, color .15s; border: none; white-space: nowrap; }
+    .btn-primary  { background: var(--blue); color: #fff; }
+    .btn-primary:hover  { background: var(--blue-dark); }
+    .btn-success  { background: #2d7d2f; color: #fff; }
+    .btn-success:hover  { background: #235e25; }
+    .btn-outline  { background: transparent; color: var(--blue); border: 1px solid var(--border); }
+    .btn-outline:hover  { background: var(--blue); color: #fff; }
+    .btn-ghost   { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .btn-ghost:hover   { background: var(--bg); color: var(--black); }
+    .btn-danger  { background: transparent; color: #c0392b; border: 1px solid var(--border); }
+    .btn-danger:hover  { background: #c0392b; color: #fff; }
+    .btn-sm { font-size: 10px; padding: 4px 9px; }
+    .btn-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+    /* ── States ────────────────────────────── */
+    .ap-loading { display: flex; align-items: center; justify-content: center; min-height: 60vh; flex-direction: column; gap: 12px; color: var(--muted); font-size: 14px; }
+    .ap-spinner { width: 26px; height: 26px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .ap-denied { text-align: center; padding: 6rem 2rem; }
+    .ap-denied h2 { font-family: 'Times New Roman', serif; font-size: 1.6rem; color: var(--blue); font-weight: normal; margin-bottom: .75rem; }
+    .ap-denied p { font-size: 14px; color: var(--muted); max-width: 400px; margin: 0 auto; }
+
+    /* ── Toast ─────────────────────────────── */
+    #ap-toast { position: fixed; bottom: 2rem; right: 2rem; background: var(--blue); color: #fff; padding: 12px 20px; border-radius: 6px; font-size: 13px; font-weight: 600; box-shadow: 0 8px 24px rgba(10,15,30,.2); transform: translateY(20px); opacity: 0; transition: all .25s; pointer-events: none; z-index: 600; max-width: 320px; }
+    #ap-toast.show { transform: translateY(0); opacity: 1; }
+    #ap-toast.error { background: #c0392b; }
+
+    .char-count { font-size: 10px; color: var(--muted); text-align: right; margin-top: 3px; }
+
+    .preview-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+    .preview-tab { padding: 8px 16px; font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; color: var(--muted); margin-bottom: -1px; transition: all .15s; }
+    .preview-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+  </style>
+</head>
+<body>
+<script type="module" src="nav.js"></script>
+
+<div id="ap-loading" class="ap-loading">
+  <div class="ap-spinner"></div>
+  <span>Checking access...</span>
+</div>
+
+<div id="ap-denied" class="ap-wrap ap-denied" style="display:none;">
+  <h2>Access Denied</h2>
+  <p>You need the <strong>Congress</strong> role (or the <code>can_manage_archive</code> permission) to access the archive dashboard. Contact an admin to get access.</p>
+  <div style="margin-top:1.5rem;"><a href="index.html" style="font-size:13px;color:var(--blue);">← Back to Home</a></div>
+</div>
+
+<div id="ap-main" class="ap-wrap" style="display:none;">
+
+  <!-- Hero -->
+  <div class="ap-hero">
+    <div class="ap-eyebrow">Archive Publishing</div>
+    <h1>Congress Archive Dashboard</h1>
+    <p class="ap-hero-sub" id="ap-author-meta"></p>
+  </div>
+
+  <!-- Editor -->
+  <div class="ap-split" style="margin-bottom:1.5rem;">
+    <div class="ap-panel" style="grid-column:1/-1;">
+      <div class="ap-panel-header">
+        <div class="ap-panel-title" id="editor-heading">New Document</div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" id="btn-clear-editor">Clear</button>
+          <button class="btn btn-outline" id="btn-save-draft">Save Draft</button>
+          <button class="btn btn-success" id="btn-publish">Publish Now</button>
+        </div>
+      </div>
+      <div class="ap-panel-body">
+        <input type="hidden" id="ap-editing-id">
+
+        <div class="form-group">
+          <label class="form-label">Document Title *</label>
+          <input type="text" id="ap-title" class="form-input" placeholder="e.g. The Nation Recognition Act of 2026">
+        </div>
+
+        <div class="col2-grid">
+          <div class="form-group">
+            <label class="form-label">Category</label>
+            <input type="text" id="ap-category" class="form-input" list="ap-category-list" placeholder="e.g. MCA Law">
+            <datalist id="ap-category-list">
+              <option value="MCA Law">
+              <option value="Constitution">
+              <option value="Executive Orders">
+              <option value="Treaties">
+              <option value="Resolutions">
+              <option value="Uncategorized">
+            </datalist>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Date of Publish / Ratification</label>
+            <input type="date" id="ap-published-at" class="form-input">
+            <div class="form-hint">Leave blank to use today's date when published.</div>
+          </div>
+        </div>
+
+        <div class="col2-grid">
+          <div class="form-group">
+            <label class="form-label">Issued By / Sponsor</label>
+            <input type="text" id="ap-author-name" class="form-input" placeholder="e.g. FactFox, HolyPied — World Congress">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Supporters (comma separated)</label>
+            <input type="text" id="ap-supporters" class="form-input" placeholder="e.g. Silky, Rector, FactFox">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Original Document (scan or PDF)</label>
+          <div class="file-drop">
+            <input type="file" id="ap-file" accept="image/*,application/pdf">
+            <span class="file-current" id="ap-file-current"></span>
+          </div>
+          <div class="form-hint">Uploading a new file replaces the current one. Images and PDFs supported.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Summary</label>
+          <textarea id="ap-summary" class="form-input" rows="2" placeholder="One or two sentences describing what this document is…"></textarea>
+          <div class="char-count" id="ap-summary-count">0 / 280</div>
+        </div>
+
+        <div class="preview-tabs">
+          <button class="preview-tab active" id="tab-write" data-mode="write">Write</button>
+          <button class="preview-tab" id="tab-preview" data-mode="preview">Preview</button>
+        </div>
+
+        <div class="editor-toolbar" id="ap-toolbar">
+          <button class="tb-btn" data-wrap="**" title="Bold">B</button>
+          <button class="tb-btn" data-wrap="*"  title="Italic"><em>I</em></button>
+          <button class="tb-btn" data-prefix="## "  title="Heading">H2</button>
+          <button class="tb-btn" data-prefix="### " title="Sub-heading">H3</button>
+          <button class="tb-btn" data-prefix="- "   title="List item">• List</button>
+          <button class="tb-btn" data-link         title="Insert link">Link</button>
+          <button class="tb-btn" data-prefix="---" title="Divider">—</button>
+        </div>
+
+        <div class="editor-wrap form-group" id="ap-write-area">
+          <textarea id="ap-body" class="form-input" rows="16"
+            placeholder="Write the plain-English explanation in Markdown…
+
+## What This Document Is
+
+Plain-English explanation of the document.
+
+## Key Points
+
+- First important point
+- Second important point
+
+## Historical Context
+
+Any background information."></textarea>
+          <div class="char-count" id="ap-body-count">0 chars</div>
+        </div>
+
+        <div id="ap-preview-area" style="display:none;">
+          <div id="ap-preview" style="border:1px solid var(--border);border-radius:4px;padding:1.25rem;background:var(--bg);min-height:200px;"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- My documents + all documents -->
+  <div class="ap-split">
+    <div class="ap-panel">
+      <div class="ap-panel-header">
+        <div class="ap-panel-title">My Documents</div>
+        <span id="my-count" style="font-size:11px;color:var(--muted);"></span>
+      </div>
+      <div id="my-docs-list">
+        <div style="padding:1.5rem;text-align:center;color:var(--muted);font-size:13px;">Loading…</div>
+      </div>
+    </div>
+
+    <div class="ap-panel">
+      <div class="ap-panel-header">
+        <div class="ap-panel-title">All Published</div>
+        <span id="all-count" style="font-size:11px;color:var(--muted);"></span>
+      </div>
+      <div id="all-docs-list">
+        <div style="padding:1.5rem;text-align:center;color:var(--muted);font-size:13px;">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /ap-main -->
+
+<div id="ap-toast"></div>
+
+<script type="module">
+import { supabase } from './supabase.js';
+
+const BUCKET = 'archive-files';
+
+function renderMarkdown(md) {
+  if (!md) return '<em style="color:var(--muted);">Nothing to preview yet.</em>';
+  let html = md
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/^### (.+)$/gm,'<h3>$1</h3>').replace(/^## (.+)$/gm,'<h2>$1</h2>').replace(/^# (.+)$/gm,'<h1>$1</h1>')
+    .replace(/^---+$/gm,'<hr>')
+    .replace(/\*\*\*(.+?)\*\*\*/g,'<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  html = html.replace(/(^[-*] .+\n?)+/gm, m => {
+    const items = m.trim().split('\n').map(l=>`<li>${l.replace(/^[-*] /,'')}</li>`).join('');
+    return `<ul>${items}</ul>`;
+  });
+  html = html.split(/\n{2,}/).map(block => {
+    block = block.trim(); if (!block) return '';
+    if (/^<(h[1-6]|ul|ol|hr)/.test(block)) return block;
+    return `<p>${block.replace(/\n/g,'<br>')}</p>`;
+  }).join('\n');
+  return html;
+}
+
+let _user = null, _profile = null;
+let _myDocs = [], _allDocs = [], _editingId = null;
+let _pendingFile = null;   // File object staged for upload
+let _currentFileUrl = null, _currentFileName = null;
+
+function toast(msg, isError = false) {
+  const el = document.getElementById('ap-toast');
+  el.textContent = msg;
+  el.className = 'show' + (isError ? ' error' : '');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.className = ''; }, 3000);
+}
+
+async function init() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) { showState('denied'); return; }
+  _user = session.user;
+
+  let hasAccess = false;
+  try {
+    const { data, error } = await supabase.rpc('user_has_permission', { perm: 'can_manage_archive' });
+    if (!error && data === true) hasAccess = true;
+    else if (error) throw new Error('rpc_missing');
+  } catch (e) {
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', _user.id).single();
+    hasAccess = profile?.role === 'owner' || profile?.role === 'admin';
+  }
+
+  if (!hasAccess) { showState('denied'); return; }
+
+  const { data: profile } = await supabase.from('profiles').select('display_name,username').eq('id', _user.id).single();
+  _profile = profile;
+  const name = profile?.display_name || profile?.username || _user.email;
+  document.getElementById('ap-author-meta').textContent = `Publishing as ${name}`;
+
+  showState('main');
+  await loadDocs();
+}
+
+function showState(which) {
+  document.getElementById('ap-loading').style.display = which === 'loading' ? '' : 'none';
+  document.getElementById('ap-denied').style.display  = which === 'denied'  ? '' : 'none';
+  document.getElementById('ap-main').style.display    = which === 'main'    ? '' : 'none';
+}
+
+async function loadDocs() {
+  const { data: mine } = await supabase
+    .from('archive_documents').select('*')
+    .eq('author_id', _user.id)
+    .order('created_at', { ascending: false });
+  _myDocs = mine || [];
+
+  const { data: all } = await supabase
+    .from('archive_documents').select('id,title,category,author_name,published_at,status')
+    .eq('status', 'published')
+    .order('published_at', { ascending: false })
+    .limit(20);
+  _allDocs = all || [];
+
+  renderMyDocs();
+  renderAllDocs();
+}
+
+function renderMyDocs() {
+  const el = document.getElementById('my-docs-list');
+  document.getElementById('my-count').textContent = `${_myDocs.length} document${_myDocs.length !== 1 ? 's' : ''}`;
+  if (!_myDocs.length) {
+    el.innerHTML = `<div style="padding:1.5rem;text-align:center;color:var(--muted);font-size:13px;">No documents yet. Add your first one above!</div>`;
+    return;
+  }
+  el.innerHTML = _myDocs.map(d => {
+    const date = d.published_at
+      ? new Date(d.published_at + 'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+      : new Date(d.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    return `<div class="doc-row">
+      <span class="status-pip ${d.status}"></span>
+      <div class="doc-row-info">
+        <div class="doc-row-title">${d.title}</div>
+        <div class="doc-row-meta">${d.category||'Uncategorized'} · ${capitalise(d.status)} · ${date}</div>
+      </div>
+      <div style="display:flex;gap:5px;flex-shrink:0;">
+        <button class="btn btn-outline btn-sm" onclick="loadIntoEditor('${d.id}')">Edit</button>
+        ${d.status !== 'published'
+          ? `<button class="btn btn-success btn-sm" onclick="quickPublish('${d.id}')">Publish</button>`
+          : `<button class="btn btn-ghost btn-sm" onclick="quickUnpublish('${d.id}')">Unpublish</button>`}
+        <button class="btn btn-danger btn-sm" onclick="deleteDoc('${d.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderAllDocs() {
+  const el = document.getElementById('all-docs-list');
+  document.getElementById('all-count').textContent = `${_allDocs.length} published`;
+  if (!_allDocs.length) {
+    el.innerHTML = `<div style="padding:1.5rem;text-align:center;color:var(--muted);font-size:13px;">No published documents yet.</div>`;
+    return;
+  }
+  el.innerHTML = _allDocs.map(d => {
+    const date = d.published_at
+      ? new Date(d.published_at + 'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+      : '';
+    return `<div class="doc-row">
+      <span class="status-pip published"></span>
+      <div class="doc-row-info">
+        <div class="doc-row-title">${d.title}</div>
+        <div class="doc-row-meta">${d.category||'Uncategorized'} · ${d.author_name||'Unknown'} · ${date}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function capitalise(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+function slugify(text) {
+  return text.toLowerCase().replace(/[^\w\s-]/g,'').replace(/\s+/g,'-').replace(/-+/g,'-').slice(0,80);
+}
+
+function clearEditor() {
+  document.getElementById('ap-editing-id').value = '';
+  document.getElementById('ap-title').value      = '';
+  document.getElementById('ap-category').value   = '';
+  document.getElementById('ap-supporters').value = '';
+  document.getElementById('ap-summary').value    = '';
+  document.getElementById('ap-body').value       = '';
+  document.getElementById('ap-author-name').value = '';
+  document.getElementById('ap-published-at').value = '';
+  document.getElementById('ap-file').value = '';
+  document.getElementById('ap-file-current').innerHTML = '';
+  document.getElementById('editor-heading').textContent = 'New Document';
+  document.getElementById('ap-summary-count').textContent = '0 / 280';
+  document.getElementById('ap-body-count').textContent = '0 chars';
+  _pendingFile = null; _currentFileUrl = null; _currentFileName = null;
+  updatePreview();
+  _editingId = null;
+}
+
+window.loadIntoEditor = async (id) => {
+  const d = _myDocs.find(x => x.id === id);
+  if (!d) return;
+  _editingId = id;
+  document.getElementById('ap-editing-id').value = id;
+  document.getElementById('ap-title').value      = d.title    || '';
+  document.getElementById('ap-category').value   = d.category || '';
+  document.getElementById('ap-supporters').value = (d.supporters || []).join(', ');
+  document.getElementById('ap-summary').value    = d.summary   || '';
+  document.getElementById('ap-body').value       = d.body      || '';
+  document.getElementById('ap-author-name').value = d.author_name || '';
+  document.getElementById('ap-published-at').value = d.published_at || '';
+  document.getElementById('ap-file').value = '';
+  _pendingFile = null;
+  _currentFileUrl  = d.file_url  || null;
+  _currentFileName = d.file_name || null;
+  document.getElementById('ap-file-current').innerHTML = _currentFileUrl
+    ? `Current: <a href="${_currentFileUrl}" target="_blank" rel="noopener">${_currentFileName || 'view file'}</a>`
+    : '';
+  document.getElementById('editor-heading').textContent = 'Editing: ' + d.title;
+  updateCharCounts();
+  updatePreview();
+  document.getElementById('editor-heading').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  setEditorMode('write');
+  toast('Document loaded into editor');
+};
+
+async function uploadFileIfNeeded() {
+  if (!_pendingFile) return { url: _currentFileUrl, name: _currentFileName };
+  const ext = (_pendingFile.name.split('.').pop() || '').toLowerCase();
+  const path = `${_user.id}/${Date.now()}-${slugify(_pendingFile.name.replace(/\.[^.]+$/, ''))}.${ext}`;
+  const { error } = await supabase.storage.from(BUCKET).upload(path, _pendingFile, { upsert: true });
+  if (error) throw error;
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+  return { url: data.publicUrl, name: _pendingFile.name };
+}
+
+async function saveDoc(forcedStatus) {
+  const id      = document.getElementById('ap-editing-id').value;
+  const title   = document.getElementById('ap-title').value.trim();
+  const body    = document.getElementById('ap-body').value.trim();
+  if (!title) { toast('Please enter a document title.', true); return; }
+
+  let fileInfo;
+  try {
+    fileInfo = await uploadFileIfNeeded();
+  } catch (err) {
+    toast('File upload failed: ' + err.message, true);
+    return;
+  }
+
+  const status = forcedStatus || 'draft';
+  const defaultAuthorName = _profile?.display_name || _profile?.username || _user.email;
+  const overrideAuthor = document.getElementById('ap-author-name').value.trim();
+  const authorName = overrideAuthor || defaultAuthorName;
+
+  const supporters = document.getElementById('ap-supporters').value
+    .split(',').map(s => s.trim()).filter(Boolean);
+
+  const publishedAtInput = document.getElementById('ap-published-at').value;
+  const publishedAt = publishedAtInput || (status === 'published' ? new Date().toISOString().slice(0,10) : null);
+
+  const payload = {
+    title,
+    body,
+    category:     document.getElementById('ap-category').value.trim() || 'Uncategorized',
+    summary:      document.getElementById('ap-summary').value.trim() || null,
+    supporters,
+    status,
+    author_name:  authorName,
+    published_at: publishedAt,
+    file_url:     fileInfo.url,
+    file_name:    fileInfo.name,
+  };
+
+  let error;
+  if (id) {
+    ({ error } = await supabase.from('archive_documents').update(payload).eq('id', id));
+  } else {
+    const slug = slugify(title) + '-' + Date.now().toString(36);
+    ({ error } = await supabase.from('archive_documents').insert({
+      ...payload, slug, author_id: _user.id
+    }));
+  }
+
+  if (error) { toast('Error: ' + error.message, true); return; }
+
+  toast(status === 'published' ? '✓ Document published!' : '✓ Draft saved');
+  clearEditor();
+  await loadDocs();
+}
+
+window.quickPublish = async (id) => {
+  const doc = _myDocs.find(x => x.id === id);
+  const { error } = await supabase.from('archive_documents')
+    .update({ status: 'published', published_at: doc?.published_at || new Date().toISOString().slice(0,10) })
+    .eq('id', id);
+  if (error) { toast('Error: '+error.message, true); return; }
+  toast('✓ Published!');
+  await loadDocs();
+};
+window.quickUnpublish = async (id) => {
+  const { error } = await supabase.from('archive_documents').update({ status: 'draft' }).eq('id', id);
+  if (error) { toast('Error: '+error.message, true); return; }
+  toast('Moved back to drafts');
+  await loadDocs();
+};
+window.deleteDoc = async (id) => {
+  if (!confirm('Delete this document? This cannot be undone.')) return;
+  if (!confirm('Are you sure? This cannot be undone.')) return;
+  const { error } = await supabase.from('archive_documents').delete().eq('id', id);
+  if (error) { toast('Error: '+error.message, true); return; }
+  if (_editingId === id) clearEditor();
+  toast('Document deleted');
+  await loadDocs();
+};
+
+document.getElementById('ap-file').addEventListener('change', e => {
+  _pendingFile = e.target.files[0] || null;
+  if (_pendingFile) {
+    document.getElementById('ap-file-current').textContent = `Selected: ${_pendingFile.name} (will upload on save)`;
+  }
+});
+
+document.querySelectorAll('#ap-toolbar .tb-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const textarea = document.getElementById('ap-body');
+    const start = textarea.selectionStart, end = textarea.selectionEnd;
+    const sel = textarea.value.slice(start, end);
+    if (btn.dataset.wrap !== undefined) {
+      const wrap = btn.dataset.wrap;
+      textarea.setRangeText(wrap + (sel || 'text') + wrap, start, end, 'select');
+    } else if (btn.dataset.prefix !== undefined) {
+      textarea.setRangeText(btn.dataset.prefix + (sel || ''), start, end, 'end');
+    } else if (btn.hasAttribute('data-link')) {
+      const url = prompt('URL:', 'https://');
+      if (!url) return;
+      const text = sel || prompt('Link text:', 'link text') || 'link';
+      textarea.setRangeText(`[${text}](${url})`, start, end, 'end');
+    }
+    textarea.focus();
+    updatePreview();
+    updateCharCounts();
+  });
+});
+
+function setEditorMode(mode) {
+  document.getElementById('tab-write').classList.toggle('active', mode === 'write');
+  document.getElementById('tab-preview').classList.toggle('active', mode === 'preview');
+  document.getElementById('ap-write-area').style.display   = mode === 'write'   ? '' : 'none';
+  document.getElementById('ap-preview-area').style.display = mode === 'preview' ? '' : 'none';
+  document.getElementById('ap-toolbar').style.display      = mode === 'write'   ? '' : 'none';
+  if (mode === 'preview') updatePreview();
+}
+document.getElementById('tab-write').addEventListener('click',   () => setEditorMode('write'));
+document.getElementById('tab-preview').addEventListener('click', () => setEditorMode('preview'));
+
+function updatePreview() {
+  document.getElementById('ap-preview').innerHTML = renderMarkdown(document.getElementById('ap-body').value);
+}
+function updateCharCounts() {
+  const summaryLen = document.getElementById('ap-summary').value.length;
+  document.getElementById('ap-summary-count').textContent = `${summaryLen} / 280`;
+  const bodyLen = document.getElementById('ap-body').value.length;
+  document.getElementById('ap-body-count').textContent = `${bodyLen} char${bodyLen !== 1 ? 's' : ''}`;
+}
+document.getElementById('ap-summary').addEventListener('input', updateCharCounts);
+document.getElementById('ap-body').addEventListener('input', () => { updatePreview(); updateCharCounts(); });
+
+document.getElementById('btn-clear-editor').addEventListener('click', () => {
+  if (document.getElementById('ap-title').value && !confirm('Clear the editor? Unsaved changes will be lost.')) return;
+  clearEditor();
+});
+document.getElementById('btn-save-draft').addEventListener('click', () => saveDoc('draft'));
+document.getElementById('btn-publish').addEventListener('click', () => {
+  if (!confirm('Publish this document? It will be visible to everyone in the Archive.')) return;
+  saveDoc('published');
+});
+
+init();
+</script>
+</body>
+</html>

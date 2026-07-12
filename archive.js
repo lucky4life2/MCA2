@@ -1,37 +1,14 @@
-/* archive.js — MCA Document Archive engine
-   ─────────────────────────────────────────────────────────────
-   HOW TO ADD A DOCUMENT
-   1. Copy TEMPLATE.md from the archive/ folder
-   2. Rename it: YYYY-MM-DD-short-title.md
-   3. Fill in the frontmatter (title, category, date, author, summary, image)
-   4. Write your explanation below the --- divider
-   5. Upload the document scan/photo to archive/images/ on GitHub
-   6. Upload the .md file to archive/ on GitHub — appears automatically
+// archive.js — MCA Document Archive engine (Supabase-backed)
+// ─────────────────────────────────────────────────────────────
+// Documents now live in the `archive_documents` table and are
+// managed by Congress members through archive-publish.html —
+// no more hand-editing markdown files on GitHub.
+// ─────────────────────────────────────────────────────────────
+import { supabase } from './supabase.js';
 
-   CATEGORIES
-   Use any category name you like. Documents will be grouped by category
-   on the archive index page automatically.
-   Examples: MCA Law, Rotavvara, Cloudridge, Treaties
-   ─────────────────────────────────────────────────────────────── */
-
-/* ── CONFIG ─────────────────────────────────────────────────── */
-const ARCH_GITHUB_USER   = 'lucky4life2';
-const ARCH_GITHUB_REPO   = 'MCA2';
-const ARCH_GITHUB_BRANCH = 'main';
-const ARCH_FOLDER        = 'archive';
-const ARCH_IMAGE_FOLDER  = `${ARCH_FOLDER}/images`;
-
-const ARCH_API  = `https://api.github.com/repos/${ARCH_GITHUB_USER}/${ARCH_GITHUB_REPO}/git/trees/${ARCH_GITHUB_BRANCH}?recursive=1`;
-const ARCH_RAW  = `https://raw.githubusercontent.com/${ARCH_GITHUB_USER}/${ARCH_GITHUB_REPO}/${ARCH_GITHUB_BRANCH}`;
-
-function getArchiveAssetPath(file) {
-  const value = (file || '').trim().replace(/\\/g, '/').replace(/^\.?\//, '');
-  if (!value) return '';
-  if (/^(https?:|data:|blob:)/i.test(value)) return value;
-  if (value.startsWith(`${ARCH_IMAGE_FOLDER}/`)) return value;
-  if (value.startsWith('images/')) return `${ARCH_FOLDER}/${value}`;
-  if (value.startsWith(`${ARCH_FOLDER}/`)) return value;
-  return `${ARCH_IMAGE_FOLDER}/${value}`;
+/* ── HELPERS ────────────────────────────────────────────────── */
+function isArchivePdf(file) {
+  return (file || '').split(/[?#]/)[0].toLowerCase().endsWith('.pdf');
 }
 
 function getArchiveAssetName(file) {
@@ -39,91 +16,9 @@ function getArchiveAssetName(file) {
   return clean.split('/').pop() || clean;
 }
 
-function isArchivePdf(file) {
-  return (file || '').split(/[?#]/)[0].toLowerCase().endsWith('.pdf');
-}
-
-/* ── AUTO-DISCOVER DOCUMENTS ────────────────────────────────── */
-async function getDocumentList() {
-  const CACHE_KEY = 'mca_archive_tree_v2';
-  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-  try {
-    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
-    if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.files;
-  } catch(e) {}
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
-  let res;
-  try {
-    res = await fetch(ARCH_API, {
-      headers: { 'Accept': 'application/vnd.github+json' },
-      signal: controller.signal
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
-  if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
-  const data = await res.json();
-
-  const files = (data.tree || [])
-    .filter(f => {
-      const path = f.path || '';
-      const relativePath = path.slice(ARCH_FOLDER.length + 1);
-      return f.type === 'blob'
-        && path.startsWith(ARCH_FOLDER + '/')
-        && path.endsWith('.md')
-        && !path.endsWith('TEMPLATE.md')
-        && !relativePath.includes('/');
-    })
-    .map(f => ({ path: f.path, url: `${ARCH_RAW}/${f.path}` }));
-
-  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), files })); } catch(e) {}
-  return files;
-}
-
-/* ── FETCH HELPER ───────────────────────────────────────────── */
-async function fetchDocument(item) {
-  const url = item.url || `${ARCH_RAW}/${item.path}`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
-  try {
-    const res = await fetch(url + '?nocache=' + Date.now(), { signal: controller.signal });
-    if (!res.ok) throw new Error(`Could not load ${item.path} (${res.status})`);
-    return res.text();
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-/* ── FRONTMATTER PARSER ─────────────────────────────────────── */
-function parseArchiveFrontmatter(raw) {
-  raw = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trimStart();
-  const meta  = {};
-  const lines = raw.split('\n');
-  let bodyStart = 0;
-  let dividerCount = 0;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (line.trim() === '---') {
-      dividerCount++;
-      if (dividerCount === 1 && i === 0) continue;
-      bodyStart = i + 1;
-      break;
-    }
-    const colon = line.indexOf(':');
-    if (colon > 0) {
-      const key   = line.slice(0, colon).trim();
-      const value = line.slice(colon + 1).trim();
-      if (key && !key.includes(' ')) meta[key] = value;
-    }
-  }
-  return { meta, body: lines.slice(bodyStart).join('\n') };
-}
-
 /* ── MARKDOWN PARSER (reuse same logic as news) ─────────────── */
 function parseArchiveMarkdown(md) {
+  if (!md) return '';
   return md
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm,  '<h2>$1</h2>')
@@ -153,10 +48,22 @@ function parseArchiveMarkdown(md) {
 
 /* ── DATE FORMATTER ─────────────────────────────────────────── */
 function formatArchiveDate(dateStr) {
+  if (!dateStr) return '';
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString('en-US', {
     year: 'numeric', month: 'long', day: 'numeric'
   });
+}
+
+function renderSupporters(supporters) {
+  if (!supporters || !supporters.length) return '';
+  return `
+    <div class="document-supporters">
+      <div class="document-supporters-label">Supporters</div>
+      <div class="document-supporters-list">
+        ${supporters.map(s => `<span class="supporter-pip">${s}</span>`).join('')}
+      </div>
+    </div>`;
 }
 
 /* ── ARCHIVE INDEX ──────────────────────────────────────────── */
@@ -171,30 +78,21 @@ async function loadArchiveIndex() {
   if (!indexEl) return;
 
   try {
-    const docPaths = await getDocumentList();
-    const results = await Promise.allSettled(
-      docPaths.map(async item => {
-        const raw = await fetchDocument(item);
-        const { meta } = parseArchiveFrontmatter(raw);
-        return { path: item.path, meta };
-      })
-    );
-    const docs = results.filter(r => r.status === 'fulfilled').map(r => r.value);
+    const { data: docs, error } = await supabase
+      .from('archive_documents')
+      .select('id,title,slug,category,summary,file_url,published_at,author_name')
+      .eq('status', 'published')
+      .order('published_at', { ascending: false });
 
-    // Sort by date descending
-    docs.sort((a, b) => {
-      const da = a.meta.date || '0000-00-00';
-      const db = b.meta.date || '0000-00-00';
-      return db.localeCompare(da);
-    });
+    if (error) throw error;
 
-    if (docs.length === 0) {
+    if (!docs || docs.length === 0) {
       loadingEl.textContent = 'No documents in the archive yet.';
       return;
     }
 
     // Get unique categories
-    const categories = [...new Set(docs.map(d => d.meta.category || 'Uncategorized'))];
+    const categories = [...new Set(docs.map(d => d.category || 'Uncategorized'))];
 
     // Build category filter buttons
     if (filterEl) {
@@ -214,7 +112,7 @@ async function loadArchiveIndex() {
     // Group docs by category and render
     const grouped = {};
     docs.forEach(doc => {
-      const cat = doc.meta.category || 'Uncategorized';
+      const cat = doc.category || 'Uncategorized';
       if (!grouped[cat]) grouped[cat] = [];
       grouped[cat].push(doc);
     });
@@ -223,23 +121,21 @@ async function loadArchiveIndex() {
       <div class="archive-category" data-category="${cat}">
         <div class="archive-category-header">${cat}</div>
         <div class="archive-category-docs">
-          ${catDocs.map(({ path, meta }) => {
-            const slug = encodeURIComponent(path);
-            const assetPath = getArchiveAssetPath(meta.image);
-            const isPDF = isArchivePdf(meta.image);
-            const thumb = !meta.image
+          ${catDocs.map(doc => {
+            const isPDF = isArchivePdf(doc.file_url);
+            const thumb = !doc.file_url
               ? `<div class="archive-card-thumb archive-card-thumb-placeholder">📄</div>`
               : isPDF
               ? `<div class="archive-card-thumb archive-card-thumb-placeholder archive-card-thumb-pdf">PDF</div>`
-              : `<img src="${assetPath}" alt="${meta.title || ''}" class="archive-card-thumb">`;
+              : `<img src="${doc.file_url}" alt="${doc.title || ''}" class="archive-card-thumb">`;
             return `
-              <a class="archive-card" href="document.html?doc=${slug}">
+              <a class="archive-card" href="document.html?slug=${encodeURIComponent(doc.slug)}">
                 ${thumb}
                 <div class="archive-card-body">
                   <div class="archive-card-category">${cat}</div>
-                  <div class="archive-card-title">${meta.title || 'Untitled'}</div>
-                  <div class="archive-card-summary">${meta.summary || ''}</div>
-                  <div class="archive-card-meta">${meta.date ? formatArchiveDate(meta.date) : ''} · ${meta.author || 'MCA'}</div>
+                  <div class="archive-card-title">${doc.title || 'Untitled'}</div>
+                  <div class="archive-card-summary">${doc.summary || ''}</div>
+                  <div class="archive-card-meta">${doc.published_at ? formatArchiveDate(doc.published_at) : ''} · ${doc.author_name || 'MCA'}</div>
                 </div>
               </a>`;
           }).join('')}
@@ -295,9 +191,9 @@ async function loadDocumentReader() {
   if (!bodyEl) return;
 
   const params = new URLSearchParams(window.location.search);
-  const path   = decodeURIComponent(params.get('doc') || '');
+  const slug   = params.get('slug') || params.get('doc'); // 'doc' kept for old bookmarked links
 
-  if (!path) {
+  if (!slug) {
     errorEl.style.display   = 'block';
     errorEl.textContent     = 'No document specified.';
     loadingEl.style.display = 'none';
@@ -305,53 +201,60 @@ async function loadDocumentReader() {
   }
 
   try {
-    const raw            = await fetchDocument({ path, url: null });
-    const { meta, body } = parseArchiveFrontmatter(raw);
-    const html           = parseArchiveMarkdown(body);
+    const { data: doc, error } = await supabase
+      .from('archive_documents')
+      .select('*')
+      .eq('slug', slug)
+      .eq('status', 'published')
+      .single();
 
-    if (meta.title) document.title = `${meta.title} — MCA Archive`;
+    if (error || !doc) throw error || new Error('Document not found.');
 
-    const hasImage = meta.image && meta.image.trim() !== '';
+    const html = parseArchiveMarkdown(doc.body);
+
+    if (doc.title) document.title = `${doc.title} — MCA Archive`;
+
+    const hasFile = doc.file_url && doc.file_url.trim() !== '';
 
     bodyEl.innerHTML = `
       <div class="article-hero">
         <div class="article-hero-inner">
           <div class="article-meta-top">
-            <span class="news-card-category">${meta.category || 'Archive'}</span>
-            <span class="news-card-date">${meta.date ? formatArchiveDate(meta.date) : ''}</span>
+            <span class="news-card-category">${doc.category || 'Archive'}</span>
+            <span class="news-card-date">${doc.published_at ? formatArchiveDate(doc.published_at) : ''}</span>
           </div>
-          <h1 class="article-title">${meta.title || 'Untitled'}</h1>
-          ${meta.summary ? `<p class="article-summary">${meta.summary}</p>` : ''}
-          <div class="article-byline">Issued by <strong>${meta.author || 'MCA'}</strong></div>
+          <h1 class="article-title">${doc.title || 'Untitled'}</h1>
+          ${doc.summary ? `<p class="article-summary">${doc.summary}</p>` : ''}
+          <div class="article-byline">Issued by <strong>${doc.author_name || 'MCA'}</strong></div>
+          ${renderSupporters(doc.supporters)}
         </div>
       </div>
 
       <div class="document-content content">
         <a class="article-back" href="archive.html">← Back to Archive</a>
 
-        <div class="document-layout ${hasImage ? 'document-has-image' : ''}">
+        <div class="document-layout ${hasFile ? 'document-has-image' : ''}">
 
-            ${hasImage ? (() => {
-            const assetPath = getArchiveAssetPath(meta.image);
-            const assetName = getArchiveAssetName(meta.image);
-            const isPDF = isArchivePdf(meta.image);
+            ${hasFile ? (() => {
+            const isPDF = isArchivePdf(doc.file_url);
+            const assetName = doc.file_name || getArchiveAssetName(doc.file_url);
             return isPDF
               ? `<div class="document-scan">
                   <div class="document-scan-label">Original Document</div>
                   <div class="document-pdf-wrap">
                     <div class="document-pdf-icon">📄</div>
                     <div class="document-pdf-name">${assetName}</div>
-                    <a href="${assetPath}" target="_blank" rel="noopener" class="document-pdf-btn">View PDF →</a>
+                    <a href="${doc.file_url}" target="_blank" rel="noopener" class="document-pdf-btn">View PDF →</a>
                   </div>
                 </div>`
               : `<div class="document-scan">
                   <div class="document-scan-label">Original Document</div>
-                  <img src="${assetPath}" alt="Original ${meta.title || 'document'}">
+                  <img src="${doc.file_url}" alt="Original ${doc.title || 'document'}">
                 </div>`;
           })() : ''}
 
           <div class="document-text">
-            <div class="document-text-label">${hasImage ? 'Explanation &amp; Translation' : 'Document'}</div>
+            <div class="document-text-label">${hasFile ? 'Explanation &amp; Translation' : 'Document'}</div>
             <div class="article-body">${html}</div>
           </div>
 

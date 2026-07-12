@@ -671,6 +671,7 @@ async function initNavAuth(_authReadyResolve) {
     let label = user.email?.split('@')[0] || 'Account';
     let isAdmin = false;
     let canPublishNews = false;
+    let canManageArchive = false;
 
     // Resolve role BEFORE the first render so other page scripts awaiting
     // _mcaAuthReady get the correct isAdmin status immediately, instead of
@@ -698,6 +699,7 @@ async function initNavAuth(_authReadyResolve) {
           <a class="nav-account-dropdown-item" href="account.html">My Account</a>
           ${isAdmin ? `<a class="nav-account-dropdown-item" href="admin.html">Admin</a>` : ''}
           ${canPublishNews ? `<a class="nav-account-dropdown-item" href="news-publish.html">Publish News</a>` : ''}
+          ${canManageArchive ? `<a class="nav-account-dropdown-item" href="archive-publish.html">Manage Archive</a>` : ''}
           <button class="nav-account-dropdown-item" id="nav-signout-btn">Sign Out</button>
         </div>
       </div>`;
@@ -736,11 +738,18 @@ async function initNavAuth(_authReadyResolve) {
         ]);
         if (permResult?.data) canPublishNews = true;
       } catch(e) {}
-      if (isAdmin) canPublishNews = true;
+      try {
+        const archiveResult = await Promise.race([
+          mod.supabase.rpc('user_has_permission', { perm: 'can_manage_archive' }),
+          new Promise(r => setTimeout(() => r({ data: null }), 1000))
+        ]);
+        if (archiveResult?.data) canManageArchive = true;
+      } catch(e) {}
+      if (isAdmin) { canPublishNews = true; canManageArchive = true; }
     } catch(e) {}
 
     render(); // re-render with full data (name, admin link, etc.)
-    return { isAdmin, canPublishNews };
+    return { isAdmin, canPublishNews, canManageArchive };
   }
 
   let mod;
