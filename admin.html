@@ -1354,11 +1354,13 @@ function renderMembers(members) {
 
 // ── Role popup for member row ─────────────────────────────────
 let _popupEl = null;
+let _popupState = null;
 window.openRolePopup = (event, userId) => {
   closeRolePopup();
   const member = _allMembers.find(m => m.id === userId);
   if (!member) return;
-  const memberRoleIds = new Set((member.roles||[]).map(r => r.role_id));
+  const originalRoleIds = new Set((member.roles||[]).map(r => r.role_id));
+  const stagedRoleIds = new Set(originalRoleIds); // working copy, only committed on Save
 
   const popup = document.createElement('div');
   popup.className = 'role-popup';
@@ -1371,18 +1373,24 @@ window.openRolePopup = (event, userId) => {
     return true;
   });
 
-  popup.innerHTML = `
-    <div style="padding:8px 14px 6px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);">Assign Roles</div>
-    ${assignableRoles.map(r => {
-      const has = memberRoleIds.has(r.id);
-      return `<div class="role-popup-item" onclick="toggleUserRole('${userId}','${r.id}',${!has},this)">
+  function renderItems() {
+    return assignableRoles.map(r => {
+      const has = stagedRoleIds.has(r.id);
+      return `<div class="role-popup-item" data-role-id="${r.id}" onclick="_toggleStagedRole('${r.id}')">
         <span class="role-popup-dot" style="background:${r.color};"></span>
         <span style="flex:1;">${r.label}</span>
         ${has ? `<span class="role-popup-check">✓</span>` : ''}
       </div>`;
-    }).join('')}
-    <div style="border-top:1px solid var(--border);padding:6px 14px;">
-      <button onclick="closeRolePopup()" style="font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;padding:0;">Close</button>
+    }).join('');
+  }
+
+  popup.innerHTML = `
+    <div style="padding:8px 14px 6px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);">Assign Roles</div>
+    <div id="role-popup-items">${renderItems()}</div>
+    <div id="role-popup-error" style="display:none;font-size:11px;color:#c0392b;padding:4px 14px 0;"></div>
+    <div style="border-top:1px solid var(--border);padding:8px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <button onclick="closeRolePopup()" style="font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;padding:0;">Cancel</button>
+      <button id="role-popup-save" class="btn btn-primary btn-sm" onclick="_saveStagedRoles('${userId}')">Save</button>
     </div>`;
 
   // Position near the button
@@ -1396,8 +1404,46 @@ window.openRolePopup = (event, userId) => {
   wrap.style.position = 'relative';
   wrap.appendChild(popup);
   _popupEl = popup;
+  _popupState = { userId, originalRoleIds, stagedRoleIds, renderItems, popup };
 
   setTimeout(() => { document.addEventListener('click', closeRolePopupOutside); }, 0);
+};
+
+window._toggleStagedRole = (roleId) => {
+  if (!_popupState) return;
+  const { stagedRoleIds } = _popupState;
+  if (stagedRoleIds.has(roleId)) stagedRoleIds.delete(roleId);
+  else stagedRoleIds.add(roleId);
+  const itemsEl = document.getElementById('role-popup-items');
+  if (itemsEl) itemsEl.innerHTML = _popupState.renderItems();
+};
+
+window._saveStagedRoles = async (userId) => {
+  if (!_popupState || _popupState.userId !== userId) return;
+  const { originalRoleIds, stagedRoleIds } = _popupState;
+  const toAdd = [...stagedRoleIds].filter(id => !originalRoleIds.has(id));
+  const toRemove = [...originalRoleIds].filter(id => !stagedRoleIds.has(id));
+  const errEl = document.getElementById('role-popup-error');
+  const saveBtn = document.getElementById('role-popup-save');
+
+  if (!toAdd.length && !toRemove.length) { closeRolePopup(); return; }
+
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
+  try {
+    for (const roleId of toAdd) {
+      const { error } = await supabase.rpc('assign_role_to_user', { p_user_id: userId, p_role_id: roleId });
+      if (error) throw error;
+    }
+    for (const roleId of toRemove) {
+      const { error } = await supabase.rpc('revoke_role_from_user', { p_user_id: userId, p_role_id: roleId });
+      if (error) throw error;
+    }
+    closeRolePopup();
+    await loadAll();
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
+  }
 };
 
 function closeRolePopupOutside(e) {
@@ -1405,21 +1451,8 @@ function closeRolePopupOutside(e) {
 }
 window.closeRolePopup = () => {
   if (_popupEl) { _popupEl.remove(); _popupEl = null; }
+  _popupState = null;
   document.removeEventListener('click', closeRolePopupOutside);
-};
-
-window.toggleUserRole = async (userId, roleId, assign, itemEl) => {
-  try {
-    if (assign) {
-      const { error } = await supabase.rpc('assign_role_to_user', { p_user_id: userId, p_role_id: roleId });
-      if (error) { alert(error.message); return; }
-    } else {
-      const { error } = await supabase.rpc('revoke_role_from_user', { p_user_id: userId, p_role_id: roleId });
-      if (error) { alert(error.message); return; }
-    }
-    closeRolePopup();
-    await loadAll();
-  } catch(e) { alert(e.message); }
 };
 
 // Filter events
