@@ -221,6 +221,16 @@
       </div>
     </div>
 
+    <!-- My Roles -->
+    <div class="account-section" id="section-my-roles">
+      <div class="account-section-header">
+        <div class="account-section-title">My Roles</div>
+      </div>
+      <div class="account-section-body" id="my-roles-body">
+        <!-- injected -->
+      </div>
+    </div>
+
     <!-- Connected Accounts -->
     <div class="account-section">
       <div class="account-section-header">
@@ -533,6 +543,48 @@ async function loadProfile() {
   _profile = data || {};
 }
 
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str == null ? '' : String(str);
+  return div.innerHTML;
+}
+
+async function loadMyRoles() {
+  const body = document.getElementById('my-roles-body');
+  if (!body) return;
+  body.innerHTML = '<div style="padding:0.5rem 0;color:var(--muted);font-size:13px;">Loading...</div>';
+
+  const { data, error } = await supabase
+    .from('user_roles')
+    .select('granted_at, roles(name, label, color, level)')
+    .eq('user_id', _user.id)
+    .order('granted_at', { ascending: true });
+
+  if (error) {
+    body.innerHTML = `<div style="padding:0.5rem 0;color:var(--muted);font-size:13px;">Couldn't load roles: ${error.message}</div>`;
+    return;
+  }
+
+  const rows = (data || []).filter(r => r.roles);
+  if (!rows.length) {
+    body.innerHTML = '<div style="padding:0.5rem 0;color:var(--muted);font-size:13px;">No roles assigned.</div>';
+    return;
+  }
+
+  rows.sort((a, b) => (b.roles.level || 0) - (a.roles.level || 0));
+
+  body.innerHTML = `
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      ${rows.map(r => `
+        <span style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;background:${r.roles.color || '#888'}1a;color:${r.roles.color || '#888'};border:1px solid ${r.roles.color || '#888'}55;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${r.roles.color || '#888'};flex-shrink:0;"></span>
+          ${escapeHtml(r.roles.label || r.roles.name)}
+        </span>
+      `).join('')}
+    </div>
+  `;
+}
+
 // ── Render ───────────────────────────────────────────────────
 async function renderPage() {
   // Hero
@@ -546,6 +598,9 @@ async function renderPage() {
 
   // Connected accounts
   await renderConnectedAccounts();
+
+  // My roles
+  loadMyRoles();
 
   // Admin messages
   loadMyMessages();
