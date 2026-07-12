@@ -785,6 +785,8 @@ async function initNavAuth(_authReadyResolve) {
 
     render(); // show nav immediately
 
+    watchMyRoleChanges(user.id);
+
     try {
       const mod = await import('./supabase.js');
       try {
@@ -806,6 +808,32 @@ async function initNavAuth(_authReadyResolve) {
 
     render(); // re-render with full data (name, admin link, etc.)
     return { isAdmin, canPublishNews, canManageArchive };
+  }
+
+  // If someone else changes this user's roles (or an admin/owner revokes/adds
+  // one) while they're on the site, force a full reload so every permission
+  // check re-runs from scratch. This closes the loop where an admin who just
+  // got demoted could otherwise use still-cached permissions in memory to
+  // re-grant themselves a role before the page ever refreshes.
+  let _roleWatchStarted = false;
+  function watchMyRoleChanges(userId) {
+    if (_roleWatchStarted) return;
+    _roleWatchStarted = true;
+    (async () => {
+      try {
+        const { supabase: _sb } = await import('./supabase.js');
+        const reload = () => window.location.reload();
+        const onProfileChange = (payload) => {
+          const before = payload.old || {};
+          const after  = payload.new || {};
+          if (before.role !== after.role || before.account_status !== after.account_status) reload();
+        };
+        _sb.channel(`role-watch-${userId}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'user_roles', filter: `user_id=eq.${userId}` }, reload)
+          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, onProfileChange)
+          .subscribe();
+      } catch(e) {}
+    })();
   }
 
   let mod;
