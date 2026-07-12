@@ -382,6 +382,7 @@
         </button>
         <div class="admin-tab-group-menu">
           <button class="admin-tab-group-item" data-tab="news">News</button>
+          <button class="admin-tab-group-item" data-tab="archive">Archive</button>
           <button class="admin-tab-group-item" data-tab="leadership">Leadership</button>
           <button class="admin-tab-group-item" data-tab="club-presidents">Club Presidents</button>
           <button class="admin-tab-group-item" data-tab="nations">Nations</button>
@@ -558,6 +559,28 @@
         </div>
         <div id="news-article-list">
           <div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">Loading articles...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── ARCHIVE ──────────────────────────────────────── -->
+    <div class="admin-panel" id="tab-archive">
+      <div class="admin-section">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Archive Documents</div>
+          <button class="btn btn-primary" id="btn-new-doc" style="font-size:12px;padding:7px 16px;">+ New Document</button>
+        </div>
+        <div class="filter-bar">
+          <input type="text" class="search-input search-input-grow" id="archive-admin-search" placeholder="Search documents...">
+          <select class="filter-select" id="archive-admin-filter-status">
+            <option value="">All Status</option>
+            <option value="published">Published</option>
+            <option value="draft">Draft</option>
+            <option value="archived">Archived</option>
+          </select>
+        </div>
+        <div id="archive-doc-list">
+          <div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">Loading documents...</div>
         </div>
       </div>
     </div>
@@ -896,6 +919,60 @@
       <button id="nm2-save-publish" style="background:var(--blue);color:#fff;font-size:13px;font-weight:600;padding:9px 18px;border:none;border-radius:4px;cursor:pointer;">Publish</button>
     </div>
   </div>
+</div>
+
+<!-- Archive document editor modal -->
+<div id="archive-modal" style="display:none;position:fixed;inset:0;background:rgba(10,15,30,.5);z-index:400;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:var(--white);border-radius:8px;border:1px solid var(--border);width:100%;max-width:700px;max-height:92vh;overflow-y:auto;box-shadow:0 16px 48px rgba(10,15,30,.2);">
+    <div style="padding:1.5rem 1.5rem 0;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--white);z-index:1;border-bottom:1px solid var(--border);padding-bottom:1rem;">
+      <div style="font-family:'Times New Roman',serif;font-size:1.3rem;color:var(--blue);font-weight:normal;" id="am2-title">New Document</div>
+      <button id="am2-close" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:20px;line-height:1;padding:4px;">✕</button>
+    </div>
+    <div style="padding:1.5rem;">
+      <input type="hidden" id="am2-id">
+      <div class="form-group"><label class="form-label">Document Title *</label><input type="text" id="am2-title-input" class="form-input" placeholder="e.g. The Nation Recognition Act of 2026"></div>
+      <div class="col2-grid">
+        <div class="form-group"><label class="form-label">Category</label><input type="text" id="am2-category" class="form-input" list="am2-category-list" placeholder="e.g. MCA Law">
+          <datalist id="am2-category-list">
+            <option value="MCA Law"><option value="Constitution"><option value="Executive Orders">
+            <option value="Treaties"><option value="Resolutions"><option value="Uncategorized">
+          </datalist>
+        </div>
+        <div class="form-group"><label class="form-label">Status</label>
+          <select id="am2-status" class="form-input">
+            <option value="draft">Draft</option>
+            <option value="published">Published</option>
+            <option value="archived">Archived</option>
+          </select>
+        </div>
+      </div>
+      <div class="col2-grid">
+        <div class="form-group"><label class="form-label">Issued By / Sponsor</label><input type="text" id="am2-author-name" class="form-input" placeholder="e.g. FactFox — World Congress"></div>
+        <div class="form-group"><label class="form-label">Date of Publish / Ratification</label><input type="date" id="am2-published-at" class="form-input"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Supporters (comma separated)</label><input type="text" id="am2-supporters" class="form-input" placeholder="e.g. Silky, Rector, FactFox"></div>
+      <div class="form-group">
+        <label class="form-label">Original Document (scan or PDF)</label>
+        <div style="border:1px dashed var(--border);border-radius:4px;padding:14px;display:flex;align-items:center;gap:12px;">
+          <input type="file" id="am2-file" accept="image/*,application/pdf" style="font-size:12px;">
+          <span id="am2-file-current" style="font-size:12px;color:var(--blue);"></span>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Summary</label><textarea id="am2-summary" class="form-input" rows="2" placeholder="One or two sentences describing what this document is..." style="resize:vertical;"></textarea></div>
+      <div class="form-group">
+        <label class="form-label">Explanation (Markdown)</label>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Supports **bold**, *italic*, ## headings, [links](url), - lists</div>
+        <textarea id="am2-body" class="form-input" rows="14" placeholder="Plain-English explanation of the document..." style="resize:vertical;font-family:monospace;font-size:13px;line-height:1.6;"></textarea>
+      </div>
+    </div>
+    <div id="am2-error" style="font-size:13px;color:#c0392b;padding:0 1.5rem .5rem;display:none;"></div>
+    <div style="padding:0 1.5rem 1.5rem;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:1rem;margin-top:0;">
+      <button id="am2-cancel" style="background:transparent;color:var(--muted);font-size:13px;font-weight:600;padding:9px 18px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">Cancel</button>
+      <button id="am2-save-draft" style="background:transparent;color:var(--blue);font-size:13px;font-weight:600;padding:9px 18px;border:1px solid var(--blue);border-radius:4px;cursor:pointer;">Save Draft</button>
+      <button id="am2-save-publish" style="background:var(--blue);color:#fff;font-size:13px;font-weight:600;padding:9px 18px;border:none;border-radius:4px;cursor:pointer;">Publish</button>
+    </div>
+  </div>
+</div>
 </div>
 
 <script type="module" src="nav.js"></script>
@@ -1572,6 +1649,191 @@ window.deleteArticle = async (id) => {
   loadNewsAdmin();
 };
 
+// ── Archive admin ─────────────────────────────────────────────
+const ARCHIVE_BUCKET = 'archive-files';
+let _archiveDocs = [];
+let _archiveFilter = { search: '', status: '' };
+let _archivePendingFile = null;
+let _archiveCurrentFileUrl = null, _archiveCurrentFileName = null;
+
+async function loadArchiveAdmin() {
+  const el = document.getElementById('archive-doc-list');
+  try {
+    const { data, error } = await supabase.from('archive_documents').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    _archiveDocs = data || [];
+    renderArchiveAdmin();
+  } catch(e) {
+    el.innerHTML = `<div style="padding:1.5rem;color:#c0392b;font-size:13px;">Error loading documents: ${e.message}</div>`;
+  }
+}
+
+function renderArchiveAdmin() {
+  const el = document.getElementById('archive-doc-list');
+  const { search, status } = _archiveFilter;
+  const q = search.toLowerCase();
+  const filtered = _archiveDocs.filter(d => {
+    if (q && !(d.title||'').toLowerCase().includes(q)) return false;
+    if (status && d.status !== status) return false;
+    return true;
+  });
+
+  if (!filtered.length) {
+    el.innerHTML = `<div style="text-align:center;padding:2.5rem;color:var(--muted);font-size:14px;">${_archiveDocs.length ? 'No documents match your filters.' : 'No documents yet. Click "+ New Document" to get started.'}</div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.map(d => {
+    const pub = d.published_at ? new Date(d.published_at + 'T00:00:00').toLocaleDateString() : '';
+    const created = new Date(d.created_at).toLocaleDateString();
+    return `<div class="news-article-row">
+      <div style="flex:1;min-width:0;">
+        <div class="news-article-title">
+          <span class="status-dot ${d.status}"></span>${d.title}
+        </div>
+        <div class="news-article-meta">
+          ${d.category || 'Uncategorized'} · By ${d.author_name||'Unknown'} · Created ${created}
+          ${d.status === 'published' && pub ? ` · Ratified ${pub}` : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;">
+        ${d.status !== 'published' ? `<button class="btn btn-success btn-sm" onclick="publishDoc('${d.id}')">Publish</button>` : ''}
+        ${d.status === 'published'  ? `<button class="btn btn-outline btn-sm" onclick="unpublishDoc('${d.id}')">Unpublish</button>` : ''}
+        <button class="btn btn-outline btn-sm" onclick="editDoc('${d.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteDoc('${d.id}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('archive-admin-search').addEventListener('input', function() {
+  _archiveFilter.search = this.value;
+  renderArchiveAdmin();
+});
+document.getElementById('archive-admin-filter-status').addEventListener('change', function() {
+  _archiveFilter.status = this.value;
+  renderArchiveAdmin();
+});
+
+function openArchiveModal(doc = null) {
+  document.getElementById('am2-id').value           = doc?.id || '';
+  document.getElementById('am2-title-input').value  = doc?.title || '';
+  document.getElementById('am2-category').value     = doc?.category || '';
+  document.getElementById('am2-status').value       = doc?.status || 'draft';
+  document.getElementById('am2-author-name').value  = doc?.author_name || '';
+  document.getElementById('am2-published-at').value = doc?.published_at || '';
+  document.getElementById('am2-supporters').value    = (doc?.supporters || []).join(', ');
+  document.getElementById('am2-summary').value      = doc?.summary || '';
+  document.getElementById('am2-body').value         = doc?.body || '';
+  document.getElementById('am2-file').value = '';
+  _archivePendingFile = null;
+  _archiveCurrentFileUrl  = doc?.file_url  || null;
+  _archiveCurrentFileName = doc?.file_name || null;
+  document.getElementById('am2-file-current').innerHTML = _archiveCurrentFileUrl
+    ? `Current: <a href="${_archiveCurrentFileUrl}" target="_blank" rel="noopener">${_archiveCurrentFileName || 'view file'}</a>`
+    : '';
+  document.getElementById('am2-error').style.display = 'none';
+  document.getElementById('am2-title').textContent   = doc ? 'Edit Document' : 'New Document';
+  document.getElementById('archive-modal').style.display = 'flex';
+}
+function closeArchiveModal() { document.getElementById('archive-modal').style.display = 'none'; }
+
+document.getElementById('btn-new-doc').addEventListener('click', () => openArchiveModal());
+document.getElementById('am2-close').addEventListener('click',  closeArchiveModal);
+document.getElementById('am2-cancel').addEventListener('click', closeArchiveModal);
+document.getElementById('am2-file').addEventListener('change', e => {
+  _archivePendingFile = e.target.files[0] || null;
+  if (_archivePendingFile) {
+    document.getElementById('am2-file-current').textContent = `Selected: ${_archivePendingFile.name} (will upload on save)`;
+  }
+});
+
+async function uploadArchiveFileIfNeeded(userId) {
+  if (!_archivePendingFile) return { url: _archiveCurrentFileUrl, name: _archiveCurrentFileName };
+  const ext = (_archivePendingFile.name.split('.').pop() || '').toLowerCase();
+  const path = `${userId}/${Date.now()}-${slugify(_archivePendingFile.name.replace(/\.[^.]+$/, ''))}.${ext}`;
+  const { error } = await supabase.storage.from(ARCHIVE_BUCKET).upload(path, _archivePendingFile, { upsert: true });
+  if (error) throw error;
+  const { data } = supabase.storage.from(ARCHIVE_BUCKET).getPublicUrl(path);
+  return { url: data.publicUrl, name: _archivePendingFile.name };
+}
+
+async function saveArchiveDoc(forceStatus = null) {
+  const id      = document.getElementById('am2-id').value;
+  const title   = document.getElementById('am2-title-input').value.trim();
+  const errEl   = document.getElementById('am2-error');
+  errEl.style.display = 'none';
+  if (!title) { errEl.textContent = 'Title is required.'; errEl.style.display = 'block'; return; }
+
+  const { data: { user } } = await supabase.auth.getUser();
+
+  let fileInfo;
+  try {
+    fileInfo = await uploadArchiveFileIfNeeded(user.id);
+  } catch (err) {
+    errEl.textContent = 'File upload failed: ' + err.message; errEl.style.display = 'block'; return;
+  }
+
+  const status = forceStatus || document.getElementById('am2-status').value;
+  const { data: profile }  = await supabase.from('profiles').select('display_name,username').eq('id', user.id).single();
+  const defaultAuthorName = profile?.display_name || profile?.username || 'Unknown';
+  const overrideAuthor = document.getElementById('am2-author-name').value.trim();
+  const authorName = overrideAuthor || defaultAuthorName;
+
+  const supporters = document.getElementById('am2-supporters').value
+    .split(',').map(s => s.trim()).filter(Boolean);
+
+  const publishedAtInput = document.getElementById('am2-published-at').value;
+  const publishedAt = publishedAtInput || (status === 'published' ? new Date().toISOString().slice(0,10) : null);
+
+  const payload = {
+    title,
+    category:     document.getElementById('am2-category').value.trim() || 'Uncategorized',
+    status,
+    summary:      document.getElementById('am2-summary').value.trim() || null,
+    body:         document.getElementById('am2-body').value.trim(),
+    supporters,
+    author_name:  authorName,
+    published_at: publishedAt,
+    file_url:     fileInfo.url,
+    file_name:    fileInfo.name,
+  };
+
+  let error;
+  if (id) {
+    ({ error } = await supabase.from('archive_documents').update(payload).eq('id', id));
+  } else {
+    const slug = slugify(title) + '-' + Date.now().toString(36);
+    ({ error } = await supabase.from('archive_documents').insert({ ...payload, slug, author_id: user.id }));
+  }
+  if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+  closeArchiveModal();
+  loadArchiveAdmin();
+}
+
+document.getElementById('am2-save-draft').addEventListener('click',   () => saveArchiveDoc('draft'));
+document.getElementById('am2-save-publish').addEventListener('click', () => saveArchiveDoc('published'));
+
+window.editDoc = (id) => {
+  const d = _archiveDocs.find(x => x.id === id);
+  if (d) openArchiveModal(d);
+};
+window.publishDoc = async (id) => {
+  const d = _archiveDocs.find(x => x.id === id);
+  await supabase.from('archive_documents').update({ status: 'published', published_at: d?.published_at || new Date().toISOString().slice(0,10) }).eq('id', id);
+  loadArchiveAdmin();
+};
+window.unpublishDoc = async (id) => {
+  await supabase.from('archive_documents').update({ status: 'draft' }).eq('id', id);
+  loadArchiveAdmin();
+};
+window.deleteDoc = async (id) => {
+  if (!confirm('Delete this document? This cannot be undone.')) return;
+  if (!confirm('Are you sure? This cannot be undone.')) return;
+  await supabase.from('archive_documents').delete().eq('id', id);
+  loadArchiveAdmin();
+};
+
 // ── Site Lock ─────────────────────────────────────────────────
 async function loadLockState() {
   const badge = document.getElementById('lock-status-badge');
@@ -2032,6 +2294,7 @@ function switchTab(tabName) {
   if (tabName === 'shop')       loadAdminProducts();
   if (tabName === 'config')     loadConfigTab();
   if (tabName === 'news')       loadNewsAdmin();
+  if (tabName === 'archive')    loadArchiveAdmin();
   if (tabName === 'roles')      renderRoles();
   if (tabName === 'messages')   loadMessages();
   if (tabName === 'leadership')      loadLeadershipAdmin();
