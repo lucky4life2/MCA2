@@ -643,14 +643,11 @@ async function renderConnectedAccounts(skipFetch = false) {
       </div>
       ${!hasEmail
         ? `<button class="btn btn-outline" id="btn-add-email">Add Email</button>`
-        : _profile.email_access_revoked
-          ? `<span class="account-section-badge badge-revoked" title="Email sign-in disabled by admin.">Revoked</span>`
-          : canUnlinkEmail
-            ? `<button class="btn btn-danger" id="btn-unlink-email">Unlink</button>`
-            : `<span class="account-section-badge badge-linked">Connected</span>`
+        : canUnlinkEmail
+          ? `<button class="btn btn-danger" id="btn-unlink-email">Unlink</button>`
+          : `<span class="account-section-badge badge-linked">Connected</span>`
       }
     </div>
-    ${_profile.email_access_revoked ? `<div style="padding:8px 0 4px;font-size:12px;color:var(--muted);line-height:1.6;">Email sign-in has been disabled for this account by an administrator. Contact an admin to have it restored.</div>` : ''}
     <div class="connected-row">
       <div class="connected-provider">
         <div class="connected-provider-icon icon-discord">

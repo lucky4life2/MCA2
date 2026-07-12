@@ -1298,11 +1298,10 @@ function renderMembers(members) {
     const auth = _authUsers[m.id] || {};
     const emailVerified = auth.email_confirmed_at;
     const hasDiscord = (auth.providers||[]).includes('discord');
-    const emailRevoked = !!m.email_access_revoked;
     const accountStatus = m.account_status || 'active';
 
-    const emailBadge = emailRevoked
-      ? `<span class="badge" style="background:#fdecea;color:#c0392b;">✉ Revoked</span>`
+    const emailBadge = !m.email
+      ? `<span class="badge badge-unlinked">No Email</span>`
       : emailVerified
         ? `<span class="badge badge-verified">✉ Verified</span>`
         : `<span class="badge badge-pending">✉ Unverified</span>`;
@@ -1319,12 +1318,10 @@ function renderMembers(members) {
         ? `<span class="badge badge-pending">Pending</span>`
         : `<span class="badge badge-unlinked">None</span>`;
 
-    const allowEmailBtn = !emailRevoked && !emailVerified && m.email && _myPermissions.can_manage_users
+    const allowEmailBtn = !emailVerified && m.email && _myPermissions.can_manage_users
       ? `<button class="btn btn-secondary btn-sm" onclick="allowEmail('${m.id}')">Allow Email</button>` : '';
-    const revokeEmailBtn = !emailRevoked && emailVerified && _myPermissions.can_manage_users
+    const revokeEmailBtn = m.email && _myPermissions.can_manage_users
       ? `<button class="btn btn-danger btn-sm" onclick="revokeEmail('${m.id}')">Revoke Email</button>` : '';
-    const repealEmailBtn = emailRevoked && _myPermissions.can_manage_users
-      ? `<button class="btn btn-success btn-sm" onclick="repealEmail('${m.id}')">Allow Email</button>` : '';
     const revokeDiscordBtn = hasDiscord && _myPermissions.can_manage_users
       ? `<button class="btn btn-danger btn-sm" onclick="revokeDiscord('${m.id}')">Revoke Discord</button>` : '';
     const freezeBtn = accountStatus === 'active' && _myPermissions.can_manage_users
@@ -1347,7 +1344,7 @@ function renderMembers(members) {
       <td>${mcBadge}</td>
       <td>
         <div class="btn-actions">
-          ${allowEmailBtn}${revokeEmailBtn}${repealEmailBtn}${revokeDiscordBtn}
+          ${allowEmailBtn}${revokeEmailBtn}${revokeDiscordBtn}
           ${freezeBtn}${unfreezeBtn}${deleteBtn}
         </div>
       </td>
@@ -2122,14 +2119,8 @@ window.allowEmail = async (id) => {
   await loadAll();
 };
 window.revokeEmail = async (id) => {
-  if (!confirm('Revoke email sign-in? This will prevent the user from signing in with email.')) return;
+  if (!confirm('Revoke and remove this email? This signs them out and fully removes the email from the account so they can add a new one themselves.')) return;
   const { error } = await supabase.rpc('revoke_email_verification', { user_id: id });
-  if (error) { alert('Error: ' + error.message); return; }
-  await loadAll();
-};
-window.repealEmail = async (id) => {
-  if (!confirm('Allow email sign-in again for this account?')) return;
-  const { error } = await supabase.rpc('restore_email_verification', { user_id: id });
   if (error) { alert('Error: ' + error.message); return; }
   await loadAll();
 };
