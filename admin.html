@@ -1338,10 +1338,6 @@ function renderMembers(members) {
       <td>${mcBadge}</td>
       <td>
         <div class="btn-actions">
-          ${m.minecraft_username && !m.minecraft_verified && _myPermissions.can_manage_minecraft
-            ? `<button class="btn btn-success btn-sm" onclick="approveMC('${m.id}')">Approve MC</button>` : ''}
-          ${m.minecraft_verified && _myPermissions.can_manage_minecraft
-            ? `<button class="btn btn-danger btn-sm" onclick="revokeMC('${m.id}')">Revoke MC</button>` : ''}
           ${allowEmailBtn}${revokeEmailBtn}${repealEmailBtn}${revokeDiscordBtn}
           ${freezeBtn}${unfreezeBtn}${deleteBtn}
         </div>
