@@ -2693,7 +2693,7 @@ async function loadMessages() {
 
   const { data, error } = await supabase
     .from('admin_messages')
-    .select('*, profiles(display_name, username, email)')
+    .select('*, profiles!admin_messages_user_id_fkey(display_name, username, email)')
     .order('last_message_at', { ascending: false });
 
   if (error) {
