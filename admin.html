@@ -756,8 +756,17 @@
         <div class="form-group"><label class="form-label">Category</label><input type="text" id="pm-category" class="form-input"></div>
         <div class="form-group"><label class="form-label">Status</label><select id="pm-active" class="form-input"><option value="true">Active</option><option value="false">Inactive</option></select></div>
       </div>
-      <div class="form-group"><label class="form-label">Primary Image URL</label><input type="text" id="pm-image" class="form-input"></div>
-      <div class="form-group"><label class="form-label">Secondary Image URL</label><input type="text" id="pm-image2" class="form-input"></div>
+      <div class="form-group">
+        <label class="form-label">Product Photos <span style="font-weight:400;text-transform:none;letter-spacing:0;">— up to 10 MB total</span></label>
+        <div id="pm-dropzone" style="border:2px dashed var(--border);border-radius:6px;padding:1.5rem;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;">
+          <div style="font-size:13px;color:var(--muted);">Drag &amp; drop photos here, or click to browse</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;">Add as many as you like — total size across all photos must stay under 10 MB.</div>
+          <input type="file" id="pm-file-input" accept="image/*" multiple style="display:none;">
+        </div>
+        <div id="pm-image-size-meter" style="font-size:11px;color:var(--muted);margin-top:6px;"></div>
+        <div id="pm-image-error" style="font-size:12px;color:#c0392b;margin-top:4px;display:none;"></div>
+        <div id="pm-image-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;"></div>
+      </div>
       <div class="col2-grid">
         <div class="form-group"><label class="form-label">Weight</label><input type="text" id="pm-weight" class="form-input"></div>
         <div class="form-group"><label class="form-label">Dimensions</label><input type="text" id="pm-dimensions" class="form-input"></div>
@@ -2033,16 +2042,104 @@ function toggleInventoryField() {
   const type = document.getElementById('pm-product-type').value;
   document.getElementById('pm-inventory-group').style.display = type === 'subscription' ? 'none' : '';
 }
+
+// ── Product photo gallery (drag & drop, multi-file, 10MB total cap) ──
+const PM_MAX_TOTAL_BYTES = 10 * 1024 * 1024; // 10 MB
+let _pmImages = []; // { type:'existing'|'new', url?, file?, previewUrl, name, size }
+
+function pmTotalBytes() {
+  return _pmImages.reduce((sum, img) => sum + (img.size || 0), 0);
+}
+
+function pmRenderImages() {
+  const grid  = document.getElementById('pm-image-grid');
+  const meter = document.getElementById('pm-image-size-meter');
+  grid.innerHTML = _pmImages.map((img, i) => `
+    <div style="position:relative;width:72px;height:72px;">
+      <img src="${img.previewUrl || img.url}" style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--border);">
+      <button type="button" onclick="pmRemoveImage(${i})" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:#c0392b;color:#fff;border:none;cursor:pointer;font-size:11px;line-height:1;">✕</button>
+      ${i === 0 ? `<div style="position:absolute;bottom:2px;left:2px;background:rgba(10,15,30,.65);color:#fff;font-size:9px;padding:1px 5px;border-radius:3px;">Main</div>` : ''}
+    </div>`).join('');
+  const totalMB = (pmTotalBytes() / (1024*1024)).toFixed(2);
+  meter.textContent = _pmImages.length ? `${totalMB} MB / 10 MB used across ${_pmImages.length} photo${_pmImages.length!==1?'s':''}` : '';
+}
+
+window.pmRemoveImage = (i) => { _pmImages.splice(i, 1); pmRenderImages(); };
+
+function pmAddFiles(fileList) {
+  const errEl = document.getElementById('pm-image-error');
+  errEl.style.display = 'none';
+  let runningTotal = pmTotalBytes();
+  let rejected = 0;
+  [...fileList].forEach(file => {
+    if (!file.type.startsWith('image/')) return;
+    if (runningTotal + file.size > PM_MAX_TOTAL_BYTES) { rejected++; return; }
+    runningTotal += file.size;
+    _pmImages.push({ type: 'new', file, previewUrl: URL.createObjectURL(file), name: file.name, size: file.size });
+  });
+  if (rejected) {
+    errEl.textContent = `${rejected} photo${rejected!==1?'s':''} skipped — that would put this product's photos over the 10 MB total limit. Remove some or pick smaller files.`;
+    errEl.style.display = 'block';
+  }
+  pmRenderImages();
+}
+
+const pmDropzone   = document.getElementById('pm-dropzone');
+const pmFileInput  = document.getElementById('pm-file-input');
+pmDropzone.addEventListener('click', () => pmFileInput.click());
+pmFileInput.addEventListener('change', e => { pmAddFiles(e.target.files); pmFileInput.value = ''; });
+['dragover','dragenter'].forEach(evt => pmDropzone.addEventListener(evt, e => {
+  e.preventDefault(); pmDropzone.style.borderColor = 'var(--blue)'; pmDropzone.style.background = 'var(--bg)';
+}));
+['dragleave','dragend'].forEach(evt => pmDropzone.addEventListener(evt, e => {
+  pmDropzone.style.borderColor = 'var(--border)'; pmDropzone.style.background = 'transparent';
+}));
+pmDropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  pmDropzone.style.borderColor = 'var(--border)'; pmDropzone.style.background = 'transparent';
+  pmAddFiles(e.dataTransfer.files);
+});
+
+async function pmUploadPendingImages(productIdHint) {
+  const folder = productIdHint || `new-${Date.now()}`;
+  const uploaded = [];
+  for (const img of _pmImages) {
+    if (img.type === 'existing') { uploaded.push({ url: img.url, name: img.name || '', size: img.size || 0 }); continue; }
+    const ext = (img.file.name.split('.').pop() || 'jpg').toLowerCase();
+    const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+    const { error } = await supabase.storage.from('shop-images').upload(path, img.file, { upsert: true });
+    if (error) throw error;
+    const { data } = supabase.storage.from('shop-images').getPublicUrl(path);
+    uploaded.push({ url: data.publicUrl, name: img.file.name, size: img.file.size });
+  }
+  return uploaded;
+}
+
 function openProductModal(product = null) {
-  ['id','name','desc','price','inventory','category','image','image2','weight','dimensions','material','sizes','colors','sku','notes'].forEach(k => {
+  ['id','name','desc','price','inventory','category','weight','dimensions','material','sizes','colors','sku','notes'].forEach(k => {
     const el = document.getElementById('pm-'+k);
-    if (el) el.value = product?.[k === 'desc' ? 'description' : k === 'image' ? 'image_url' : k === 'image2' ? 'image_url2' : k === 'notes' ? 'admin_notes' : k] || '';
+    if (el) el.value = product?.[k === 'desc' ? 'description' : k === 'notes' ? 'admin_notes' : k] || '';
   });
   document.getElementById('pm-product-type').value = product?.product_type || 'physical';
   document.getElementById('pm-active').value = product ? String(product.active) : 'true';
   document.getElementById('pm-cart-enabled').checked = product ? (product.cart_enabled !== false) : true;
   document.getElementById('pm-error').style.display = 'none';
+  document.getElementById('pm-image-error').style.display = 'none';
   document.getElementById('pm-title').textContent = product ? 'Edit Product' : 'Add Product';
+
+  // Rebuild the photo gallery state from saved data.
+  // Prefer the new `images` array; fall back to the legacy image_url/image_url2
+  // fields for products created before multi-photo support (their byte size is
+  // unknown, so they don't count against the 10MB meter until re-uploaded).
+  _pmImages = [];
+  if (product?.images && Array.isArray(product.images) && product.images.length) {
+    _pmImages = product.images.map(img => ({ type: 'existing', url: img.url, name: img.name || '', size: img.size || 0 }));
+  } else if (product) {
+    if (product.image_url)  _pmImages.push({ type: 'existing', url: product.image_url,  name: '', size: 0 });
+    if (product.image_url2) _pmImages.push({ type: 'existing', url: product.image_url2, name: '', size: 0 });
+  }
+  pmRenderImages();
+
   toggleInventoryField();
   document.getElementById('product-modal').style.display = 'flex';
 }
@@ -2059,9 +2156,18 @@ document.getElementById('pm-save').addEventListener('click', async () => {
   const inventoryRaw = document.getElementById('pm-inventory').value;
   const inventory = isSubscription ? null : parseInt(inventoryRaw, 10);
   const errEl = document.getElementById('pm-error');
+  errEl.style.display = 'none';
   if (!name || isNaN(price)) { errEl.textContent = 'Name and price are required.'; errEl.style.display = 'block'; return; }
   if (!isSubscription && isNaN(inventory)) { errEl.textContent = 'Inventory is required for physical products.'; errEl.style.display = 'block'; return; }
-  const payload = { name, description: document.getElementById('pm-desc').value.trim()||null, price, inventory, product_type: productType, category: document.getElementById('pm-category').value.trim()||null, active: document.getElementById('pm-active').value==='true', image_url: document.getElementById('pm-image').value.trim()||null, image_url2: document.getElementById('pm-image2').value.trim()||null, weight: document.getElementById('pm-weight').value.trim()||null, dimensions: document.getElementById('pm-dimensions').value.trim()||null, material: document.getElementById('pm-material').value.trim()||null, sizes: document.getElementById('pm-sizes').value.trim()||null, colors: document.getElementById('pm-colors').value.trim()||null, sku: document.getElementById('pm-sku').value.trim()||null, admin_notes: document.getElementById('pm-notes').value.trim()||null, cart_enabled: document.getElementById('pm-cart-enabled').checked };
+
+  let uploadedImages;
+  try {
+    uploadedImages = await pmUploadPendingImages(id);
+  } catch (err) {
+    errEl.textContent = 'Photo upload failed: ' + err.message; errEl.style.display = 'block'; return;
+  }
+
+  const payload = { name, description: document.getElementById('pm-desc').value.trim()||null, price, inventory, product_type: productType, category: document.getElementById('pm-category').value.trim()||null, active: document.getElementById('pm-active').value==='true', images: uploadedImages, image_url: uploadedImages[0]?.url || null, image_url2: uploadedImages[1]?.url || null, weight: document.getElementById('pm-weight').value.trim()||null, dimensions: document.getElementById('pm-dimensions').value.trim()||null, material: document.getElementById('pm-material').value.trim()||null, sizes: document.getElementById('pm-sizes').value.trim()||null, colors: document.getElementById('pm-colors').value.trim()||null, sku: document.getElementById('pm-sku').value.trim()||null, admin_notes: document.getElementById('pm-notes').value.trim()||null, cart_enabled: document.getElementById('pm-cart-enabled').checked };
   const { error } = id ? await supabase.from('products').update(payload).eq('id',id) : await supabase.from('products').insert(payload);
   if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
   closeProductModal(); loadAdminProducts();

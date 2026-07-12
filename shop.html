@@ -368,8 +368,24 @@
       }
     }
 
+    const gallery = (p.images && Array.isArray(p.images) && p.images.length)
+      ? p.images.map(img => img.url)
+      : [p.image_url, p.image_url2].filter(Boolean);
+
+    const mainImg = gallery[0]
+      ? `<img class="detail-modal-img" id="detail-modal-main-img" src="${gallery[0]}" alt="${p.name}">`
+      : `<div class="detail-modal-img-placeholder"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9l4-4 4 4 4-4 4 4"/><circle cx="8.5" cy="13.5" r="1.5"/></svg></div>`;
+
+    window._detailGallery = gallery;
+
+    const thumbStrip = gallery.length > 1 ? `
+      <div class="detail-modal-thumbs" style="display:flex;gap:6px;padding:8px 0 0;flex-wrap:wrap;">
+        ${gallery.map((url, i) => `<img src="${url}" onclick="selectDetailThumb(${i})" style="width:48px;height:48px;object-fit:cover;border-radius:5px;cursor:pointer;border:2px solid ${i===0?'var(--blue)':'transparent'};">`).join('')}
+      </div>` : '';
+
     elDetailInner.innerHTML = `
-      ${p.image_url ? `<img class="detail-modal-img" src="${p.image_url}" alt="${p.name}">` : `<div class="detail-modal-img-placeholder"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9l4-4 4 4 4-4 4 4"/><circle cx="8.5" cy="13.5" r="1.5"/></svg></div>`}
+      ${mainImg}
+      ${thumbStrip}
       <div class="detail-modal-body">
         <div class="detail-modal-header">
           <div>
@@ -393,6 +409,15 @@
     elDetailOverlay.classList.add('open');
   }
   window.closeDetail = () => elDetailOverlay.classList.remove('open');
+  window.selectDetailThumb = (i) => {
+    const url = window._detailGallery?.[i];
+    if (!url) return;
+    const mainImg = document.getElementById('detail-modal-main-img');
+    if (mainImg) mainImg.src = url;
+    document.querySelectorAll('.detail-modal-thumbs img').forEach((el, j) => {
+      el.style.borderColor = j === i ? 'var(--blue)' : 'transparent';
+    });
+  };
   elDetailOverlay.addEventListener('click', e => { if (e.target === elDetailOverlay) closeDetail(); });
 
   // ── Element refs
