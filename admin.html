@@ -2591,6 +2591,13 @@ function switchTab(tabName) {
   if (tabName === 'leadership')      loadLeadershipAdmin();
   if (tabName === 'club-presidents') loadClubPresidentsAdmin();
   if (tabName === 'nations')         loadNationsAdmin();
+
+  // Persist so a refresh (or reopening the page) lands back on this tab.
+  // replaceState (not pushState) so tab switches don't pile up browser history.
+  if (window.location.hash !== '#' + tabName) {
+    history.replaceState(null, '', '#' + tabName);
+  }
+  try { localStorage.setItem('admin-active-tab', tabName); } catch (e) {}
 }
 
 // Flat tabs
@@ -2649,7 +2656,10 @@ document.querySelectorAll('.admin-tab-group-trigger').forEach(trigger => {
 document.addEventListener('click', closeAllGroupMenus);
 window.addEventListener('resize', closeAllGroupMenus);
 
-const _hashTab = window.location.hash.replace('#','');
+let _hashTab = window.location.hash.replace('#','');
+if (!_hashTab) {
+  try { _hashTab = localStorage.getItem('admin-active-tab') || ''; } catch (e) {}
+}
 if (_hashTab) switchTab(_hashTab);
 
 // ── Admin Messages ────────────────────────────────────────────
