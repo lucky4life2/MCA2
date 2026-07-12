@@ -491,7 +491,7 @@ function initAppealForm(subjectPrefix) {
     if (!body) { errEl.textContent = 'Please enter a message explaining your appeal.'; errEl.style.display = 'block'; return; }
 
     sendBtn.disabled = true;
-    const { error } = await supabase.from('admin_messages').insert({ user_id: _user.id, subject: subjectPrefix, body });
+    const { error } = await supabase.rpc('create_admin_message_thread', { p_subject: subjectPrefix, p_body: body });
     if (error) {
       errEl.textContent = error.message || 'Failed to send appeal. Please try again.';
       errEl.style.display = 'block';
@@ -733,9 +733,17 @@ async function renderConnectedAccounts(skipFetch = false) {
       // Clear email from auth.users and profiles table
       const { error: cleanupError } = await supabase.rpc('clear_user_email');
       if (cleanupError) console.warn('Email cleanup warning:', cleanupError.message);
-      // Reload immediately so the password section hides and state is clean.
-      // Skip re-rendering — the reload is the re-render.
-      window.location.reload();
+      // Force a fresh access token to be issued and persisted BEFORE reloading.
+      // Reloading immediately (as before) raced the still-propagating identity
+      // change: the freshly loaded page could read a stale/not-yet-flushed
+      // session, which either made init() hang waiting for an auth event
+      // (the "loads forever" bug) or made the reloaded page still show the
+      // email as linked (requiring a second click of Unlink to actually take).
+      try { await supabase.auth.refreshSession(); } catch (e) {}
+      if (btn) btn.textContent = 'Unlinked — reloading…';
+      // Small delay (matches the add-email flow below) so the refreshed
+      // session has time to settle before the reload/re-render.
+      setTimeout(() => { window.location.reload(); }, 1000);
     });
   }
   if (!hasEmail) {
@@ -1413,6 +1421,8 @@ document.getElementById('del-submit').addEventListener('click', async () => {
 });
 
 // ── Contact Administrator ─────────────────────────────────────
+let _myItems = {}; // thread_id -> [items]
+
 async function loadMyMessages() {
   const listEl = document.getElementById('my-messages-list');
   if (!listEl) return;
@@ -1420,28 +1430,69 @@ async function loadMyMessages() {
     .from('admin_messages')
     .select('*')
     .eq('user_id', _user.id)
-    .order('created_at', { ascending: false });
+    .order('last_message_at', { ascending: false });
   if (error || !data || !data.length) { listEl.innerHTML = ''; return; }
 
+  const threadIds = data.map(m => m.id);
+  const { data: itemRows } = await supabase
+    .from('admin_message_items')
+    .select('*')
+    .in('thread_id', threadIds)
+    .order('created_at', { ascending: true });
+  _myItems = {};
+  (itemRows || []).forEach(it => { (_myItems[it.thread_id] ||= []).push(it); });
+
   listEl.innerHTML = data.map(m => {
-    const time = new Date(m.created_at).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
-    return `<div style="border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:10px;">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:2px;">${time}</div>
-      <div style="font-size:13px;font-weight:600;margin-bottom:4px;">${m.subject}</div>
-      <div style="font-size:13px;color:var(--mid);white-space:pre-wrap;">${m.body}</div>
-      ${m.admin_reply ? `
+    const items = _myItems[m.id] || [];
+    const itemsHtml = items.map(it => {
+      const t = new Date(it.created_at).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
+      return it.sender_type === 'admin' ? `
       <div style="margin-top:8px;padding:10px 12px;background:var(--bg);border-left:3px solid var(--blue);border-radius:4px;">
-        <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--blue);margin-bottom:4px;">Admin Reply</div>
-        <div style="font-size:13px;white-space:pre-wrap;">${m.admin_reply}</div>
-      </div>` : `<div style="font-size:12px;color:var(--muted);margin-top:6px;font-style:italic;">Awaiting reply...</div>`}
+        <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--blue);margin-bottom:4px;">Admin Reply · ${t}</div>
+        <div style="font-size:13px;white-space:pre-wrap;">${it.body}</div>
+      </div>` : `
+      <div style="margin-top:8px;font-size:13px;color:var(--mid);white-space:pre-wrap;">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:2px;">${t}</div>
+        ${it.body}
+      </div>`;
+    }).join('');
+    const hasReply = items.some(it => it.sender_type === 'admin');
+    return `<div style="border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:10px;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px;">${m.subject}</div>
+      ${itemsHtml}
+      ${hasReply ? '' : '<div style="font-size:12px;color:var(--muted);margin-top:6px;font-style:italic;">Awaiting reply...</div>'}
+      <div style="margin-top:10px;">
+        <textarea class="form-input" id="my-reply-input-${m.id}" rows="2" placeholder="Add another message..." style="resize:vertical;min-height:50px;width:100%;box-sizing:border-box;font-size:13px;"></textarea>
+        <button class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="sendMyMessageReply('${m.id}')">Send</button>
+      </div>
     </div>`;
   }).join('');
 
-  const unreadReplyIds = data.filter(m => m.admin_reply && !m.reply_read).map(m => m.id);
-  if (unreadReplyIds.length) {
-    await supabase.from('admin_messages').update({ reply_read: true }).in('id', unreadReplyIds);
+  const unreadThreadIds = data.filter(m => (_myItems[m.id] || []).some(it => it.sender_type === 'admin' && !it.read_by_user)).map(m => m.id);
+  for (const id of unreadThreadIds) {
+    await supabase.rpc('mark_thread_read_by_user', { p_thread_id: id });
   }
 }
+
+window.sendMyMessageReply = async (id) => {
+  const input = document.getElementById(`my-reply-input-${id}`);
+  const body = input?.value.trim();
+  if (!body) return;
+  const btn = input.nextElementSibling;
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+  const { error } = await supabase.from('admin_message_items').insert({
+    thread_id: id,
+    sender_type: 'user',
+    sender_id: _user.id,
+    body,
+  });
+  if (error) {
+    alert(error.message || 'Failed to send message.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
+    return;
+  }
+  loadMyMessages();
+};
 
 document.getElementById('btn-contact-admin').addEventListener('click', () => {
   document.getElementById('contact-modal').classList.remove('hidden');
@@ -1473,7 +1524,7 @@ document.getElementById('contact-send').addEventListener('click', async () => {
   if (!subject) { errEl.textContent = 'Please enter a subject.'; errEl.style.display = 'block'; return; }
   if (!body)    { errEl.textContent = 'Please enter a message.'; errEl.style.display = 'block'; return; }
   document.getElementById('contact-send').disabled = true;
-  const { error } = await supabase.from('admin_messages').insert({ user_id: _user.id, subject, body });
+  const { error } = await supabase.rpc('create_admin_message_thread', { p_subject: subject, p_body: body });
   if (error) {
     errEl.textContent = error.message || 'Failed to send message.';
     errEl.style.display = 'block';

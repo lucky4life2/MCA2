@@ -27,12 +27,12 @@
     .admin-tab-group.open .admin-tab-group-trigger svg { transform: rotate(180deg); }
     .admin-tab-group-trigger.active { color: var(--blue); border-bottom-color: var(--blue); }
     .admin-tab-group-menu {
-      display: none; position: absolute; top: calc(100% + 2px); left: 0;
+      display: none; position: fixed;
       background: var(--white); border: 1px solid var(--border);
       border-radius: 6px; box-shadow: 0 6px 20px rgba(10,15,30,.1);
-      min-width: 140px; z-index: 200; overflow: hidden; padding: 4px 0;
+      min-width: 140px; z-index: 600; overflow: hidden; padding: 4px 0;
     }
-    .admin-tab-group.open .admin-tab-group-menu { display: block; }
+    .admin-tab-group-menu.open { display: block; }
     .admin-tab-group-item {
       display: flex; align-items: center; gap: 8px;
       width: 100%; padding: 9px 16px; text-align: left;
@@ -660,6 +660,14 @@
         <div style="padding:1.25rem 1.5rem 1rem;">
           <label class="stat-cfg-label">Discord Invite URL</label>
           <input type="text" id="cfg-discord-url" class="search-input" placeholder="https://discord.gg/..." style="width:100%;box-sizing:border-box;">
+        </div>
+        <div style="padding:0 1.5rem 1rem;">
+          <label class="stat-cfg-label">YouTube Page URL</label>
+          <input type="text" id="cfg-youtube-url" class="search-input" placeholder="https://www.youtube.com/@..." style="width:100%;box-sizing:border-box;">
+        </div>
+        <div style="padding:0 1.5rem 1rem;">
+          <label class="stat-cfg-label">Email Us Address</label>
+          <input type="text" id="cfg-email-us" class="search-input" placeholder="you@example.com" style="width:100%;box-sizing:border-box;">
         </div>
         <div style="padding:0 1.5rem .5rem;">
           <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:10px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:0;">
@@ -1802,7 +1810,7 @@ async function loadConfigTab() { await loadSiteConfig(); }
 async function loadSiteConfig() {
   const { data } = await supabase.from('settings').select('value').eq('key','site_config').single();
   let cfg = {}; if (data?.value) { try { cfg = JSON.parse(data.value); } catch(e) {} }
-  ['discord-url','stat1-label','stat1-value','stat1-sub','stat2-label','stat2-value','stat2-sub','stat3-label','stat3-value','stat3-sub','stat4-label','stat4-value','stat4-sub'].forEach(k => {
+  ['discord-url','youtube-url','email-us','stat1-label','stat1-value','stat1-sub','stat2-label','stat2-value','stat2-sub','stat3-label','stat3-value','stat3-sub','stat4-label','stat4-value','stat4-sub'].forEach(k => {
     const el = document.getElementById('cfg-'+k);
     if (el) el.value = cfg[k.replace('-','_')]||'';
   });
@@ -1811,7 +1819,7 @@ document.getElementById('btn-save-config').addEventListener('click', async () =>
   const statusEl = document.getElementById('cfg-status');
   statusEl.textContent = 'Saving...';
   const cfg = {};
-  ['discord-url','stat1-label','stat1-value','stat1-sub','stat2-label','stat2-value','stat2-sub','stat3-label','stat3-value','stat3-sub','stat4-label','stat4-value','stat4-sub'].forEach(k => {
+  ['discord-url','youtube-url','email-us','stat1-label','stat1-value','stat1-sub','stat2-label','stat2-value','stat2-sub','stat3-label','stat3-value','stat3-sub','stat4-label','stat4-value','stat4-sub'].forEach(k => {
     cfg[k.replace('-','_')] = document.getElementById('cfg-'+k)?.value.trim()||'';
   });
   const { error } = await supabase.from('settings').upsert({ key:'site_config', value: JSON.stringify(cfg) }, { onConflict:'key' });
@@ -2040,24 +2048,57 @@ document.querySelectorAll('.admin-tab-group-item').forEach(item => {
 });
 
 // Group triggers — toggle dropdown, close others
+//
+// The "Members"/"Content" dropdown menus used to live inside .admin-tabs,
+// which scrolls horizontally on phones (overflow-x: auto). Mobile Safari has
+// a long-standing bug where a `position: fixed` element nested inside a
+// horizontally-scrolling ancestor can render clipped, offset, or just never
+// show up at all — which is exactly what made these menus "not function" on
+// phone even though the same code worked fine on desktop. Moving each menu
+// out to be a direct child of <body> sidesteps that entirely: the menu is no
+// longer a descendant of the scrolling strip at all, on any device.
+document.querySelectorAll('.admin-tab-group').forEach(grp => {
+  const menu = grp.querySelector('.admin-tab-group-menu');
+  if (!menu) return;
+  menu.dataset.forGroup = grp.id;
+  document.body.appendChild(menu);
+});
+
+function getGroupMenu(grp) {
+  return document.querySelector(`.admin-tab-group-menu[data-for-group="${grp.id}"]`);
+}
+function closeAllGroupMenus() {
+  document.querySelectorAll('.admin-tab-group').forEach(g => g.classList.remove('open'));
+  document.querySelectorAll('.admin-tab-group-menu').forEach(m => m.classList.remove('open'));
+}
+
 document.querySelectorAll('.admin-tab-group-trigger').forEach(trigger => {
   trigger.addEventListener('click', e => {
     e.stopPropagation();
     const grp = trigger.closest('.admin-tab-group');
+    const menu = getGroupMenu(grp);
     const wasOpen = grp.classList.contains('open');
-    document.querySelectorAll('.admin-tab-group').forEach(g => g.classList.remove('open'));
-    if (!wasOpen) grp.classList.add('open');
+    closeAllGroupMenus();
+    if (!wasOpen && menu) {
+      // Only matters on desktop — the mobile media query pins the menu to
+      // the bottom of the screen with `!important`, overriding this.
+      const rect = trigger.getBoundingClientRect();
+      menu.style.top = (rect.bottom + 4) + 'px';
+      menu.style.left = rect.left + 'px';
+      grp.classList.add('open');
+      menu.classList.add('open');
+    }
   });
 });
-document.addEventListener('click', () => {
-  document.querySelectorAll('.admin-tab-group').forEach(g => g.classList.remove('open'));
-});
+document.addEventListener('click', closeAllGroupMenus);
+window.addEventListener('resize', closeAllGroupMenus);
 
 const _hashTab = window.location.hash.replace('#','');
 if (_hashTab) switchTab(_hashTab);
 
 // ── Admin Messages ────────────────────────────────────────────
-let _messages = [];
+let _messages = [];   // threads
+let _items = {};      // thread_id -> [items] (chronological)
 
 async function loadMessages() {
   const inbox = document.getElementById('messages-inbox');
@@ -2066,15 +2107,31 @@ async function loadMessages() {
   const { data, error } = await supabase
     .from('admin_messages')
     .select('*, profiles(display_name, username, email)')
-    .order('created_at', { ascending: false });
+    .order('last_message_at', { ascending: false });
 
   if (error) {
     inbox.innerHTML = `<div class="msg-empty">Failed to load messages: ${error.message}</div>`;
     return;
   }
   _messages = data || [];
+
+  const { data: itemRows, error: itemErr } = await supabase
+    .from('admin_message_items')
+    .select('*')
+    .order('created_at', { ascending: true });
+  _items = {};
+  if (!itemErr) {
+    (itemRows || []).forEach(it => {
+      (_items[it.thread_id] ||= []).push(it);
+    });
+  }
+
   renderMessages();
   updateUnreadBadge();
+}
+
+function threadUnread(id) {
+  return (_items[id] || []).some(i => i.sender_type === 'user' && !i.read_by_admin);
 }
 
 function renderMessages() {
@@ -2086,31 +2143,37 @@ function renderMessages() {
   inbox.innerHTML = _messages.map(m => {
     const p = m.profiles || {};
     const sender = p.display_name || p.username || p.email || m.user_id;
-    const time = new Date(m.created_at).toLocaleString(undefined, { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
-    const replyTime = m.replied_at ? new Date(m.replied_at).toLocaleString(undefined, { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' }) : '';
-    return `<div class="msg-row ${m.read ? '' : 'unread'}" data-id="${m.id}">
+    const unread = threadUnread(m.id);
+    const items = _items[m.id] || [];
+    const itemsHtml = items.map(it => {
+      const t = new Date(it.created_at).toLocaleString(undefined, { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
+      return it.sender_type === 'admin'
+        ? `<div style="margin-top:8px;padding:10px 12px;background:var(--bg);border-left:3px solid var(--blue);border-radius:4px;">
+             <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--blue);margin-bottom:4px;">Your Reply · ${t}</div>
+             <div style="font-size:13px;white-space:pre-wrap;">${it.body}</div>
+           </div>`
+        : `<div style="margin-top:8px;padding:10px 12px;background:var(--card,var(--bg));border-left:3px solid var(--border);border-radius:4px;">
+             <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;">${sender} · ${t}</div>
+             <div style="font-size:13px;white-space:pre-wrap;">${it.body}</div>
+           </div>`;
+    }).join('');
+    return `<div class="msg-row ${unread ? 'unread' : ''}" data-id="${m.id}">
       <div class="msg-dot"></div>
       <div class="msg-content">
         <div class="msg-meta">
           <span class="msg-sender">${sender}</span>
-          <span class="msg-time">${time}</span>
         </div>
         <div class="msg-subject">${m.subject}</div>
-        <div class="msg-body">${m.body}</div>
-        ${m.admin_reply ? `
-        <div class="msg-reply" style="margin-top:10px;padding:10px 12px;background:var(--bg);border-left:3px solid var(--blue);border-radius:4px;">
-          <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--blue);margin-bottom:4px;">Your Reply · ${replyTime}</div>
-          <div style="font-size:13px;white-space:pre-wrap;">${m.admin_reply}</div>
-        </div>` : `
+        ${itemsHtml}
         <div class="msg-reply-form" style="margin-top:10px;">
-          <textarea class="form-input" id="reply-input-${m.id}" rows="2" placeholder="Write a reply..." style="resize:vertical;min-height:60px;width:100%;box-sizing:border-box;"></textarea>
-          <button class="btn btn-primary btn-sm" style="margin-top:6px;" onclick="sendMessageReply('${m.id}')">Send Reply</button>
-        </div>`}
+          <textarea class="form-input" id="reply-input-${m.id}" rows="2" placeholder="Write a message..." style="resize:vertical;min-height:60px;width:100%;box-sizing:border-box;"></textarea>
+          <button class="btn btn-primary btn-sm" style="margin-top:6px;" onclick="sendMessageReply('${m.id}')">Send</button>
+        </div>
       </div>
       <div class="msg-actions">
-        ${m.read
-          ? `<button class="btn btn-outline btn-sm" onclick="toggleMessageRead('${m.id}', false)">Mark Unread</button>`
-          : `<button class="btn btn-outline btn-sm" onclick="toggleMessageRead('${m.id}', true)">Mark Read</button>`
+        ${unread
+          ? `<button class="btn btn-outline btn-sm" onclick="toggleMessageRead('${m.id}', true)">Mark Read</button>`
+          : `<button class="btn btn-outline btn-sm" onclick="toggleMessageRead('${m.id}', false)">Mark Unread</button>`
         }
         <button class="btn btn-danger btn-sm" onclick="deleteMessage('${m.id}')">Delete</button>
       </div>
@@ -2125,26 +2188,28 @@ window.sendMessageReply = async (id) => {
   const btn = input.nextElementSibling;
   if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
   const { data: { user } } = await supabase.auth.getUser();
-  const { error } = await supabase.from('admin_messages').update({
-    admin_reply: reply,
-    replied_at: new Date().toISOString(),
-    replied_by: user?.id || null,
-    reply_read: false,
-    read: true,
-  }).eq('id', id);
+  const { data: newItem, error } = await supabase.from('admin_message_items').insert({
+    thread_id: id,
+    sender_type: 'admin',
+    sender_id: user?.id || null,
+    body: reply,
+    read_by_admin: true,
+    read_by_user: false,
+  }).select().single();
   if (error) {
-    alert(error.message || 'Failed to send reply.');
-    if (btn) { btn.disabled = false; btn.textContent = 'Send Reply'; }
+    alert(error.message || 'Failed to send message.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
     return;
   }
-  const m = _messages.find(x => x.id === id);
-  if (m) { m.admin_reply = reply; m.replied_at = new Date().toISOString(); m.read = true; }
+  (_items[id] ||= []).push(newItem);
+  if (input) input.value = '';
+  if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
   renderMessages();
   updateUnreadBadge();
 };
 
 function updateUnreadBadge() {
-  const unread = _messages.filter(m => !m.read).length;
+  const unread = _messages.filter(m => threadUnread(m.id)).length;
   const badge = document.getElementById('messages-unread-badge');
   if (unread > 0) {
     badge.textContent = unread;
@@ -2155,9 +2220,13 @@ function updateUnreadBadge() {
 }
 
 window.toggleMessageRead = async (id, read) => {
-  await supabase.from('admin_messages').update({ read }).eq('id', id);
-  const m = _messages.find(x => x.id === id);
-  if (m) m.read = read;
+  if (read) {
+    await supabase.from('admin_message_items').update({ read_by_admin: true }).eq('thread_id', id).eq('sender_type', 'user');
+    (_items[id] || []).forEach(i => { if (i.sender_type === 'user') i.read_by_admin = true; });
+  } else {
+    await supabase.from('admin_message_items').update({ read_by_admin: false }).eq('thread_id', id).eq('sender_type', 'user');
+    (_items[id] || []).forEach(i => { if (i.sender_type === 'user') i.read_by_admin = false; });
+  }
   renderMessages();
   updateUnreadBadge();
 };
@@ -2167,15 +2236,16 @@ window.deleteMessage = async (id) => {
   if (!confirm('Are you sure? This cannot be undone.')) return;
   await supabase.from('admin_messages').delete().eq('id', id);
   _messages = _messages.filter(x => x.id !== id);
+  delete _items[id];
   renderMessages();
   updateUnreadBadge();
 };
 
 document.getElementById('btn-mark-all-read')?.addEventListener('click', async () => {
-  const unreadIds = _messages.filter(m => !m.read).map(m => m.id);
+  const unreadIds = _messages.filter(m => threadUnread(m.id)).map(m => m.id);
   if (!unreadIds.length) return;
-  await supabase.from('admin_messages').update({ read: true }).in('id', unreadIds);
-  _messages.forEach(m => m.read = true);
+  await supabase.from('admin_message_items').update({ read_by_admin: true }).in('thread_id', unreadIds).eq('sender_type', 'user');
+  unreadIds.forEach(id => (_items[id] || []).forEach(i => { if (i.sender_type === 'user') i.read_by_admin = true; }));
   renderMessages();
   updateUnreadBadge();
 });
@@ -2183,9 +2253,10 @@ document.getElementById('btn-mark-all-read')?.addEventListener('click', async ()
 // Load unread count on page init so badge shows even before tab is clicked
 async function loadUnreadCount() {
   const { count } = await supabase
-    .from('admin_messages')
+    .from('admin_message_items')
     .select('id', { count: 'exact', head: true })
-    .eq('read', false);
+    .eq('sender_type', 'user')
+    .eq('read_by_admin', false);
   if (count) {
     const badge = document.getElementById('messages-unread-badge');
     badge.textContent = count;
