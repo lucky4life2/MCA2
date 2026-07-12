@@ -1423,6 +1423,26 @@ document.getElementById('del-submit').addEventListener('click', async () => {
 // ── Contact Administrator ─────────────────────────────────────
 let _myItems = {}; // thread_id -> [items]
 
+function renderMsgAttachments(attachments) {
+  if (!attachments || !attachments.length) return '';
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">
+    ${attachments.map(a => `<a href="${a.url}" target="_blank" rel="noopener"><img src="${a.url}" alt="${a.name||'attachment'}" style="width:56px;height:56px;object-fit:cover;border-radius:5px;border:1px solid var(--border);"></a>`).join('')}
+  </div>`;
+}
+
+async function uploadMsgAttachments(files) {
+  const uploaded = [];
+  for (const file of files) {
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const path = `${_user.id}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+    const { error } = await supabase.storage.from('message-attachments').upload(path, file, { upsert: true });
+    if (error) throw error;
+    const { data } = supabase.storage.from('message-attachments').getPublicUrl(path);
+    uploaded.push({ url: data.publicUrl, name: file.name, size: file.size });
+  }
+  return uploaded;
+}
+
 async function loadMyMessages() {
   const listEl = document.getElementById('my-messages-list');
   if (!listEl) return;
@@ -1446,14 +1466,17 @@ async function loadMyMessages() {
     const items = _myItems[m.id] || [];
     const itemsHtml = items.map(it => {
       const t = new Date(it.created_at).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
+      const adminLabel = it.sender_display_name ? `Admin Reply · ${it.sender_display_name}` : 'Admin Reply';
       return it.sender_type === 'admin' ? `
       <div style="margin-top:8px;padding:10px 12px;background:var(--bg);border-left:3px solid var(--blue);border-radius:4px;">
-        <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--blue);margin-bottom:4px;">Admin Reply · ${t}</div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--blue);margin-bottom:4px;">${adminLabel} · ${t}</div>
         <div style="font-size:13px;white-space:pre-wrap;">${it.body}</div>
+        ${renderMsgAttachments(it.attachments)}
       </div>` : `
       <div style="margin-top:8px;font-size:13px;color:var(--mid);white-space:pre-wrap;">
         <div style="font-size:11px;color:var(--muted);margin-bottom:2px;">${t}</div>
         ${it.body}
+        ${renderMsgAttachments(it.attachments)}
       </div>`;
     }).join('');
     const hasReply = items.some(it => it.sender_type === 'admin');
@@ -1463,6 +1486,8 @@ async function loadMyMessages() {
       ${hasReply ? '' : '<div style="font-size:12px;color:var(--muted);margin-top:6px;font-style:italic;">Awaiting reply...</div>'}
       <div style="margin-top:10px;">
         <textarea class="form-input" id="my-reply-input-${m.id}" rows="2" placeholder="Add another message..." style="resize:vertical;min-height:50px;width:100%;box-sizing:border-box;font-size:13px;"></textarea>
+        <input type="file" id="my-reply-file-${m.id}" accept="image/*" multiple style="font-size:11px;max-width:200px;margin-top:6px;display:block;">
+        <div style="font-size:10px;color:var(--muted);margin-top:2px;">Photos up to 10 MB total.</div>
         <button class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="sendMyMessageReply('${m.id}')">Send</button>
       </div>
     </div>`;
@@ -1476,15 +1501,34 @@ async function loadMyMessages() {
 
 window.sendMyMessageReply = async (id) => {
   const input = document.getElementById(`my-reply-input-${id}`);
+  const fileInput = document.getElementById(`my-reply-file-${id}`);
   const body = input?.value.trim();
   if (!body) return;
-  const btn = input.nextElementSibling;
+  const btn = input.parentElement.querySelector('.btn-outline');
   if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+
+  const files = fileInput?.files ? [...fileInput.files] : [];
+  const totalBytes = files.reduce((s, f) => s + f.size, 0);
+  if (totalBytes > 10 * 1024 * 1024) {
+    alert('Attached photos exceed 10 MB total. Please remove some and try again.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
+    return;
+  }
+  let attachments = [];
+  try {
+    attachments = await uploadMsgAttachments(files);
+  } catch (err) {
+    alert('Photo upload failed: ' + err.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
+    return;
+  }
+
   const { error } = await supabase.from('admin_message_items').insert({
     thread_id: id,
     sender_type: 'user',
     sender_id: _user.id,
     body,
+    attachments,
   });
   if (error) {
     alert(error.message || 'Failed to send message.');
@@ -1504,6 +1548,7 @@ function closeContactModal() {
   document.getElementById('contact-success').style.display = 'none';
   document.getElementById('contact-subject').value = '';
   document.getElementById('contact-body').value = '';
+  document.getElementById('contact-files').value = '';
   document.getElementById('contact-char-count').textContent = '0 / 2000';
   document.getElementById('contact-send').disabled = false;
 }
@@ -1524,7 +1569,24 @@ document.getElementById('contact-send').addEventListener('click', async () => {
   if (!subject) { errEl.textContent = 'Please enter a subject.'; errEl.style.display = 'block'; return; }
   if (!body)    { errEl.textContent = 'Please enter a message.'; errEl.style.display = 'block'; return; }
   document.getElementById('contact-send').disabled = true;
-  const { error } = await supabase.rpc('create_admin_message_thread', { p_subject: subject, p_body: body });
+  const files = [...(document.getElementById('contact-files').files || [])];
+  const totalBytes = files.reduce((s, f) => s + f.size, 0);
+  if (totalBytes > 10 * 1024 * 1024) {
+    errEl.textContent = 'Attached photos exceed 10 MB total. Please remove some and try again.';
+    errEl.style.display = 'block';
+    document.getElementById('contact-send').disabled = false;
+    return;
+  }
+  let attachments = [];
+  try {
+    attachments = await uploadMsgAttachments(files);
+  } catch (err) {
+    errEl.textContent = 'Photo upload failed: ' + err.message;
+    errEl.style.display = 'block';
+    document.getElementById('contact-send').disabled = false;
+    return;
+  }
+  const { error } = await supabase.rpc('create_admin_message_thread', { p_subject: subject, p_body: body, p_attachments: attachments });
   if (error) {
     errEl.textContent = error.message || 'Failed to send message.';
     errEl.style.display = 'block';
@@ -1558,6 +1620,11 @@ init();
         <label class="form-label" for="contact-body">Message</label>
         <textarea id="contact-body" class="form-input" rows="5" placeholder="Describe your issue or question..." maxlength="2000" style="resize:vertical;min-height:100px;"></textarea>
         <div class="form-hint" id="contact-char-count" style="text-align:right;">0 / 2000</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="contact-files">Attach Photos (optional)</label>
+        <input type="file" id="contact-files" accept="image/*" multiple>
+        <div class="form-hint">For evidence of bans or other issues. Up to 10 MB total.</div>
       </div>
       <div class="form-error" id="contact-error"></div>
       <div class="form-success" id="contact-success"></div>

@@ -2656,6 +2656,27 @@ if (_hashTab) switchTab(_hashTab);
 let _messages = [];   // threads
 let _items = {};      // thread_id -> [items] (chronological)
 
+function renderMsgAttachments(attachments) {
+  if (!attachments || !attachments.length) return '';
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">
+    ${attachments.map(a => `<a href="${a.url}" target="_blank" rel="noopener"><img src="${a.url}" alt="${a.name||'attachment'}" style="width:56px;height:56px;object-fit:cover;border-radius:5px;border:1px solid var(--border);"></a>`).join('')}
+  </div>`;
+}
+
+async function uploadMsgAttachments(files) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const uploaded = [];
+  for (const file of files) {
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+    const { error } = await supabase.storage.from('message-attachments').upload(path, file, { upsert: true });
+    if (error) throw error;
+    const { data } = supabase.storage.from('message-attachments').getPublicUrl(path);
+    uploaded.push({ url: data.publicUrl, name: file.name, size: file.size });
+  }
+  return uploaded;
+}
+
 async function loadMessages() {
   const inbox = document.getElementById('messages-inbox');
   inbox.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--muted);font-size:13px;">Loading...</div>';
@@ -2703,14 +2724,17 @@ function renderMessages() {
     const items = _items[m.id] || [];
     const itemsHtml = items.map(it => {
       const t = new Date(it.created_at).toLocaleString(undefined, { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
+      const adminLabel = it.sender_display_name ? `Your Reply · ${it.sender_display_name}` : 'Your Reply';
       return it.sender_type === 'admin'
         ? `<div style="margin-top:8px;padding:10px 12px;background:var(--bg);border-left:3px solid var(--blue);border-radius:4px;">
-             <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--blue);margin-bottom:4px;">Your Reply · ${t}</div>
+             <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--blue);margin-bottom:4px;">${adminLabel} · ${t}</div>
              <div style="font-size:13px;white-space:pre-wrap;">${it.body}</div>
+             ${renderMsgAttachments(it.attachments)}
            </div>`
         : `<div style="margin-top:8px;padding:10px 12px;background:var(--card,var(--bg));border-left:3px solid var(--border);border-radius:4px;">
              <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;">${sender} · ${t}</div>
              <div style="font-size:13px;white-space:pre-wrap;">${it.body}</div>
+             ${renderMsgAttachments(it.attachments)}
            </div>`;
     }).join('');
     return `<div class="msg-row ${unread ? 'unread' : ''}" data-id="${m.id}">
@@ -2723,6 +2747,13 @@ function renderMessages() {
         ${itemsHtml}
         <div class="msg-reply-form" style="margin-top:10px;">
           <textarea class="form-input" id="reply-input-${m.id}" rows="2" placeholder="Write a message..." style="resize:vertical;min-height:60px;width:100%;box-sizing:border-box;"></textarea>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap;">
+            <input type="file" id="reply-file-${m.id}" accept="image/*" multiple style="font-size:11px;max-width:200px;">
+            <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;">
+              <input type="checkbox" id="reply-share-name-${m.id}"> Share my name with the member
+            </label>
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">Photos up to 10 MB total.</div>
           <button class="btn btn-primary btn-sm" style="margin-top:6px;" onclick="sendMessageReply('${m.id}')">Send</button>
         </div>
       </div>
@@ -2739,11 +2770,37 @@ function renderMessages() {
 
 window.sendMessageReply = async (id) => {
   const input = document.getElementById(`reply-input-${id}`);
+  const fileInput = document.getElementById(`reply-file-${id}`);
+  const shareNameBox = document.getElementById(`reply-share-name-${id}`);
   const reply = input?.value.trim();
   if (!reply) return;
-  const btn = input.nextElementSibling;
+  const btn = input.parentElement.querySelector('.btn-primary');
   if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+
+  const files = fileInput?.files ? [...fileInput.files] : [];
+  const totalBytes = files.reduce((s, f) => s + f.size, 0);
+  if (totalBytes > 10 * 1024 * 1024) {
+    alert('Attached photos exceed 10 MB total. Please remove some and try again.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
+    return;
+  }
+
+  let attachments = [];
+  try {
+    attachments = await uploadMsgAttachments(files);
+  } catch (err) {
+    alert('Photo upload failed: ' + err.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
+    return;
+  }
+
   const { data: { user } } = await supabase.auth.getUser();
+  let senderDisplayName = null;
+  if (shareNameBox?.checked) {
+    const { data: profile } = await supabase.from('profiles').select('display_name,username').eq('id', user.id).single();
+    senderDisplayName = profile?.display_name || profile?.username || null;
+  }
+
   const { data: newItem, error } = await supabase.from('admin_message_items').insert({
     thread_id: id,
     sender_type: 'admin',
@@ -2751,6 +2808,8 @@ window.sendMessageReply = async (id) => {
     body: reply,
     read_by_admin: true,
     read_by_user: false,
+    attachments,
+    sender_display_name: senderDisplayName,
   }).select().single();
   if (error) {
     alert(error.message || 'Failed to send message.');
