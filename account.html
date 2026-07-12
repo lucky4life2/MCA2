@@ -1440,6 +1440,9 @@ async function uploadMsgAttachments(files) {
   return uploaded;
 }
 
+let _myMessages = [];
+let _myExpandedThreads = new Set();
+
 async function loadMyMessages() {
   const listEl = document.getElementById('my-messages-list');
   if (!listEl) return;
@@ -1449,6 +1452,7 @@ async function loadMyMessages() {
     .eq('user_id', _user.id)
     .order('last_message_at', { ascending: false });
   if (error || !data || !data.length) { listEl.innerHTML = ''; return; }
+  _myMessages = data;
 
   const threadIds = data.map(m => m.id);
   const { data: itemRows } = await supabase
@@ -1459,8 +1463,29 @@ async function loadMyMessages() {
   _myItems = {};
   (itemRows || []).forEach(it => { (_myItems[it.thread_id] ||= []).push(it); });
 
-  listEl.innerHTML = data.map(m => {
+  renderMyMessages();
+
+  const unreadThreadIds = data.filter(m => (_myItems[m.id] || []).some(it => it.sender_type === 'admin' && !it.read_by_user)).map(m => m.id);
+  for (const id of unreadThreadIds) {
+    await supabase.rpc('mark_thread_read_by_user', { p_thread_id: id });
+  }
+}
+
+window.toggleMyThreadExpand = (id) => {
+  if (_myExpandedThreads.has(id)) _myExpandedThreads.delete(id);
+  else _myExpandedThreads.add(id);
+  renderMyMessages();
+};
+
+function renderMyMessages() {
+  const listEl = document.getElementById('my-messages-list');
+  if (!listEl) return;
+  listEl.innerHTML = _myMessages.map(m => {
     const items = _myItems[m.id] || [];
+    const expanded = _myExpandedThreads.has(m.id);
+    const lastItem = items[items.length - 1];
+    const lastPreview = lastItem ? lastItem.body.slice(0, 80) + (lastItem.body.length > 80 ? '…' : '') : '';
+    const lastTime = lastItem ? new Date(lastItem.created_at).toLocaleDateString(undefined, { month:'short', day:'numeric' }) : '';
     const itemsHtml = items.map(it => {
       const t = new Date(it.created_at).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
       const adminLabel = it.sender_display_name ? `Admin Reply · ${it.sender_display_name}` : 'Admin Reply';
@@ -1478,7 +1503,12 @@ async function loadMyMessages() {
     }).join('');
     const hasReply = items.some(it => it.sender_type === 'admin');
     return `<div style="border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:10px;">
-      <div style="font-size:13px;font-weight:600;margin-bottom:4px;">${m.subject}</div>
+      <div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="toggleMyThreadExpand('${m.id}')">
+        <span style="flex:1;">${m.subject}</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:400;">${expanded ? '▲' : '▼'}</span>
+      </div>
+      ${expanded ? '' : `<div style="font-size:12px;color:var(--muted);margin-top:4px;cursor:pointer;" onclick="toggleMyThreadExpand('${m.id}')">${lastPreview} ${lastPreview ? '· ' + lastTime : ''}</div>`}
+      ${expanded ? `
       ${itemsHtml}
       ${hasReply ? '' : '<div style="font-size:12px;color:var(--muted);margin-top:6px;font-style:italic;">Awaiting reply...</div>'}
       <div style="margin-top:10px;">
@@ -1486,14 +1516,9 @@ async function loadMyMessages() {
         <input type="file" id="my-reply-file-${m.id}" accept="image/*" multiple style="font-size:11px;max-width:200px;margin-top:6px;display:block;">
         <div style="font-size:10px;color:var(--muted);margin-top:2px;">Photos up to 10 MB total.</div>
         <button class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="sendMyMessageReply('${m.id}')">Send</button>
-      </div>
+      </div>` : ''}
     </div>`;
   }).join('');
-
-  const unreadThreadIds = data.filter(m => (_myItems[m.id] || []).some(it => it.sender_type === 'admin' && !it.read_by_user)).map(m => m.id);
-  for (const id of unreadThreadIds) {
-    await supabase.rpc('mark_thread_read_by_user', { p_thread_id: id });
-  }
 }
 
 window.sendMyMessageReply = async (id) => {

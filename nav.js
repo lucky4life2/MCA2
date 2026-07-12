@@ -153,7 +153,53 @@ let _mcaAuthResolve;
 window._mcaAuthReady = new Promise(r => { _mcaAuthResolve = r; });
 
 
-/* ── SITE LOCK ──────────────────────────────────────────────── */
+/* ── SYSTEM LOCKDOWN (separate from the site lock below) ─────
+   This is a second, independent kill switch. It has no admin bypass, no
+   preview-key bypass, and applies to every page including admin.html. There
+   is no button or RPC anywhere in the app that can flip it — the
+   `system_lockdown` table only accepts SELECT from anon/authenticated (see
+   migration), so the only way to turn it on/off is to run SQL directly in
+   the Supabase dashboard. If the check itself can't reach Supabase, it fails
+   open (lets the page continue) rather than bricking the site on a network
+   hiccup — the switch only blocks when it can positively confirm
+   `locked = true`.
+
+   Everything else in this file (including the admin.html fast-path below)
+   awaits `_systemLockdownCheck` before doing anything else, so there is no
+   timing window where a page can render before this resolves. */
+(function() {
+  document.documentElement.style.visibility = 'hidden';
+})();
+
+const _systemLockdownCheck = (async function checkSystemLockdown() {
+  const SUPABASE_URL  = 'https://hjaywokvgdzhvsoygctc.supabase.co';
+  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNzA2NTQsImV4cCI6MjA5NTg0NjY1NH0.nFqlc20iUDwE1sXLRi2Pev181v2RJKx_S6UcTkGgPWU';
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/system_lockdown?select=locked,message&id=eq.1`,
+      { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` } }
+    );
+    if (res.ok) {
+      const rows = await res.json();
+      if (rows?.[0]?.locked === true) {
+        if (window.stop) window.stop();
+        document.documentElement.style.visibility = '';
+        document.documentElement.innerHTML = `<head><meta charset="utf-8"><title>Unavailable</title></head><body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#05070f;font-family:'Open Sans',sans-serif;padding:2rem;text-align:center;">
+          <div>
+            <h1 style="color:#fff;font-size:1.6rem;font-weight:700;margin:0 0 0.75rem;">Site Unavailable</h1>
+            <p style="color:#94a3b8;font-size:0.95rem;max-width:420px;line-height:1.6;margin:0 auto;">${(rows[0].message || 'This site is temporarily unavailable. Please check back later.').replace(/</g,'&lt;')}</p>
+          </div>
+        </body>`;
+        return { locked: true };
+      }
+    }
+  } catch (e) {
+    // Can't reach the table — fail open.
+  }
+  return { locked: false };
+})();
+
+
 const PREVIEW_KEY     = 'I-pG1idLnWhIjId9i1TLAumZkBQjVcvc';
 const SUPABASE_URL    = 'https://hjaywokvgdzhvsoygctc.supabase.co';
 const SUPABASE_ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNzA2NTQsImV4cCI6MjA5NTg0NjY1NH0.nFqlc20iUDwE1sXLRi2Pev181v2RJKx_S6UcTkGgPWU';
@@ -171,6 +217,12 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
 })();
 
 (async function checkLock() {
+  // Wait on the independent system lockdown check first — if it's active,
+  // it has already replaced the page and halted everything; nothing below
+  // (including the admin.html fast-path) should run.
+  const lockdownState = await _systemLockdownCheck;
+  if (lockdownState.locked) { return; }
+
   // If preview key is in the URL, reveal immediately and skip lock check
   const params = new URLSearchParams(window.location.search);
   if (params.get('preview') === PREVIEW_KEY) {

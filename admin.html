@@ -2655,6 +2655,16 @@ if (_hashTab) switchTab(_hashTab);
 // ── Admin Messages ────────────────────────────────────────────
 let _messages = [];   // threads
 let _items = {};      // thread_id -> [items] (chronological)
+let _expandedThreads = new Set();
+let _myDisplayName = null;
+
+async function getMyDisplayName() {
+  if (_myDisplayName) return _myDisplayName;
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: profile } = await supabase.from('profiles').select('display_name,username').eq('id', user.id).single();
+  _myDisplayName = profile?.display_name || profile?.username || 'An admin';
+  return _myDisplayName;
+}
 
 function renderMsgAttachments(attachments) {
   if (!attachments || !attachments.length) return '';
@@ -2722,6 +2732,16 @@ function renderMessages() {
     const sender = p.display_name || p.username || p.email || m.user_id;
     const unread = threadUnread(m.id);
     const items = _items[m.id] || [];
+    const expanded = _expandedThreads.has(m.id);
+    const lastItem = items[items.length - 1];
+    const lastPreview = lastItem ? lastItem.body.slice(0, 80) + (lastItem.body.length > 80 ? '…' : '') : '';
+    const lastTime = lastItem ? new Date(lastItem.created_at).toLocaleDateString(undefined, { month:'short', day:'numeric' }) : '';
+    const claimBadge = m.claimed_by
+      ? `<span class="badge" style="background:#eef3ff;color:#18489e;">Claimed by ${m.claimed_by_name || 'an admin'}</span>` : '';
+    const claimBtn = m.claimed_by
+      ? `<button class="btn btn-outline btn-sm" onclick="unclaimThread('${m.id}')">Unclaim</button>`
+      : `<button class="btn btn-outline btn-sm" onclick="claimThread('${m.id}')">Claim</button>`;
+
     const itemsHtml = items.map(it => {
       const t = new Date(it.created_at).toLocaleString(undefined, { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
       const adminLabel = it.sender_display_name ? `Your Reply · ${it.sender_display_name}` : 'Your Reply';
@@ -2737,27 +2757,33 @@ function renderMessages() {
              ${renderMsgAttachments(it.attachments)}
            </div>`;
     }).join('');
+
     return `<div class="msg-row ${unread ? 'unread' : ''}" data-id="${m.id}">
       <div class="msg-dot"></div>
       <div class="msg-content">
-        <div class="msg-meta">
+        <div class="msg-meta" style="cursor:pointer;" onclick="toggleThreadExpand('${m.id}')">
           <span class="msg-sender">${sender}</span>
+          ${claimBadge}
+          <span style="margin-left:auto;font-size:11px;color:var(--muted);">${expanded ? '▲' : '▼'}</span>
         </div>
-        <div class="msg-subject">${m.subject}</div>
+        <div class="msg-subject" style="cursor:pointer;" onclick="toggleThreadExpand('${m.id}')">${m.subject}</div>
+        ${expanded ? '' : `<div style="font-size:12px;color:var(--muted);margin-top:2px;cursor:pointer;" onclick="toggleThreadExpand('${m.id}')">${lastPreview} ${lastPreview ? '· ' + lastTime : ''}</div>`}
+        ${expanded ? `
         ${itemsHtml}
         <div class="msg-reply-form" style="margin-top:10px;">
           <textarea class="form-input" id="reply-input-${m.id}" rows="2" placeholder="Write a message..." style="resize:vertical;min-height:60px;width:100%;box-sizing:border-box;"></textarea>
           <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap;">
             <input type="file" id="reply-file-${m.id}" accept="image/*" multiple style="font-size:11px;max-width:200px;">
             <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;">
-              <input type="checkbox" id="reply-share-name-${m.id}"> Share my name with the member
+              <input type="checkbox" id="reply-share-name-${m.id}" checked> Share my name with the member
             </label>
           </div>
           <div style="font-size:10px;color:var(--muted);margin-top:2px;">Photos up to 10 MB total.</div>
           <button class="btn btn-primary btn-sm" style="margin-top:6px;" onclick="sendMessageReply('${m.id}')">Send</button>
-        </div>
+        </div>` : ''}
       </div>
       <div class="msg-actions">
+        ${claimBtn}
         ${unread
           ? `<button class="btn btn-outline btn-sm" onclick="toggleMessageRead('${m.id}', true)">Mark Read</button>`
           : `<button class="btn btn-outline btn-sm" onclick="toggleMessageRead('${m.id}', false)">Mark Unread</button>`
@@ -2767,6 +2793,30 @@ function renderMessages() {
     </div>`;
   }).join('');
 }
+
+window.toggleThreadExpand = (id) => {
+  if (_expandedThreads.has(id)) _expandedThreads.delete(id);
+  else _expandedThreads.add(id);
+  renderMessages();
+};
+
+window.claimThread = async (id) => {
+  const name = await getMyDisplayName();
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase.from('admin_messages').update({ claimed_by: user.id, claimed_by_name: name, claimed_at: new Date().toISOString() }).eq('id', id);
+  if (error) { alert(error.message || 'Failed to claim.'); return; }
+  const m = _messages.find(x => x.id === id);
+  if (m) { m.claimed_by = user.id; m.claimed_by_name = name; }
+  renderMessages();
+};
+
+window.unclaimThread = async (id) => {
+  const { error } = await supabase.from('admin_messages').update({ claimed_by: null, claimed_by_name: null, claimed_at: null }).eq('id', id);
+  if (error) { alert(error.message || 'Failed to unclaim.'); return; }
+  const m = _messages.find(x => x.id === id);
+  if (m) { m.claimed_by = null; m.claimed_by_name = null; }
+  renderMessages();
+};
 
 window.sendMessageReply = async (id) => {
   const input = document.getElementById(`reply-input-${id}`);
@@ -2819,6 +2869,14 @@ window.sendMessageReply = async (id) => {
   (_items[id] ||= []).push(newItem);
   if (input) input.value = '';
   if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
+
+  const m = _messages.find(x => x.id === id);
+  if (m && !m.claimed_by) {
+    const name = senderDisplayName || await getMyDisplayName();
+    const { error: claimErr } = await supabase.from('admin_messages').update({ claimed_by: user.id, claimed_by_name: name, claimed_at: new Date().toISOString() }).eq('id', id);
+    if (!claimErr) { m.claimed_by = user.id; m.claimed_by_name = name; }
+  }
+
   renderMessages();
   updateUnreadBadge();
 };
