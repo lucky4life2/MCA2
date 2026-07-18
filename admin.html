@@ -1376,7 +1376,7 @@ window.openRolePopup = (event, userId) => {
   function renderItems() {
     return assignableRoles.map(r => {
       const has = stagedRoleIds.has(r.id);
-      return `<div class="role-popup-item" data-role-id="${r.id}" onclick="_toggleStagedRole('${r.id}')">
+      return `<div class="role-popup-item" data-role-id="${r.id}" onclick="event.stopPropagation();_toggleStagedRole('${r.id}')">
         <span class="role-popup-dot" style="background:${r.color};"></span>
         <span style="flex:1;">${r.label}</span>
         ${has ? `<span class="role-popup-check">✓</span>` : ''}
