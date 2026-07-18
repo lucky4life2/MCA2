@@ -573,6 +573,9 @@ async function loadMyRoles() {
 
   rows.sort((a, b) => (b.roles.level || 0) - (a.roles.level || 0));
 
+  const heroSub = document.getElementById('account-hero-sub');
+  if (heroSub) heroSub.textContent = rows[0].roles.label || rows[0].roles.name;
+
   body.innerHTML = `
     <div style="display:flex;flex-wrap:wrap;gap:8px;">
       ${rows.map(r => `
@@ -590,7 +593,7 @@ async function renderPage() {
   // Hero
   const name = _profile.display_name || _profile.username || _user.email?.split('@')[0] || 'Account';
   document.getElementById('account-hero-name').textContent = name;
-  document.getElementById('account-hero-sub').textContent = _profile.role === 'admin' ? 'Administrator' : 'Member';
+  document.getElementById('account-hero-sub').textContent = 'Member';
 
   // Profile fields
   document.getElementById('field-display-name').value = _profile.display_name || '';
