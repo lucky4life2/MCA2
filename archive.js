@@ -91,8 +91,9 @@ async function loadArchiveIndex() {
       return;
     }
 
-    // Get unique categories
-    const categories = [...new Set(docs.map(d => d.category || 'Uncategorized'))];
+    // Get unique categories, Constitution pinned first
+    const categories = [...new Set(docs.map(d => d.category || 'Uncategorized'))]
+      .sort((a, b) => (a === 'Constitution' ? -1 : b === 'Constitution' ? 1 : 0));
 
     // Build category filter buttons
     if (filterEl) {
@@ -117,7 +118,7 @@ async function loadArchiveIndex() {
       grouped[cat].push(doc);
     });
 
-    indexEl.innerHTML = Object.entries(grouped).map(([cat, catDocs]) => `
+    indexEl.innerHTML = categories.filter(cat => grouped[cat]).map(cat => { const catDocs = grouped[cat]; return `
       <div class="archive-category" data-category="${cat}">
         <div class="archive-category-header">${cat}</div>
         <div class="archive-category-docs">
@@ -140,7 +141,7 @@ async function loadArchiveIndex() {
               </a>`;
           }).join('')}
         </div>
-      </div>`
+      </div>`; }
     ).join('');
 
     loadingEl.style.display = 'none';
