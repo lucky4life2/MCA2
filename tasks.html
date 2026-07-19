@@ -226,7 +226,8 @@ function render() {
   const board = document.getElementById('board');
   if (!_projects.length) { board.innerHTML = '<div class="t-empty">No projects yet — create one to start adding tasks.</div>'; return; }
   board.innerHTML = _projects.map(p => {
-    const rows = _tasks.filter(t => t.project_id === p.id);
+    const rows = _tasks.filter(t => t.project_id === p.id)
+      .sort((a, b) => (a.status === 'done') - (b.status === 'done'));
     return `
     <div class="tp-group">
       <div class="tp-head">
@@ -288,7 +289,9 @@ async function openTaskModal(t) {
   document.getElementById('tk-status').value = t?.status || 'todo';
   document.getElementById('tk-title').textContent = t ? 'Edit Task' : 'New Task';
   document.getElementById('tk-delete').style.display = t ? '' : 'none';
-  document.getElementById('tk-mark-done').style.display = (t && t.status !== 'done') ? '' : 'none';
+  const doneBtn = document.getElementById('tk-mark-done');
+  doneBtn.style.display = t ? '' : 'none';
+  doneBtn.textContent = (t && t.status === 'done') ? '↺ Mark as Not Done' : '✓ Mark as Done';
   document.getElementById('tk-error').style.display = 'none';
   document.getElementById('tk-comments-wrap').style.display = t ? '' : 'none';
   if (t) await loadComments(t.id);
@@ -306,7 +309,9 @@ document.getElementById('btn-new-task').onclick = () => {
 document.getElementById('tk-close').onclick = document.getElementById('tk-cancel').onclick = () => document.getElementById('tk-modal').style.display = 'none';
 document.getElementById('tk-mark-done').onclick = async () => {
   const id = document.getElementById('tk-id').value;
-  await supabase.from('tasks').update({ status: 'done', updated_at: new Date().toISOString() }).eq('id', id);
+  const t = _tasks.find(x => x.id === id);
+  const newStatus = t?.status === 'done' ? 'todo' : 'done';
+  await supabase.from('tasks').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', id);
   document.getElementById('tk-modal').style.display = 'none'; loadAll();
 };
 document.getElementById('tk-save').onclick = async () => {
