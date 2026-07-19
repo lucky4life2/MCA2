@@ -7,6 +7,20 @@
 <link rel="stylesheet" href="style.css">
 <link rel="icon" type="image/x-icon" href="images/icon.ico">
 <style>
+  .btn { font-size: 11px; font-weight: 600; letter-spacing: .5px; padding: 6px 14px; border-radius: 3px; cursor: pointer; transition: background .15s, color .15s, border-color .15s; border: none; white-space: nowrap; }
+  .btn-primary { background: var(--blue); color: #fff; }
+  .btn-primary:hover { background: var(--blue-dark); }
+  .btn-danger { background: transparent; color: #c0392b; border: 1px solid var(--border); }
+  .btn-danger:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
+  .btn-outline { background: transparent; color: var(--blue); border: 1px solid var(--border); }
+  .btn-outline:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .form-input { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-family: 'Open Sans', sans-serif; font-size: 13px; background: var(--white); color: var(--black); box-sizing: border-box; }
+  .form-input:focus { outline: none; border-color: var(--blue); }
+  .form-group { margin-bottom: 1rem; }
+  .form-label { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .5px; }
+  .col2-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 600px) { .col2-grid { grid-template-columns: 1fr; } }
+
   .admin-wrap { max-width: 960px; margin: 0 auto; padding: 4rem 2.5rem 6rem; }
   .admin-hero { border-bottom: 1px solid var(--border); padding-bottom: 2.5rem; margin-bottom: 2.5rem; display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
   .admin-hero-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 2.5px; text-transform: uppercase; color: var(--green); margin-bottom: 1rem; }
@@ -135,6 +149,7 @@
     </div>
     <div id="tk-error" style="font-size:13px;color:#c0392b;padding:0 1.5rem .5rem;display:none;"></div>
     <div class="modal-foot">
+      <button class="btn btn-outline" id="tk-mark-done" style="font-size:13px;">✓ Mark as Done</button>
       <button class="btn btn-danger" id="tk-delete" style="display:none;font-size:13px;">Delete</button>
       <button class="btn btn-outline" id="tk-cancel" style="font-size:13px;">Cancel</button>
       <button class="btn btn-primary" id="tk-save" style="font-size:13px;">Save</button>
@@ -173,12 +188,25 @@ function show(which) {
 }
 
 async function loadAll() {
-  const [{ data: projects }, { data: tasks }, { data: members }] = await Promise.all([
+  const [{ data: projects }, { data: tasks }, { data: members }, { data: userRoles }] = await Promise.all([
     supabase.from('task_projects').select('*').order('sort_order').order('created_at'),
     supabase.from('tasks').select('*').order('due_date', { nullsFirst: false }),
-    supabase.from('profiles').select('id, display_name, username'),
+    supabase.from('profiles').select('id, display_name, username, role'),
+    supabase.from('user_roles').select('user_id, roles(level)'),
   ]);
-  _projects = projects || []; _tasks = tasks || []; _members = members || [];
+  _projects = projects || []; _tasks = tasks || [];
+
+  const levelByUser = {};
+  (userRoles || []).forEach(ur => {
+    const lvl = ur.roles?.level || 0;
+    if (lvl > (levelByUser[ur.user_id] || 0)) levelByUser[ur.user_id] = lvl;
+  });
+  const legacyLevel = { owner: 100, admin: 80 };
+  _members = (members || []).filter(m => {
+    const lvl = Math.max(levelByUser[m.id] || 0, legacyLevel[m.role] || 0);
+    return lvl >= 50;
+  });
+
   fillSelects(); render();
 }
 
@@ -214,6 +242,7 @@ function render() {
           ${t.due_date ? `<div class="t-meta">${t.due_date}</div>` : ''}
           <div class="t-badge ${t.priority}">${t.priority}</div>
           <div class="t-status">${t.status.replace('_',' ')}</div>
+          ${t.status !== 'done' ? `<button class="btn btn-outline" style="font-size:10px;padding:3px 8px;" onclick="event.stopPropagation();markDone('${t.id}')">✓ Done</button>` : ''}
         </div>`).join('') : '<div class="t-empty">No tasks in this project.</div>'}
     </div>`;
   }).join('');
@@ -259,17 +288,27 @@ async function openTaskModal(t) {
   document.getElementById('tk-status').value = t?.status || 'todo';
   document.getElementById('tk-title').textContent = t ? 'Edit Task' : 'New Task';
   document.getElementById('tk-delete').style.display = t ? '' : 'none';
+  document.getElementById('tk-mark-done').style.display = (t && t.status !== 'done') ? '' : 'none';
   document.getElementById('tk-error').style.display = 'none';
   document.getElementById('tk-comments-wrap').style.display = t ? '' : 'none';
   if (t) await loadComments(t.id);
   document.getElementById('tk-modal').style.display = 'flex';
 }
 window.editTask = (id) => openTaskModal(_tasks.find(t => t.id === id));
+window.markDone = async (id) => {
+  await supabase.from('tasks').update({ status: 'done', updated_at: new Date().toISOString() }).eq('id', id);
+  loadAll();
+};
 document.getElementById('btn-new-task').onclick = () => {
   if (!_projects.length) { alert('Create a project first.'); return; }
   openTaskModal(null);
 };
 document.getElementById('tk-close').onclick = document.getElementById('tk-cancel').onclick = () => document.getElementById('tk-modal').style.display = 'none';
+document.getElementById('tk-mark-done').onclick = async () => {
+  const id = document.getElementById('tk-id').value;
+  await supabase.from('tasks').update({ status: 'done', updated_at: new Date().toISOString() }).eq('id', id);
+  document.getElementById('tk-modal').style.display = 'none'; loadAll();
+};
 document.getElementById('tk-save').onclick = async () => {
   const id = document.getElementById('tk-id').value;
   const title = document.getElementById('tk-name').value.trim();
