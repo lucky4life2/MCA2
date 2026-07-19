@@ -402,6 +402,7 @@
       <button class="admin-tab" data-tab="minecraft">Minecraft</button>
       <button class="admin-tab" data-tab="shop">Shop</button>
       <button class="admin-tab" data-tab="config">Config</button>
+      <a class="admin-tab admin-tab-link" href="tasks.html">Tasks</a>
     </div>
 
     <!-- ── OVERVIEW ─────────────────────────────────────── -->
@@ -1105,6 +1106,7 @@ const ALL_PERMISSIONS = [
   { key: 'can_manage_config',    label: 'Edit Site Config',        group: 'content' },
   { key: 'can_manage_minecraft', label: 'MC Verifications',        group: 'content' },
   { key: 'can_lock_site',        label: 'Lock / Unlock Site',      group: 'admin' },
+  { key: 'can_manage_tasks',     label: 'Manage Task Board',       group: 'admin' },
 ];
 
 // ── Init ─────────────────────────────────────────────────────
@@ -2668,7 +2670,7 @@ function switchTab(tabName) {
 }
 
 // Flat tabs
-document.querySelectorAll('.admin-tab:not(.admin-tab-group-trigger)').forEach(tab => {
+document.querySelectorAll('.admin-tab:not(.admin-tab-group-trigger):not(.admin-tab-link)').forEach(tab => {
   tab.addEventListener('click', () => switchTab(tab.dataset.tab));
 });
 

@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tasks — Minecraft Club of America</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" type="image/x-icon" href="images/icon.ico">
+<style>
+  .admin-wrap { max-width: 960px; margin: 0 auto; padding: 4rem 2.5rem 6rem; }
+  .admin-hero { border-bottom: 1px solid var(--border); padding-bottom: 2.5rem; margin-bottom: 2.5rem; display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .admin-hero-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 2.5px; text-transform: uppercase; color: var(--green); margin-bottom: 1rem; }
+  .admin-hero h1 { font-family: 'Times New Roman', serif; font-size: clamp(28px, 4vw, 42px); font-weight: 700; color: var(--blue); line-height: 1.15; }
+  .admin-loading { display: flex; align-items: center; justify-content: center; min-height: 60vh; flex-direction: column; gap: 12px; color: var(--muted); font-size: 14px; }
+  .admin-loading-spinner { width: 28px; height: 28px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .admin-denied { text-align: center; padding: 6rem 2rem; }
+  .admin-denied h2 { font-family: 'Times New Roman', serif; font-size: 1.6rem; color: var(--blue); font-weight: normal; margin-bottom: .75rem; }
+  .admin-denied p { font-size: 14px; color: var(--muted); }
+
+  .tp-group { margin-bottom: 2rem; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .tp-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--bg); }
+  .tp-head-name { font-weight: 700; color: var(--blue); font-size: 14px; }
+  .tp-head-actions { display: flex; gap: 6px; }
+  .tp-head-actions button { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 12px; }
+  .tp-head-actions button:hover { color: var(--blue); }
+
+  .t-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--border); cursor: pointer; }
+  .t-row:hover { background: var(--bg); }
+  .t-title { flex: 1; font-size: 13px; font-weight: 600; color: var(--black); }
+  .t-title.done { text-decoration: line-through; color: var(--muted); }
+  .t-meta { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .t-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .t-badge.low { background: #e8f4ea; color: #2d7d2f; }
+  .t-badge.medium { background: #eef1f8; color: var(--blue); }
+  .t-badge.high { background: #fdf0e2; color: #b5691c; }
+  .t-badge.urgent { background: #fbe6e6; color: #c0392b; }
+  .t-status { font-size: 10px; padding: 2px 8px; border-radius: 10px; white-space: nowrap; background: var(--bg); border: 1px solid var(--border); color: var(--muted); }
+  .t-empty { padding: 16px; font-size: 12px; color: var(--muted); }
+
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(10,15,30,.5); z-index: 400; align-items: center; justify-content: center; padding: 1rem; }
+  .modal-box { background: var(--white); border-radius: 8px; border: 1px solid var(--border); width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; box-shadow: 0 16px 48px rgba(10,15,30,.2); }
+  .modal-head { padding: 1.5rem 1.5rem 0; display: flex; align-items: center; justify-content: space-between; }
+  .modal-title { font-family: 'Times New Roman', serif; font-size: 1.3rem; color: var(--blue); font-weight: normal; }
+  .modal-close { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 20px; line-height: 1; padding: 4px; }
+  .modal-body { padding: 1.5rem; }
+  .modal-foot { padding: 0 1.5rem 1.5rem; display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+
+  .comment { padding: 8px 0; border-top: 1px solid var(--border); font-size: 12px; }
+  .comment-meta { color: var(--muted); font-size: 11px; margin-bottom: 2px; }
+</style>
+</head>
+<body>
+
+<div class="page-wrap">
+  <div id="loading" class="admin-loading"><div class="admin-loading-spinner"></div><span>Loading...</span></div>
+
+  <div id="denied" class="admin-wrap admin-denied" style="display:none;">
+    <h2>Access Denied</h2>
+    <p>You don't have permission to view this page.</p>
+  </div>
+
+  <div id="main" class="admin-wrap" style="display:none;">
+    <div class="admin-hero">
+      <div>
+        <div class="admin-hero-eyebrow">Staff Only</div>
+        <h1>Task Board</h1>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-outline" id="btn-new-project" style="font-size:12px;padding:7px 16px;">+ Project</button>
+        <button class="btn btn-primary" id="btn-new-task" style="font-size:12px;padding:7px 16px;">+ Task</button>
+      </div>
+    </div>
+
+    <div id="board"></div>
+  </div>
+</div>
+
+<!-- Project modal -->
+<div class="modal-overlay" id="pj-modal">
+  <div class="modal-box" style="max-width:400px;">
+    <div class="modal-head"><div class="modal-title" id="pj-title">New Project</div><button class="modal-close" id="pj-close">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="pj-id">
+      <div class="form-group"><label class="form-label">Project Name</label><input type="text" id="pj-name" class="form-input"></div>
+    </div>
+    <div id="pj-error" style="font-size:13px;color:#c0392b;padding:0 1.5rem .5rem;display:none;"></div>
+    <div class="modal-foot">
+      <button class="btn btn-danger" id="pj-delete" style="display:none;font-size:13px;">Delete</button>
+      <button class="btn btn-outline" id="pj-cancel" style="font-size:13px;">Cancel</button>
+      <button class="btn btn-primary" id="pj-save" style="font-size:13px;">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Task modal -->
+<div class="modal-overlay" id="tk-modal">
+  <div class="modal-box">
+    <div class="modal-head"><div class="modal-title" id="tk-title">New Task</div><button class="modal-close" id="tk-close">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="tk-id">
+      <div class="form-group"><label class="form-label">Title</label><input type="text" id="tk-name" class="form-input"></div>
+      <div class="form-group"><label class="form-label">Description</label><textarea id="tk-desc" class="form-input" rows="2" style="resize:vertical;"></textarea></div>
+      <div class="col2-grid">
+        <div class="form-group"><label class="form-label">Project</label><select id="tk-project" class="form-input"></select></div>
+        <div class="form-group"><label class="form-label">Assignee</label><select id="tk-assignee" class="form-input"><option value="">Unassigned</option></select></div>
+      </div>
+      <div class="col2-grid">
+        <div class="form-group"><label class="form-label">Due Date</label><input type="date" id="tk-due" class="form-input"></div>
+        <div class="form-group"><label class="form-label">Priority</label>
+          <select id="tk-priority" class="form-input">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+            <option value="urgent">Urgent</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Status</label>
+        <select id="tk-status" class="form-input">
+          <option value="todo">To Do</option>
+          <option value="in_progress">In Progress</option>
+          <option value="done">Done</option>
+        </select>
+      </div>
+
+      <div id="tk-comments-wrap" style="display:none;margin-top:1rem;border-top:1px solid var(--border);padding-top:1rem;">
+        <label class="form-label">Comments</label>
+        <div id="tk-comments"></div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <input type="text" id="tk-comment-input" class="form-input" placeholder="Add a comment...">
+          <button class="btn btn-outline" id="tk-comment-add" style="font-size:12px;white-space:nowrap;">Post</button>
+        </div>
+      </div>
+    </div>
+    <div id="tk-error" style="font-size:13px;color:#c0392b;padding:0 1.5rem .5rem;display:none;"></div>
+    <div class="modal-foot">
+      <button class="btn btn-danger" id="tk-delete" style="display:none;font-size:13px;">Delete</button>
+      <button class="btn btn-outline" id="tk-cancel" style="font-size:13px;">Cancel</button>
+      <button class="btn btn-primary" id="tk-save" style="font-size:13px;">Save</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="nav.js"></script>
+<script type="module">
+import { supabase } from './supabase.js';
+
+let _projects = [], _tasks = [], _members = [], _me = null;
+
+async function canManageTasks(userId) {
+  try {
+    const { data } = await supabase.rpc('user_has_permission', { perm: 'can_manage_tasks' });
+    if (data === true) return true;
+  } catch {}
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).single();
+  return profile?.role === 'admin' || profile?.role === 'owner';
+}
+
+async function init() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) return show('denied');
+  _me = session.user;
+  if (!(await canManageTasks(_me.id))) return show('denied');
+  show('main');
+  await loadAll();
+}
+
+function show(which) {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('denied').style.display = which === 'denied' ? 'block' : 'none';
+  document.getElementById('main').style.display = which === 'main' ? 'block' : 'none';
+}
+
+async function loadAll() {
+  const [{ data: projects }, { data: tasks }, { data: members }] = await Promise.all([
+    supabase.from('task_projects').select('*').order('sort_order').order('created_at'),
+    supabase.from('tasks').select('*').order('due_date', { nullsFirst: false }),
+    supabase.from('profiles').select('id, display_name, username'),
+  ]);
+  _projects = projects || []; _tasks = tasks || []; _members = members || [];
+  fillSelects(); render();
+}
+
+function fillSelects() {
+  const pjSel = document.getElementById('tk-project');
+  pjSel.innerHTML = _projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  const asSel = document.getElementById('tk-assignee');
+  asSel.innerHTML = '<option value="">Unassigned</option>' + _members.map(m => `<option value="${m.id}">${m.display_name || m.username}</option>`).join('');
+}
+
+function memberName(id) {
+  const m = _members.find(m => m.id === id);
+  return m ? (m.display_name || m.username) : '';
+}
+
+function render() {
+  const board = document.getElementById('board');
+  if (!_projects.length) { board.innerHTML = '<div class="t-empty">No projects yet — create one to start adding tasks.</div>'; return; }
+  board.innerHTML = _projects.map(p => {
+    const rows = _tasks.filter(t => t.project_id === p.id);
+    return `
+    <div class="tp-group">
+      <div class="tp-head">
+        <div class="tp-head-name">${p.name}</div>
+        <div class="tp-head-actions">
+          <button onclick="editProject('${p.id}')">Edit</button>
+        </div>
+      </div>
+      ${rows.length ? rows.map(t => `
+        <div class="t-row" onclick="editTask('${t.id}')">
+          <div class="t-title${t.status === 'done' ? ' done' : ''}">${t.title}</div>
+          ${t.assignee_id ? `<div class="t-meta">${memberName(t.assignee_id)}</div>` : ''}
+          ${t.due_date ? `<div class="t-meta">${t.due_date}</div>` : ''}
+          <div class="t-badge ${t.priority}">${t.priority}</div>
+          <div class="t-status">${t.status.replace('_',' ')}</div>
+        </div>`).join('') : '<div class="t-empty">No tasks in this project.</div>'}
+    </div>`;
+  }).join('');
+}
+
+// ── Project modal ──
+function openProjectModal(p) {
+  document.getElementById('pj-id').value = p?.id || '';
+  document.getElementById('pj-name').value = p?.name || '';
+  document.getElementById('pj-title').textContent = p ? 'Edit Project' : 'New Project';
+  document.getElementById('pj-delete').style.display = p ? '' : 'none';
+  document.getElementById('pj-error').style.display = 'none';
+  document.getElementById('pj-modal').style.display = 'flex';
+}
+window.editProject = (id) => openProjectModal(_projects.find(p => p.id === id));
+document.getElementById('btn-new-project').onclick = () => openProjectModal(null);
+document.getElementById('pj-close').onclick = document.getElementById('pj-cancel').onclick = () => document.getElementById('pj-modal').style.display = 'none';
+document.getElementById('pj-save').onclick = async () => {
+  const id = document.getElementById('pj-id').value;
+  const name = document.getElementById('pj-name').value.trim();
+  const errEl = document.getElementById('pj-error');
+  if (!name) { errEl.textContent = 'Name is required.'; errEl.style.display = 'block'; return; }
+  const { error } = id ? await supabase.from('task_projects').update({ name }).eq('id', id) : await supabase.from('task_projects').insert({ name });
+  if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+  document.getElementById('pj-modal').style.display = 'none'; loadAll();
+};
+document.getElementById('pj-delete').onclick = async () => {
+  const id = document.getElementById('pj-id').value;
+  if (!confirm('Delete this project and all its tasks?')) return;
+  await supabase.from('task_projects').delete().eq('id', id);
+  document.getElementById('pj-modal').style.display = 'none'; loadAll();
+};
+
+// ── Task modal ──
+async function openTaskModal(t) {
+  document.getElementById('tk-id').value = t?.id || '';
+  document.getElementById('tk-name').value = t?.title || '';
+  document.getElementById('tk-desc').value = t?.description || '';
+  document.getElementById('tk-project').value = t?.project_id || _projects[0]?.id || '';
+  document.getElementById('tk-assignee').value = t?.assignee_id || '';
+  document.getElementById('tk-due').value = t?.due_date || '';
+  document.getElementById('tk-priority').value = t?.priority || 'medium';
+  document.getElementById('tk-status').value = t?.status || 'todo';
+  document.getElementById('tk-title').textContent = t ? 'Edit Task' : 'New Task';
+  document.getElementById('tk-delete').style.display = t ? '' : 'none';
+  document.getElementById('tk-error').style.display = 'none';
+  document.getElementById('tk-comments-wrap').style.display = t ? '' : 'none';
+  if (t) await loadComments(t.id);
+  document.getElementById('tk-modal').style.display = 'flex';
+}
+window.editTask = (id) => openTaskModal(_tasks.find(t => t.id === id));
+document.getElementById('btn-new-task').onclick = () => {
+  if (!_projects.length) { alert('Create a project first.'); return; }
+  openTaskModal(null);
+};
+document.getElementById('tk-close').onclick = document.getElementById('tk-cancel').onclick = () => document.getElementById('tk-modal').style.display = 'none';
+document.getElementById('tk-save').onclick = async () => {
+  const id = document.getElementById('tk-id').value;
+  const title = document.getElementById('tk-name').value.trim();
+  const errEl = document.getElementById('tk-error');
+  if (!title) { errEl.textContent = 'Title is required.'; errEl.style.display = 'block'; return; }
+  const payload = {
+    title,
+    description: document.getElementById('tk-desc').value.trim() || null,
+    project_id: document.getElementById('tk-project').value,
+    assignee_id: document.getElementById('tk-assignee').value || null,
+    due_date: document.getElementById('tk-due').value || null,
+    priority: document.getElementById('tk-priority').value,
+    status: document.getElementById('tk-status').value,
+    updated_at: new Date().toISOString(),
+  };
+  let error;
+  if (id) {
+    ({ error } = await supabase.from('tasks').update(payload).eq('id', id));
+  } else {
+    payload.created_by = _me.id;
+    ({ error } = await supabase.from('tasks').insert(payload));
+  }
+  if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+  document.getElementById('tk-modal').style.display = 'none'; loadAll();
+};
+document.getElementById('tk-delete').onclick = async () => {
+  const id = document.getElementById('tk-id').value;
+  if (!confirm('Delete this task?')) return;
+  await supabase.from('tasks').delete().eq('id', id);
+  document.getElementById('tk-modal').style.display = 'none'; loadAll();
+};
+
+// ── Comments ──
+async function loadComments(taskId) {
+  const { data } = await supabase.from('task_comments').select('*').eq('task_id', taskId).order('created_at');
+  document.getElementById('tk-comments').innerHTML = (data || []).map(c => `
+    <div class="comment"><div class="comment-meta">${memberName(c.author_id) || 'Staff'} · ${new Date(c.created_at).toLocaleString()}</div>${c.body}</div>
+  `).join('') || '<div class="t-empty">No comments yet.</div>';
+}
+document.getElementById('tk-comment-add').onclick = async () => {
+  const taskId = document.getElementById('tk-id').value;
+  const input = document.getElementById('tk-comment-input');
+  const body = input.value.trim();
+  if (!body || !taskId) return;
+  await supabase.from('task_comments').insert({ task_id: taskId, author_id: _me.id, body });
+  input.value = '';
+  loadComments(taskId);
+};
+
+init();
+</script>
+</body>
+</html>
