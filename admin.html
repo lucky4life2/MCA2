@@ -780,6 +780,27 @@
           <option value="subscription">Subscription / Digital — no inventory</option>
         </select>
       </div>
+      <div class="form-group" id="pm-billing-group" style="display:none;">
+        <label class="form-label">Billing Cycle</label>
+        <div class="col2-grid">
+          <select id="pm-billing-cycle" class="form-input">
+            <option value="weekly">Weekly</option>
+            <option value="biweekly">Every 2 weeks</option>
+            <option value="monthly">Monthly</option>
+            <option value="quarterly">Every 3 months</option>
+            <option value="semiannual">Every 6 months</option>
+            <option value="yearly">Yearly</option>
+          </select>
+          <select id="pm-billing-anchor" class="form-input" onchange="toggleBillingAnchorDate()">
+            <option value="purchase">From purchase date</option>
+            <option value="fixed">Fixed calendar date</option>
+          </select>
+        </div>
+        <div class="form-group" id="pm-billing-anchor-date-group" style="display:none;margin-top:.5rem;">
+          <label class="form-label">Fixed Billing Date</label>
+          <input type="date" id="pm-billing-anchor-date" class="form-input">
+        </div>
+      </div>
       <div class="col2-grid">
         <div class="form-group"><label class="form-label">Price (USD)</label><input type="number" id="pm-price" class="form-input" step="0.01" min="0"></div>
         <div class="form-group" id="pm-inventory-group"><label class="form-label">Inventory</label><input type="number" id="pm-inventory" class="form-input" min="0"></div>
@@ -2258,6 +2279,11 @@ async function loadAdminProducts() {
 function toggleInventoryField() {
   const type = document.getElementById('pm-product-type').value;
   document.getElementById('pm-inventory-group').style.display = type === 'subscription' ? 'none' : '';
+  document.getElementById('pm-billing-group').style.display = type === 'subscription' ? '' : 'none';
+}
+function toggleBillingAnchorDate() {
+  const anchor = document.getElementById('pm-billing-anchor').value;
+  document.getElementById('pm-billing-anchor-date-group').style.display = anchor === 'fixed' ? '' : 'none';
 }
 
 // ── Product photo gallery (drag & drop, multi-file, 10MB total cap) ──
@@ -2338,6 +2364,10 @@ function openProductModal(product = null) {
     if (el) el.value = product?.[k === 'desc' ? 'description' : k === 'notes' ? 'admin_notes' : k] || '';
   });
   document.getElementById('pm-product-type').value = product?.product_type || 'physical';
+  document.getElementById('pm-billing-cycle').value = product?.billing_cycle || 'monthly';
+  document.getElementById('pm-billing-anchor').value = product?.billing_anchor || 'purchase';
+  document.getElementById('pm-billing-anchor-date').value = product?.billing_anchor_date || '';
+  toggleBillingAnchorDate();
   document.getElementById('pm-active').value = product ? String(product.active) : 'true';
   document.getElementById('pm-cart-enabled').checked = product ? (product.cart_enabled !== false) : true;
   document.getElementById('pm-error').style.display = 'none';
@@ -2384,7 +2414,11 @@ document.getElementById('pm-save').addEventListener('click', async () => {
     errEl.textContent = 'Photo upload failed: ' + err.message; errEl.style.display = 'block'; return;
   }
 
-  const payload = { name, description: document.getElementById('pm-desc').value.trim()||null, price, inventory, product_type: productType, category: document.getElementById('pm-category').value.trim()||null, active: document.getElementById('pm-active').value==='true', images: uploadedImages, image_url: uploadedImages[0]?.url || null, image_url2: uploadedImages[1]?.url || null, weight: document.getElementById('pm-weight').value.trim()||null, dimensions: document.getElementById('pm-dimensions').value.trim()||null, material: document.getElementById('pm-material').value.trim()||null, sizes: document.getElementById('pm-sizes').value.trim()||null, colors: document.getElementById('pm-colors').value.trim()||null, sku: document.getElementById('pm-sku').value.trim()||null, admin_notes: document.getElementById('pm-notes').value.trim()||null, cart_enabled: document.getElementById('pm-cart-enabled').checked };
+  const billingAnchor = document.getElementById('pm-billing-anchor').value;
+  const billing_cycle = isSubscription ? document.getElementById('pm-billing-cycle').value : null;
+  const billing_anchor = isSubscription ? billingAnchor : null;
+  const billing_anchor_date = isSubscription && billingAnchor === 'fixed' ? (document.getElementById('pm-billing-anchor-date').value || null) : null;
+  const payload = { name, description: document.getElementById('pm-desc').value.trim()||null, price, inventory, product_type: productType, billing_cycle, billing_anchor, billing_anchor_date, category: document.getElementById('pm-category').value.trim()||null, active: document.getElementById('pm-active').value==='true', images: uploadedImages, image_url: uploadedImages[0]?.url || null, image_url2: uploadedImages[1]?.url || null, weight: document.getElementById('pm-weight').value.trim()||null, dimensions: document.getElementById('pm-dimensions').value.trim()||null, material: document.getElementById('pm-material').value.trim()||null, sizes: document.getElementById('pm-sizes').value.trim()||null, colors: document.getElementById('pm-colors').value.trim()||null, sku: document.getElementById('pm-sku').value.trim()||null, admin_notes: document.getElementById('pm-notes').value.trim()||null, cart_enabled: document.getElementById('pm-cart-enabled').checked };
   const { error } = id ? await supabase.from('products').update(payload).eq('id',id) : await supabase.from('products').insert(payload);
   if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
   closeProductModal(); loadAdminProducts();
