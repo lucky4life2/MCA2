@@ -220,14 +220,10 @@ const STATUSES = [
   { key: 'saved_for_later',      label: 'Saved for Later Testing',color: '#E97132' },
   { key: 'undecided',            label: 'Undecided',              color: '#A5A5A5' },
   { key: 'no_color',             label: 'No Color',               color: '#D9D9D9' },
+  { key: 'finished_fixed',       label: 'Finished / Fixed',       color: '#92D050' },
+  { key: 'not_possible',         label: 'Not Possible',           color: '#0F9ED5' },
 ];
-// Kept for reference/lookup even though hidden from the board (existing tasks in these
-// statuses stay in the database, they're just not shown here).
-const HIDDEN_STATUSES = {
-  finished_fixed: { key: 'finished_fixed', label: 'Finished / Fixed', color: '#92D050' },
-  not_possible:   { key: 'not_possible',   label: 'Not Possible',     color: '#0F9ED5' },
-};
-const STATUS_MAP = Object.fromEntries([...STATUSES, ...Object.values(HIDDEN_STATUSES)].map(s => [s.key, s]));
+const STATUS_MAP = Object.fromEntries(STATUSES.map(s => [s.key, s]));
 const STATUS_ORDER = Object.fromEntries(STATUSES.map((s, i) => [s.key, i]));
 
 function statusColor(key) { return (STATUS_MAP[key] || STATUS_MAP.no_color).color; }
@@ -354,7 +350,7 @@ function memberName(id) {
 }
 
 function visibleTasks() {
-  let list = _tasks.filter(t => !HIDDEN_STATUSES[t.status]);
+  let list = _tasks;
   if (_projectFilter) list = list.filter(t => t.project_id === _projectFilter);
   if (_statusFilter) list = list.filter(t => t.status === _statusFilter);
   return list;
@@ -498,8 +494,7 @@ let _editingStatus = null;
 
 function buildStatusPicker(selectedStatus) {
   const el = document.getElementById('tk-status-picker');
-  const allStatuses = [...STATUSES, ...Object.values(HIDDEN_STATUSES)];
-  el.innerHTML = allStatuses.map(s => `
+  el.innerHTML = STATUSES.map(s => `
     <div class="status-pick${s.key === selectedStatus ? ' selected' : ''}" data-status="${s.key}">
       <span class="tk-swatch" style="background:${s.color};"></span>${s.label}
     </div>`).join('');
