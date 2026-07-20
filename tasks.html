@@ -128,6 +128,7 @@
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <select id="tk-project-filter" class="form-input tk-project-select"><option value="">All Projects</option></select>
         <select id="tk-sort" class="form-input tk-project-select" style="min-width:150px;">
+          <option value="project">Sort by Project</option>
           <option value="color">Sort by Color</option>
           <option value="name">Sort by Name</option>
           <option value="due">Sort by Due Date</option>
@@ -219,16 +220,20 @@ import { supabase } from './supabase.js';
 // ── Status / color system ──────────────────────────────────────
 // Order doubles as sort order for the grid view.
 const STATUSES = [
-  { key: 'required_for_release', label: 'Required for Release',   color: '#FF0000' },
-  { key: 'in_progress',          label: 'In Progress',            color: '#FFD400' },
   { key: 'does_it_work',         label: 'Does It Work?',          color: '#A02B93' },
+  { key: 'in_progress',          label: 'In Progress',            color: '#FFD400' },
+  { key: 'required_for_release', label: 'Required for Release',   color: '#FF0000' },
   { key: 'saved_for_later',      label: 'Saved for Later Testing',color: '#E97132' },
   { key: 'undecided',            label: 'Undecided',              color: '#A5A5A5' },
-  { key: 'not_possible',         label: 'Not Possible',           color: '#0F9ED5' },
-  { key: 'finished_fixed',       label: 'Finished / Fixed',       color: '#92D050' },
   { key: 'no_color',             label: 'No Color',               color: '#D9D9D9' },
 ];
-const STATUS_MAP = Object.fromEntries(STATUSES.map(s => [s.key, s]));
+// Kept for reference/lookup even though hidden from the board (existing tasks in these
+// statuses stay in the database, they're just not shown here).
+const HIDDEN_STATUSES = {
+  finished_fixed: { key: 'finished_fixed', label: 'Finished / Fixed', color: '#92D050' },
+  not_possible:   { key: 'not_possible',   label: 'Not Possible',     color: '#0F9ED5' },
+};
+const STATUS_MAP = Object.fromEntries([...STATUSES, ...Object.values(HIDDEN_STATUSES)].map(s => [s.key, s]));
 const STATUS_ORDER = Object.fromEntries(STATUSES.map((s, i) => [s.key, i]));
 
 function statusColor(key) { return (STATUS_MAP[key] || STATUS_MAP.no_color).color; }
@@ -245,7 +250,7 @@ let _projects = [], _tasks = [], _members = [], _me = null;
 let _view = 'list';
 let _projectFilter = '';
 let _statusFilter = null; // null = all, or a status key
-let _sortBy = 'color'; // color | name | due | priority
+let _sortBy = 'project'; // project | color | name | due | priority
 const PRIORITY_ORDER = { urgent: 0, high: 1, medium: 2, low: 3 };
 
 function sortTasks(list) {
@@ -336,7 +341,7 @@ function memberName(id) {
 }
 
 function visibleTasks() {
-  let list = _tasks;
+  let list = _tasks.filter(t => !HIDDEN_STATUSES[t.status]);
   if (_projectFilter) list = list.filter(t => t.project_id === _projectFilter);
   if (_statusFilter) list = list.filter(t => t.status === _statusFilter);
   return list;
@@ -374,10 +379,16 @@ function render() {
   if (_view === 'grid') renderGrid(); else renderList();
 }
 
+function orderedProjects() {
+  const list = _projectFilter ? _projects.filter(p => p.id === _projectFilter) : _projects.slice();
+  if (_sortBy === 'project') return list.slice().sort((a, b) => a.name.localeCompare(b.name));
+  return list;
+}
+
 function renderList() {
   const board = document.getElementById('board');
   if (!_projects.length) { board.innerHTML = '<div class="t-empty">No projects yet — create one to start adding tasks.</div>'; return; }
-  const projectsToShow = _projectFilter ? _projects.filter(p => p.id === _projectFilter) : _projects;
+  const projectsToShow = orderedProjects();
   board.innerHTML = projectsToShow.map(p => {
     const rows = sortTasks(visibleTasks().filter(t => t.project_id === p.id));
     return `
@@ -409,7 +420,7 @@ function renderList() {
 function renderGrid() {
   const board = document.getElementById('board');
   if (!_projects.length) { board.innerHTML = '<div class="t-empty">No projects yet — create one to start adding tasks.</div>'; return; }
-  const projectsToShow = _projectFilter ? _projects.filter(p => p.id === _projectFilter) : _projects;
+  const projectsToShow = orderedProjects();
   board.innerHTML = projectsToShow.map(p => {
     const cards = sortTasks(visibleTasks().filter(t => t.project_id === p.id));
     return `
@@ -473,7 +484,8 @@ let _editingStatus = null;
 
 function buildStatusPicker(selectedStatus) {
   const el = document.getElementById('tk-status-picker');
-  el.innerHTML = STATUSES.map(s => `
+  const allStatuses = [...STATUSES, ...Object.values(HIDDEN_STATUSES)];
+  el.innerHTML = allStatuses.map(s => `
     <div class="status-pick${s.key === selectedStatus ? ' selected' : ''}" data-status="${s.key}">
       <span class="tk-swatch" style="background:${s.color};"></span>${s.label}
     </div>`).join('');
