@@ -14,6 +14,7 @@
   .btn-danger:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
   .btn-outline { background: transparent; color: var(--blue); border: 1px solid var(--border); }
   .btn-outline:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .btn-outline.active { background: var(--blue); color: #fff; border-color: var(--blue); }
   .form-input { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-family: 'Open Sans', sans-serif; font-size: 13px; background: var(--white); color: var(--black); box-sizing: border-box; }
   .form-input:focus { outline: none; border-color: var(--blue); }
   .form-group { margin-bottom: 1rem; }
@@ -21,8 +22,8 @@
   .col2-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   @media (max-width: 600px) { .col2-grid { grid-template-columns: 1fr; } }
 
-  .admin-wrap { max-width: 960px; margin: 0 auto; padding: 4rem 2.5rem 6rem; }
-  .admin-hero { border-bottom: 1px solid var(--border); padding-bottom: 2.5rem; margin-bottom: 2.5rem; display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .admin-wrap { max-width: 1100px; margin: 0 auto; padding: 4rem 2.5rem 6rem; }
+  .admin-hero { border-bottom: 1px solid var(--border); padding-bottom: 2.5rem; margin-bottom: 1.5rem; display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
   .admin-hero-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 2.5px; text-transform: uppercase; color: var(--green); margin-bottom: 1rem; }
   .admin-hero h1 { font-family: 'Times New Roman', serif; font-size: clamp(28px, 4vw, 42px); font-weight: 700; color: var(--blue); line-height: 1.15; }
   .admin-loading { display: flex; align-items: center; justify-content: center; min-height: 60vh; flex-direction: column; gap: 12px; color: var(--muted); font-size: 14px; }
@@ -32,6 +33,17 @@
   .admin-denied h2 { font-family: 'Times New Roman', serif; font-size: 1.6rem; color: var(--blue); font-weight: normal; margin-bottom: .75rem; }
   .admin-denied p { font-size: 14px; color: var(--muted); }
 
+  /* Toolbar */
+  .tk-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 1.25rem; }
+  .tk-view-toggle { display: flex; gap: 6px; }
+  .tk-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1.75rem; }
+  .tk-legend-chip { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--muted); padding: 5px 10px 5px 8px; border-radius: 20px; border: 1px solid var(--border); cursor: pointer; background: var(--white); transition: border-color .15s, color .15s; }
+  .tk-legend-chip:hover { color: var(--black); }
+  .tk-legend-chip.active { border-color: var(--blue); color: var(--blue); }
+  .tk-swatch { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.15); flex-shrink: 0; }
+  .tk-project-select { min-width: 180px; }
+
+  /* List view */
   .tp-group { margin-bottom: 2rem; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
   .tp-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--bg); }
   .tp-head-name { font-weight: 700; color: var(--blue); font-size: 14px; }
@@ -39,8 +51,9 @@
   .tp-head-actions button { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 12px; }
   .tp-head-actions button:hover { color: var(--blue); }
 
-  .t-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--border); cursor: pointer; }
+  .t-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--border); cursor: pointer; position: relative; }
   .t-row:hover { background: var(--bg); }
+  .t-color-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(0,0,0,.15); }
   .t-title { flex: 1; font-size: 13px; font-weight: 600; color: var(--black); }
   .t-title.done { text-decoration: line-through; color: var(--muted); }
   .t-meta { font-size: 11px; color: var(--muted); white-space: nowrap; }
@@ -49,11 +62,22 @@
   .t-badge.medium { background: #eef1f8; color: var(--blue); }
   .t-badge.high { background: #fdf0e2; color: #b5691c; }
   .t-badge.urgent { background: #fbe6e6; color: #c0392b; }
-  .t-status { font-size: 10px; padding: 2px 8px; border-radius: 10px; white-space: nowrap; background: var(--bg); border: 1px solid var(--border); color: var(--muted); }
+  .t-status { font-size: 10px; font-weight: 700; padding: 2px 9px; border-radius: 10px; white-space: nowrap; }
   .t-empty { padding: 16px; font-size: 12px; color: var(--muted); }
 
+  /* Grid view */
+  .tk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+  .tk-card { border-radius: 8px; padding: 12px 14px; cursor: pointer; border: 1px solid rgba(0,0,0,.08); box-shadow: 0 1px 3px rgba(10,15,30,.08); transition: transform .12s, box-shadow .12s; display: flex; flex-direction: column; gap: 8px; min-height: 108px; }
+  .tk-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(10,15,30,.16); }
+  .tk-card-title { font-size: 13px; font-weight: 700; line-height: 1.35; }
+  .tk-card-title.done { text-decoration: line-through; opacity: .7; }
+  .tk-card-foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
+  .tk-card-status { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; padding: 2px 7px; border-radius: 8px; background: rgba(255,255,255,.55); }
+  .tk-card-meta { font-size: 10px; opacity: .85; white-space: nowrap; }
+  .tk-card-project { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; opacity: .75; }
+
   .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(10,15,30,.5); z-index: 400; align-items: center; justify-content: center; padding: 1rem; }
-  .modal-box { background: var(--white); border-radius: 8px; border: 1px solid var(--border); width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; box-shadow: 0 16px 48px rgba(10,15,30,.2); }
+  .modal-box { background: var(--white); border-radius: 8px; border: 1px solid var(--border); width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; box-shadow: 0 16px 48px rgba(10,15,30,.2); }
   .modal-head { padding: 1.5rem 1.5rem 0; display: flex; align-items: center; justify-content: space-between; }
   .modal-title { font-family: 'Times New Roman', serif; font-size: 1.3rem; color: var(--blue); font-weight: normal; }
   .modal-close { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 20px; line-height: 1; padding: 4px; }
@@ -62,6 +86,16 @@
 
   .comment { padding: 8px 0; border-top: 1px solid var(--border); font-size: 12px; }
   .comment-meta { color: var(--muted); font-size: 11px; margin-bottom: 2px; }
+
+  /* Status swatch picker inside task modal */
+  .status-picker { display: flex; flex-wrap: wrap; gap: 8px; }
+  .status-pick { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; padding: 6px 10px; border-radius: 20px; border: 2px solid transparent; background: var(--bg); cursor: pointer; color: var(--black); }
+  .status-pick .tk-swatch { width: 13px; height: 13px; }
+  .status-pick.selected { border-color: var(--blue); }
+
+  .custom-color-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .custom-color-row input[type=color] { width: 36px; height: 30px; padding: 0; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; background: none; }
+  .custom-color-note { font-size: 11px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -85,6 +119,16 @@
         <button class="btn btn-primary" id="btn-new-task" style="font-size:12px;padding:7px 16px;">+ Task</button>
       </div>
     </div>
+
+    <div class="tk-toolbar">
+      <div class="tk-view-toggle">
+        <button class="btn btn-outline active" id="btn-view-list">☰ List</button>
+        <button class="btn btn-outline" id="btn-view-grid">▦ Grid</button>
+      </div>
+      <select id="tk-project-filter" class="form-input tk-project-select"><option value="">All Projects</option></select>
+    </div>
+
+    <div id="tk-legend" class="tk-legend"></div>
 
     <div id="board"></div>
   </div>
@@ -130,12 +174,15 @@
           </select>
         </div>
       </div>
-      <div class="form-group"><label class="form-label">Status</label>
-        <select id="tk-status" class="form-input">
-          <option value="todo">To Do</option>
-          <option value="in_progress">In Progress</option>
-          <option value="done">Done</option>
-        </select>
+      <div class="form-group">
+        <label class="form-label">Status &amp; Color</label>
+        <div class="status-picker" id="tk-status-picker"></div>
+        <div class="custom-color-row">
+          <input type="color" id="tk-custom-color" value="#ffffff">
+          <button class="btn btn-outline" id="tk-custom-color-apply" style="font-size:11px;">Use custom color</button>
+          <button class="btn btn-outline" id="tk-custom-color-clear" style="font-size:11px;">Clear custom color</button>
+        </div>
+        <div class="custom-color-note" id="tk-color-note">Color follows the status above.</div>
       </div>
 
       <div id="tk-comments-wrap" style="display:none;margin-top:1rem;border-top:1px solid var(--border);padding-top:1rem;">
@@ -161,7 +208,35 @@
 <script type="module">
 import { supabase } from './supabase.js';
 
+// ── Status / color system ──────────────────────────────────────
+// Order doubles as sort order for the grid view.
+const STATUSES = [
+  { key: 'required_for_release', label: 'Required for Release',   color: '#FF0000' },
+  { key: 'in_progress',          label: 'In Progress',            color: '#FFD400' },
+  { key: 'does_it_work',         label: 'Does It Work?',          color: '#A02B93' },
+  { key: 'saved_for_later',      label: 'Saved for Later Testing',color: '#E97132' },
+  { key: 'undecided',            label: 'Undecided',              color: '#A5A5A5' },
+  { key: 'not_possible',         label: 'Not Possible',           color: '#0F9ED5' },
+  { key: 'finished_fixed',       label: 'Finished / Fixed',       color: '#92D050' },
+  { key: 'no_color',             label: 'No Color',               color: '#D9D9D9' },
+];
+const STATUS_MAP = Object.fromEntries(STATUSES.map(s => [s.key, s]));
+const STATUS_ORDER = Object.fromEntries(STATUSES.map((s, i) => [s.key, i]));
+
+function statusColor(key) { return (STATUS_MAP[key] || STATUS_MAP.no_color).color; }
+function taskColor(t) { return t.custom_color || statusColor(t.status); }
+function contrastText(hex) {
+  if (!hex) return '#111';
+  const h = hex.replace('#', '');
+  const r = parseInt(h.substring(0,2),16), g = parseInt(h.substring(2,4),16), b = parseInt(h.substring(4,6),16);
+  const yiq = (r*299 + g*587 + b*114) / 1000;
+  return yiq >= 150 ? '#111111' : '#ffffff';
+}
+
 let _projects = [], _tasks = [], _members = [], _me = null;
+let _view = 'list';
+let _projectFilter = '';
+let _statusFilter = null; // null = all, or a status key
 
 async function canManageTasks(userId) {
   try {
@@ -178,6 +253,7 @@ async function init() {
   _me = session.user;
   if (!(await canManageTasks(_me.id))) return show('denied');
   show('main');
+  buildLegend();
   await loadAll();
 }
 
@@ -215,6 +291,10 @@ function fillSelects() {
   pjSel.innerHTML = _projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
   const asSel = document.getElementById('tk-assignee');
   asSel.innerHTML = '<option value="">Unassigned</option>' + _members.map(m => `<option value="${m.id}">${m.display_name || m.username}</option>`).join('');
+  const filterSel = document.getElementById('tk-project-filter');
+  const prevVal = filterSel.value;
+  filterSel.innerHTML = '<option value="">All Projects</option>' + _projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  filterSel.value = prevVal;
 }
 
 function memberName(id) {
@@ -222,12 +302,51 @@ function memberName(id) {
   return m ? (m.display_name || m.username) : '';
 }
 
+function visibleTasks() {
+  let list = _tasks;
+  if (_projectFilter) list = list.filter(t => t.project_id === _projectFilter);
+  if (_statusFilter) list = list.filter(t => t.status === _statusFilter);
+  return list;
+}
+
+// ── Legend (also acts as color filter) ──
+function buildLegend() {
+  const el = document.getElementById('tk-legend');
+  el.innerHTML = STATUSES.map(s => `
+    <div class="tk-legend-chip" data-status="${s.key}">
+      <span class="tk-swatch" style="background:${s.color};"></span>${s.label}
+    </div>`).join('');
+  el.querySelectorAll('.tk-legend-chip').forEach(chip => {
+    chip.onclick = () => {
+      const key = chip.dataset.status;
+      _statusFilter = (_statusFilter === key) ? null : key;
+      el.querySelectorAll('.tk-legend-chip').forEach(c => c.classList.toggle('active', c.dataset.status === _statusFilter));
+      render();
+    };
+  });
+}
+
+document.getElementById('tk-project-filter').onchange = (e) => { _projectFilter = e.target.value; render(); };
+document.getElementById('btn-view-list').onclick = () => setView('list');
+document.getElementById('btn-view-grid').onclick = () => setView('grid');
+function setView(v) {
+  _view = v;
+  document.getElementById('btn-view-list').classList.toggle('active', v === 'list');
+  document.getElementById('btn-view-grid').classList.toggle('active', v === 'grid');
+  render();
+}
+
 function render() {
+  if (_view === 'grid') renderGrid(); else renderList();
+}
+
+function renderList() {
   const board = document.getElementById('board');
   if (!_projects.length) { board.innerHTML = '<div class="t-empty">No projects yet — create one to start adding tasks.</div>'; return; }
-  board.innerHTML = _projects.map(p => {
-    const rows = _tasks.filter(t => t.project_id === p.id)
-      .sort((a, b) => (a.status === 'done') - (b.status === 'done'));
+  const projectsToShow = _projectFilter ? _projects.filter(p => p.id === _projectFilter) : _projects;
+  board.innerHTML = projectsToShow.map(p => {
+    const rows = visibleTasks().filter(t => t.project_id === p.id)
+      .sort((a, b) => (a.status === 'finished_fixed') - (b.status === 'finished_fixed'));
     return `
     <div class="tp-group">
       <div class="tp-head">
@@ -236,17 +355,47 @@ function render() {
           <button onclick="editProject('${p.id}')">Edit</button>
         </div>
       </div>
-      ${rows.length ? rows.map(t => `
+      ${rows.length ? rows.map(t => {
+        const color = taskColor(t);
+        const txt = contrastText(color);
+        const st = STATUS_MAP[t.status] || STATUS_MAP.no_color;
+        return `
         <div class="t-row" onclick="editTask('${t.id}')">
-          <div class="t-title${t.status === 'done' ? ' done' : ''}">${t.title}</div>
+          <span class="t-color-dot" style="background:${color};"></span>
+          <div class="t-title${t.status === 'finished_fixed' ? ' done' : ''}">${t.title}</div>
           ${t.assignee_id ? `<div class="t-meta">${memberName(t.assignee_id)}</div>` : ''}
           ${t.due_date ? `<div class="t-meta">${t.due_date}</div>` : ''}
           <div class="t-badge ${t.priority}">${t.priority}</div>
-          <div class="t-status">${t.status.replace('_',' ')}</div>
-          ${t.status !== 'done' ? `<button class="btn btn-outline" style="font-size:10px;padding:3px 8px;" onclick="event.stopPropagation();markDone('${t.id}')">✓ Done</button>` : ''}
-        </div>`).join('') : '<div class="t-empty">No tasks in this project.</div>'}
+          <div class="t-status" style="background:${color};color:${txt};">${st.label}</div>
+        </div>`;
+      }).join('') : '<div class="t-empty">No tasks in this project.</div>'}
     </div>`;
   }).join('');
+}
+
+function renderGrid() {
+  const board = document.getElementById('board');
+  const tasks = visibleTasks().slice().sort((a, b) => {
+    const so = (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99);
+    if (so !== 0) return so;
+    return a.title.localeCompare(b.title);
+  });
+  if (!tasks.length) { board.innerHTML = '<div class="t-empty">No tasks to show.</div>'; return; }
+  const projectName = (id) => _projects.find(p => p.id === id)?.name || '';
+  board.innerHTML = `<div class="tk-grid">${tasks.map(t => {
+    const color = taskColor(t);
+    const txt = contrastText(color);
+    const st = STATUS_MAP[t.status] || STATUS_MAP.no_color;
+    return `
+    <div class="tk-card" style="background:${color};color:${txt};" onclick="editTask('${t.id}')">
+      <div class="tk-card-project" style="color:${txt};">${projectName(t.project_id)}</div>
+      <div class="tk-card-title${t.status === 'finished_fixed' ? ' done' : ''}" style="color:${txt};">${t.title}</div>
+      <div class="tk-card-foot">
+        <span class="tk-card-status" style="color:${txt};">${st.label}</span>
+        ${t.due_date ? `<span class="tk-card-meta" style="color:${txt};">${t.due_date}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('')}</div>`;
 }
 
 // ── Project modal ──
@@ -278,6 +427,33 @@ document.getElementById('pj-delete').onclick = async () => {
 };
 
 // ── Task modal ──
+let _editingCustomColor = null; // holds pending custom_color for the open task ('' = cleared, null = untouched, '#hex' = set)
+let _editingStatus = null;
+
+function buildStatusPicker(selectedStatus) {
+  const el = document.getElementById('tk-status-picker');
+  el.innerHTML = STATUSES.map(s => `
+    <div class="status-pick${s.key === selectedStatus ? ' selected' : ''}" data-status="${s.key}">
+      <span class="tk-swatch" style="background:${s.color};"></span>${s.label}
+    </div>`).join('');
+  el.querySelectorAll('.status-pick').forEach(pick => {
+    pick.onclick = () => {
+      _editingStatus = pick.dataset.status;
+      el.querySelectorAll('.status-pick').forEach(p => p.classList.toggle('selected', p.dataset.status === _editingStatus));
+      updateColorNote();
+    };
+  });
+}
+
+function updateColorNote() {
+  const note = document.getElementById('tk-color-note');
+  if (_editingCustomColor) {
+    note.textContent = `Using custom color ${_editingCustomColor} instead of the status color.`;
+  } else {
+    note.textContent = 'Color follows the status selected above.';
+  }
+}
+
 async function openTaskModal(t) {
   document.getElementById('tk-id').value = t?.id || '';
   document.getElementById('tk-name').value = t?.title || '';
@@ -286,20 +462,26 @@ async function openTaskModal(t) {
   document.getElementById('tk-assignee').value = t?.assignee_id || '';
   document.getElementById('tk-due').value = t?.due_date || '';
   document.getElementById('tk-priority').value = t?.priority || 'medium';
-  document.getElementById('tk-status').value = t?.status || 'todo';
   document.getElementById('tk-title').textContent = t ? 'Edit Task' : 'New Task';
   document.getElementById('tk-delete').style.display = t ? '' : 'none';
   const doneBtn = document.getElementById('tk-mark-done');
   doneBtn.style.display = t ? '' : 'none';
-  doneBtn.textContent = (t && t.status === 'done') ? '↺ Mark as Not Done' : '✓ Mark as Done';
+  doneBtn.textContent = (t && t.status === 'finished_fixed') ? '↺ Mark as Not Done' : '✓ Mark as Done';
   document.getElementById('tk-error').style.display = 'none';
   document.getElementById('tk-comments-wrap').style.display = t ? '' : 'none';
+
+  _editingStatus = t?.status || 'no_color';
+  _editingCustomColor = t?.custom_color || null;
+  buildStatusPicker(_editingStatus);
+  document.getElementById('tk-custom-color').value = _editingCustomColor || statusColor(_editingStatus);
+  updateColorNote();
+
   if (t) await loadComments(t.id);
   document.getElementById('tk-modal').style.display = 'flex';
 }
 window.editTask = (id) => openTaskModal(_tasks.find(t => t.id === id));
 window.markDone = async (id) => {
-  await supabase.from('tasks').update({ status: 'done', updated_at: new Date().toISOString() }).eq('id', id);
+  await supabase.from('tasks').update({ status: 'finished_fixed', updated_at: new Date().toISOString() }).eq('id', id);
   loadAll();
 };
 document.getElementById('btn-new-task').onclick = () => {
@@ -307,10 +489,21 @@ document.getElementById('btn-new-task').onclick = () => {
   openTaskModal(null);
 };
 document.getElementById('tk-close').onclick = document.getElementById('tk-cancel').onclick = () => document.getElementById('tk-modal').style.display = 'none';
+
+document.getElementById('tk-custom-color-apply').onclick = () => {
+  _editingCustomColor = document.getElementById('tk-custom-color').value;
+  updateColorNote();
+};
+document.getElementById('tk-custom-color-clear').onclick = () => {
+  _editingCustomColor = null;
+  document.getElementById('tk-custom-color').value = statusColor(_editingStatus);
+  updateColorNote();
+};
+
 document.getElementById('tk-mark-done').onclick = async () => {
   const id = document.getElementById('tk-id').value;
   const t = _tasks.find(x => x.id === id);
-  const newStatus = t?.status === 'done' ? 'todo' : 'done';
+  const newStatus = t?.status === 'finished_fixed' ? 'no_color' : 'finished_fixed';
   await supabase.from('tasks').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', id);
   document.getElementById('tk-modal').style.display = 'none'; loadAll();
 };
@@ -326,7 +519,8 @@ document.getElementById('tk-save').onclick = async () => {
     assignee_id: document.getElementById('tk-assignee').value || null,
     due_date: document.getElementById('tk-due').value || null,
     priority: document.getElementById('tk-priority').value,
-    status: document.getElementById('tk-status').value,
+    status: _editingStatus || 'no_color',
+    custom_color: _editingCustomColor || null,
     updated_at: new Date().toISOString(),
   };
   let error;
