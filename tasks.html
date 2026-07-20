@@ -45,11 +45,12 @@
 
   /* List view */
   .tp-group { margin-bottom: 2rem; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-  .tp-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--bg); }
+  .tp-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--bg); gap: 10px; flex-wrap: wrap; }
   .tp-head-name { font-weight: 700; color: var(--blue); font-size: 14px; }
-  .tp-head-actions { display: flex; gap: 6px; }
+  .tp-head-actions { display: flex; gap: 6px; align-items: center; }
   .tp-head-actions button { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 12px; }
   .tp-head-actions button:hover { color: var(--blue); }
+  .tp-sort { font-size: 11px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--white); color: var(--black); }
 
   .t-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--border); cursor: pointer; position: relative; }
   .t-row:hover { background: var(--bg); }
@@ -127,13 +128,6 @@
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <select id="tk-project-filter" class="form-input tk-project-select"><option value="">All Projects</option></select>
-        <select id="tk-sort" class="form-input tk-project-select" style="min-width:150px;">
-          <option value="project">Sort by Project</option>
-          <option value="color">Sort by Color</option>
-          <option value="name">Sort by Name</option>
-          <option value="due">Sort by Due Date</option>
-          <option value="priority">Sort by Priority</option>
-        </select>
       </div>
     </div>
 
@@ -250,21 +244,40 @@ let _projects = [], _tasks = [], _members = [], _me = null;
 let _view = 'list';
 let _projectFilter = '';
 let _statusFilter = null; // null = all, or a status key
-let _sortBy = 'project'; // project | color | name | due | priority
 const PRIORITY_ORDER = { urgent: 0, high: 1, medium: 2, low: 3 };
 
-function sortTasks(list) {
+let _projectSort = {}; // { [projectId]: 'color' | 'name' | 'due' | 'priority' }
+function sortKeyFor(projectId) { return _projectSort[projectId] || 'color'; }
+
+function sortSelectHtml(projectId) {
+  const current = sortKeyFor(projectId);
+  const opts = [['color','Color'],['name','Name'],['due','Due Date'],['priority','Priority']];
+  return `<select class="tp-sort" data-project="${projectId}">
+    ${opts.map(([v,l]) => `<option value="${v}"${v===current?' selected':''}>Sort: ${l}</option>`).join('')}
+  </select>`;
+}
+
+function attachProjectSortListeners() {
+  document.querySelectorAll('.tp-sort').forEach(sel => {
+    sel.onchange = (e) => {
+      _projectSort[sel.dataset.project] = e.target.value;
+      render();
+    };
+  });
+}
+
+function sortTasks(list, sortBy) {
   const arr = list.slice();
-  if (_sortBy === 'name') {
+  if (sortBy === 'name') {
     arr.sort((a, b) => a.title.localeCompare(b.title));
-  } else if (_sortBy === 'due') {
+  } else if (sortBy === 'due') {
     arr.sort((a, b) => {
       if (!a.due_date && !b.due_date) return 0;
       if (!a.due_date) return 1;
       if (!b.due_date) return -1;
       return a.due_date.localeCompare(b.due_date);
     });
-  } else if (_sortBy === 'priority') {
+  } else if (sortBy === 'priority') {
     arr.sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9));
   } else { // color
     arr.sort((a, b) => {
@@ -365,7 +378,6 @@ function buildLegend() {
 }
 
 document.getElementById('tk-project-filter').onchange = (e) => { _projectFilter = e.target.value; render(); };
-document.getElementById('tk-sort').onchange = (e) => { _sortBy = e.target.value; render(); };
 document.getElementById('btn-view-list').onclick = () => setView('list');
 document.getElementById('btn-view-grid').onclick = () => setView('grid');
 function setView(v) {
@@ -380,9 +392,7 @@ function render() {
 }
 
 function orderedProjects() {
-  const list = _projectFilter ? _projects.filter(p => p.id === _projectFilter) : _projects.slice();
-  if (_sortBy === 'project') return list.slice().sort((a, b) => a.name.localeCompare(b.name));
-  return list;
+  return _projectFilter ? _projects.filter(p => p.id === _projectFilter) : _projects.slice();
 }
 
 function renderList() {
@@ -390,12 +400,13 @@ function renderList() {
   if (!_projects.length) { board.innerHTML = '<div class="t-empty">No projects yet — create one to start adding tasks.</div>'; return; }
   const projectsToShow = orderedProjects();
   board.innerHTML = projectsToShow.map(p => {
-    const rows = sortTasks(visibleTasks().filter(t => t.project_id === p.id));
+    const rows = sortTasks(visibleTasks().filter(t => t.project_id === p.id), sortKeyFor(p.id));
     return `
     <div class="tp-group">
       <div class="tp-head">
         <div class="tp-head-name">${p.name}</div>
         <div class="tp-head-actions">
+          ${sortSelectHtml(p.id)}
           <button onclick="editProject('${p.id}')">Edit</button>
         </div>
       </div>
@@ -415,6 +426,7 @@ function renderList() {
       }).join('') : '<div class="t-empty">No tasks in this project.</div>'}
     </div>`;
   }).join('');
+  attachProjectSortListeners();
 }
 
 function renderGrid() {
@@ -422,12 +434,13 @@ function renderGrid() {
   if (!_projects.length) { board.innerHTML = '<div class="t-empty">No projects yet — create one to start adding tasks.</div>'; return; }
   const projectsToShow = orderedProjects();
   board.innerHTML = projectsToShow.map(p => {
-    const cards = sortTasks(visibleTasks().filter(t => t.project_id === p.id));
+    const cards = sortTasks(visibleTasks().filter(t => t.project_id === p.id), sortKeyFor(p.id));
     return `
     <div class="tp-group">
       <div class="tp-head">
         <div class="tp-head-name">${p.name}</div>
         <div class="tp-head-actions">
+          ${sortSelectHtml(p.id)}
           <button onclick="editProject('${p.id}')">Edit</button>
         </div>
       </div>
@@ -448,6 +461,7 @@ function renderGrid() {
       </div>
     </div>`;
   }).join('');
+  attachProjectSortListeners();
 }
 
 // ── Project modal ──
