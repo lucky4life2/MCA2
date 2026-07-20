@@ -125,7 +125,15 @@
         <button class="btn btn-outline active" id="btn-view-list">☰ List</button>
         <button class="btn btn-outline" id="btn-view-grid">▦ Grid</button>
       </div>
-      <select id="tk-project-filter" class="form-input tk-project-select"><option value="">All Projects</option></select>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <select id="tk-project-filter" class="form-input tk-project-select"><option value="">All Projects</option></select>
+        <select id="tk-sort" class="form-input tk-project-select" style="min-width:150px;">
+          <option value="color">Sort by Color</option>
+          <option value="name">Sort by Name</option>
+          <option value="due">Sort by Due Date</option>
+          <option value="priority">Sort by Priority</option>
+        </select>
+      </div>
     </div>
 
     <div id="tk-legend" class="tk-legend"></div>
@@ -237,6 +245,31 @@ let _projects = [], _tasks = [], _members = [], _me = null;
 let _view = 'list';
 let _projectFilter = '';
 let _statusFilter = null; // null = all, or a status key
+let _sortBy = 'color'; // color | name | due | priority
+const PRIORITY_ORDER = { urgent: 0, high: 1, medium: 2, low: 3 };
+
+function sortTasks(list) {
+  const arr = list.slice();
+  if (_sortBy === 'name') {
+    arr.sort((a, b) => a.title.localeCompare(b.title));
+  } else if (_sortBy === 'due') {
+    arr.sort((a, b) => {
+      if (!a.due_date && !b.due_date) return 0;
+      if (!a.due_date) return 1;
+      if (!b.due_date) return -1;
+      return a.due_date.localeCompare(b.due_date);
+    });
+  } else if (_sortBy === 'priority') {
+    arr.sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9));
+  } else { // color
+    arr.sort((a, b) => {
+      const so = (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99);
+      if (so !== 0) return so;
+      return a.title.localeCompare(b.title);
+    });
+  }
+  return arr;
+}
 
 async function canManageTasks(userId) {
   try {
@@ -327,6 +360,7 @@ function buildLegend() {
 }
 
 document.getElementById('tk-project-filter').onchange = (e) => { _projectFilter = e.target.value; render(); };
+document.getElementById('tk-sort').onchange = (e) => { _sortBy = e.target.value; render(); };
 document.getElementById('btn-view-list').onclick = () => setView('list');
 document.getElementById('btn-view-grid').onclick = () => setView('grid');
 function setView(v) {
@@ -345,8 +379,7 @@ function renderList() {
   if (!_projects.length) { board.innerHTML = '<div class="t-empty">No projects yet — create one to start adding tasks.</div>'; return; }
   const projectsToShow = _projectFilter ? _projects.filter(p => p.id === _projectFilter) : _projects;
   board.innerHTML = projectsToShow.map(p => {
-    const rows = visibleTasks().filter(t => t.project_id === p.id)
-      .sort((a, b) => (a.status === 'finished_fixed') - (b.status === 'finished_fixed'));
+    const rows = sortTasks(visibleTasks().filter(t => t.project_id === p.id));
     return `
     <div class="tp-group">
       <div class="tp-head">
@@ -375,27 +408,35 @@ function renderList() {
 
 function renderGrid() {
   const board = document.getElementById('board');
-  const tasks = visibleTasks().slice().sort((a, b) => {
-    const so = (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99);
-    if (so !== 0) return so;
-    return a.title.localeCompare(b.title);
-  });
-  if (!tasks.length) { board.innerHTML = '<div class="t-empty">No tasks to show.</div>'; return; }
-  const projectName = (id) => _projects.find(p => p.id === id)?.name || '';
-  board.innerHTML = `<div class="tk-grid">${tasks.map(t => {
-    const color = taskColor(t);
-    const txt = contrastText(color);
-    const st = STATUS_MAP[t.status] || STATUS_MAP.no_color;
+  if (!_projects.length) { board.innerHTML = '<div class="t-empty">No projects yet — create one to start adding tasks.</div>'; return; }
+  const projectsToShow = _projectFilter ? _projects.filter(p => p.id === _projectFilter) : _projects;
+  board.innerHTML = projectsToShow.map(p => {
+    const cards = sortTasks(visibleTasks().filter(t => t.project_id === p.id));
     return `
-    <div class="tk-card" style="background:${color};color:${txt};" onclick="editTask('${t.id}')">
-      <div class="tk-card-project" style="color:${txt};">${projectName(t.project_id)}</div>
-      <div class="tk-card-title${t.status === 'finished_fixed' ? ' done' : ''}" style="color:${txt};">${t.title}</div>
-      <div class="tk-card-foot">
-        <span class="tk-card-status" style="color:${txt};">${st.label}</span>
-        ${t.due_date ? `<span class="tk-card-meta" style="color:${txt};">${t.due_date}</span>` : ''}
+    <div class="tp-group">
+      <div class="tp-head">
+        <div class="tp-head-name">${p.name}</div>
+        <div class="tp-head-actions">
+          <button onclick="editProject('${p.id}')">Edit</button>
+        </div>
+      </div>
+      <div style="padding:14px 16px;">
+        ${cards.length ? `<div class="tk-grid">${cards.map(t => {
+          const color = taskColor(t);
+          const txt = contrastText(color);
+          const st = STATUS_MAP[t.status] || STATUS_MAP.no_color;
+          return `
+          <div class="tk-card" style="background:${color};color:${txt};" onclick="editTask('${t.id}')">
+            <div class="tk-card-title${t.status === 'finished_fixed' ? ' done' : ''}" style="color:${txt};">${t.title}</div>
+            <div class="tk-card-foot">
+              <span class="tk-card-status" style="color:${txt};">${st.label}</span>
+              ${t.due_date ? `<span class="tk-card-meta" style="color:${txt};">${t.due_date}</span>` : ''}
+            </div>
+          </div>`;
+        }).join('')}</div>` : '<div class="t-empty">No tasks in this project.</div>'}
       </div>
     </div>`;
-  }).join('')}</div>`;
+  }).join('');
 }
 
 // ── Project modal ──
