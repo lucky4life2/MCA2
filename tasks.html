@@ -189,7 +189,7 @@
       </div>
 
       <div id="tk-comments-wrap" style="display:none;margin-top:1rem;border-top:1px solid var(--border);padding-top:1rem;">
-        <label class="form-label">Comments</label>
+        <label class="form-label" id="tk-comments-label">Comments</label>
         <div id="tk-comments"></div>
         <div style="display:flex;gap:8px;margin-top:8px;">
           <input type="text" id="tk-comment-input" class="form-input" placeholder="Add a comment...">
@@ -237,6 +237,7 @@ function contrastText(hex) {
 }
 
 let _projects = [], _tasks = [], _members = [], _me = null;
+let _commentCounts = {};
 let _view = 'list';
 let _projectFilter = '';
 let _statusFilter = null; // null = all, or a status key
@@ -311,13 +312,17 @@ function show(which) {
 }
 
 async function loadAll() {
-  const [{ data: projects }, { data: tasks }, { data: members }, { data: userRoles }] = await Promise.all([
+  const [{ data: projects }, { data: tasks }, { data: members }, { data: userRoles }, { data: comments }] = await Promise.all([
     supabase.from('task_projects').select('*').order('sort_order').order('created_at'),
     supabase.from('tasks').select('*').order('due_date', { nullsFirst: false }),
     supabase.from('profiles').select('id, display_name, username, role'),
     supabase.from('user_roles').select('user_id, roles(level)'),
+    supabase.from('task_comments').select('task_id'),
   ]);
   _projects = projects || []; _tasks = tasks || [];
+
+  _commentCounts = {};
+  (comments || []).forEach(c => { _commentCounts[c.task_id] = (_commentCounts[c.task_id] || 0) + 1; });
 
   const levelByUser = {};
   (userRoles || []).forEach(ur => {
@@ -416,6 +421,7 @@ function renderList() {
           <div class="t-title${t.status === 'finished_fixed' ? ' done' : ''}">${t.title}</div>
           ${t.assignee_id ? `<div class="t-meta">${memberName(t.assignee_id)}</div>` : ''}
           ${t.due_date ? `<div class="t-meta">${t.due_date}</div>` : ''}
+          ${_commentCounts[t.id] ? `<div class="t-meta">💬 ${_commentCounts[t.id]}</div>` : ''}
           <div class="t-badge ${t.priority}">${t.priority}</div>
           <div class="t-status" style="background:${color};color:${txt};">${st.label}</div>
         </div>`;
@@ -451,6 +457,7 @@ function renderGrid() {
             <div class="tk-card-foot">
               <span class="tk-card-status" style="color:${txt};">${st.label}</span>
               ${t.due_date ? `<span class="tk-card-meta" style="color:${txt};">${t.due_date}</span>` : ''}
+              ${_commentCounts[t.id] ? `<span class="tk-card-meta" style="color:${txt};">💬 ${_commentCounts[t.id]}</span>` : ''}
             </div>
           </div>`;
         }).join('')}</div>` : '<div class="t-empty">No tasks in this project.</div>'}
@@ -605,9 +612,12 @@ document.getElementById('tk-delete').onclick = async () => {
 // ── Comments ──
 async function loadComments(taskId) {
   const { data } = await supabase.from('task_comments').select('*').eq('task_id', taskId).order('created_at');
-  document.getElementById('tk-comments').innerHTML = (data || []).map(c => `
+  const list = data || [];
+  document.getElementById('tk-comments-label').textContent = `Comments: ${list.length}`;
+  document.getElementById('tk-comments').innerHTML = list.map(c => `
     <div class="comment"><div class="comment-meta">${memberName(c.author_id) || 'Staff'} · ${new Date(c.created_at).toLocaleString()}</div>${c.body}</div>
   `).join('') || '<div class="t-empty">No comments yet.</div>';
+  _commentCounts[taskId] = list.length;
 }
 document.getElementById('tk-comment-add').onclick = async () => {
   const taskId = document.getElementById('tk-id').value;
