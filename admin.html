@@ -2164,6 +2164,7 @@ window.approveMC  = async (id) => {
 };
 window.revokeMC   = async (id) => {
   if (!confirm('Remove Minecraft verification?')) return;
+  if (!confirm('Are you sure? This cannot be undone.')) return;
   await supabase.from('profiles').update({ minecraft_verified: false, minecraft_username: null, mc_verify_code: null, mc_verify_expires: null }).eq('id', id);
   await loadAll();
 };
