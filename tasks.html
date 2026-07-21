@@ -217,6 +217,7 @@
           <button class="btn btn-outline" id="tk-custom-color-clear" style="font-size:11px;">Clear custom color</button>
         </div>
         <div class="custom-color-note" id="tk-color-note">Color follows the status above.</div>
+        <div style="font-size:12px;font-weight:600;margin-top:8px;display:none;" id="tk-checkoff-note"></div>
       </div>
 
       <div id="tk-comments-wrap" style="display:none;margin-top:1rem;border-top:1px solid var(--border);padding-top:1rem;">
@@ -230,6 +231,8 @@
     </div>
     <div id="tk-error" style="font-size:13px;color:#c0392b;padding:0 1.5rem .5rem;display:none;"></div>
     <div class="modal-foot">
+      <button class="btn btn-outline" id="tk-submit-checkoff" style="display:none;font-size:13px;">🚩 Submit for Check-off</button>
+      <button class="btn btn-primary" id="tk-checkoff-toggle" style="display:none;font-size:13px;background:#2d7d2f;">✓ Check Off</button>
       <button class="btn btn-outline" id="tk-mark-done" style="font-size:13px;">✓ Mark as Done</button>
       <button class="btn btn-danger" id="tk-delete" style="display:none;font-size:13px;">Delete</button>
       <button class="btn btn-outline" id="tk-cancel" style="font-size:13px;">Cancel</button>
@@ -245,6 +248,7 @@ import { supabase } from './supabase.js';
 // ── Status / color system ──────────────────────────────────────
 // Order doubles as sort order for the grid view.
 const STATUSES = [
+  { key: 'needs_manager_check_off', label: 'Needs Manager Check-off', color: '#FF6EC7' },
   { key: 'does_it_work',         label: 'Does It Work?',          color: '#A02B93' },
   { key: 'in_progress',          label: 'In Progress',            color: '#FFD400' },
   { key: 'required_for_release', label: 'Required for Release',   color: '#FF0000' },
@@ -267,7 +271,8 @@ function contrastText(hex) {
   return yiq >= 150 ? '#111111' : '#ffffff';
 }
 
-let _projects = [], _tasks = [], _members = [], _me = null;
+let _projects = [], _tasks = [], _members = [], _allProfiles = [], _me = null;
+let _access = { manage: false, checkoff: false, test: false };
 let _commentCounts = {};
 let _view = 'list';
 let _projectFilter = '';
@@ -317,20 +322,37 @@ function sortTasks(list, sortBy) {
   return arr;
 }
 
-async function canManageTasks(userId) {
+async function resolveAccess(userId) {
+  const access = { manage: false, checkoff: false, test: false };
   try {
-    const { data } = await supabase.rpc('user_has_permission', { perm: 'can_manage_tasks' });
-    if (data === true) return true;
+    const [{ data: manage }, { data: checkoff }, { data: test }] = await Promise.all([
+      supabase.rpc('user_has_permission', { perm: 'can_manage_tasks' }),
+      supabase.rpc('user_has_permission', { perm: 'can_check_off_tasks' }),
+      supabase.rpc('user_has_permission', { perm: 'can_test_tasks' }),
+    ]);
+    access.manage = manage === true;
+    access.checkoff = checkoff === true;
+    access.test = test === true;
   } catch {}
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).single();
-  return profile?.role === 'admin' || profile?.role === 'owner';
+  if (!access.manage) {
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).single();
+    if (profile?.role === 'admin' || profile?.role === 'owner') access.manage = true;
+  }
+  return access;
+}
+
+function applyAccessUI() {
+  document.getElementById('btn-new-project').style.display = _access.manage ? '' : 'none';
+  document.getElementById('btn-new-task').style.display = _access.manage ? '' : 'none';
 }
 
 async function init() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user) return show('denied');
   _me = session.user;
-  if (!(await canManageTasks(_me.id))) return show('denied');
+  _access = await resolveAccess(_me.id);
+  if (!_access.manage && !_access.checkoff && !_access.test) return show('denied');
+  applyAccessUI();
   show('main');
   buildLegend();
   await loadAll();
@@ -343,7 +365,7 @@ function show(which) {
 }
 
 async function loadAll() {
-  const [{ data: projects }, { data: tasks }, { data: members }, { data: userRoles }, { data: comments }] = await Promise.all([
+  const [{ data: projects }, { data: tasks }, { data: profiles }, { data: userRoles }, { data: comments }] = await Promise.all([
     supabase.from('task_projects').select('*').order('sort_order').order('created_at'),
     supabase.from('tasks').select('*').order('due_date', { nullsFirst: false }),
     supabase.from('profiles').select('id, display_name, username, role'),
@@ -351,6 +373,7 @@ async function loadAll() {
     supabase.from('task_comments').select('task_id'),
   ]);
   _projects = projects || []; _tasks = tasks || [];
+  _allProfiles = profiles || []; // used for name lookups (assignees, commenters, checked-off-by) regardless of level
 
   _commentCounts = {};
   (comments || []).forEach(c => { _commentCounts[c.task_id] = (_commentCounts[c.task_id] || 0) + 1; });
@@ -361,7 +384,7 @@ async function loadAll() {
     if (lvl > (levelByUser[ur.user_id] || 0)) levelByUser[ur.user_id] = lvl;
   });
   const legacyLevel = { owner: 100, admin: 80 };
-  _members = (members || []).filter(m => {
+  _members = _allProfiles.filter(m => {
     const lvl = Math.max(levelByUser[m.id] || 0, legacyLevel[m.role] || 0);
     return lvl >= 50;
   });
@@ -381,7 +404,7 @@ function fillSelects() {
 }
 
 function memberName(id) {
-  const m = _members.find(m => m.id === id);
+  const m = _allProfiles.find(m => m.id === id);
   return m ? (m.display_name || m.username) : '';
 }
 
@@ -439,7 +462,7 @@ function renderList() {
         <div class="tp-head-name">${p.name}</div>
         <div class="tp-head-actions">
           ${sortSelectHtml(p.id)}
-          <button onclick="editProject('${p.id}')">Edit</button>
+          ${_access.manage ? `<button onclick="editProject('${p.id}')">Edit</button>` : ''}
         </div>
       </div>
       ${rows.length ? rows.map(t => {
@@ -453,6 +476,7 @@ function renderList() {
           ${t.assignee_id ? `<div class="t-meta">${memberName(t.assignee_id)}</div>` : ''}
           ${t.due_date ? `<div class="t-meta">${t.due_date}</div>` : ''}
           ${_commentCounts[t.id] ? `<div class="t-meta">💬 ${_commentCounts[t.id]}</div>` : ''}
+          ${t.checked_off_by ? `<div class="t-meta" style="color:#2d7d2f;">✓ ${memberName(t.checked_off_by) || 'checked'}</div>` : ''}
           <div class="t-badge ${t.priority}">${t.priority}</div>
           <div class="t-status" style="background:${color};color:${txt};">${st.label}</div>
         </div>`;
@@ -474,7 +498,7 @@ function renderGrid() {
         <div class="tp-head-name">${p.name}</div>
         <div class="tp-head-actions">
           ${sortSelectHtml(p.id)}
-          <button onclick="editProject('${p.id}')">Edit</button>
+          ${_access.manage ? `<button onclick="editProject('${p.id}')">Edit</button>` : ''}
         </div>
       </div>
       <div style="padding:14px 16px;">
@@ -489,6 +513,7 @@ function renderGrid() {
               <span class="tk-card-status" style="color:${txt};">${st.label}</span>
               ${t.due_date ? `<span class="tk-card-meta" style="color:${txt};">${t.due_date}</span>` : ''}
               ${_commentCounts[t.id] ? `<span class="tk-card-meta" style="color:${txt};">💬 ${_commentCounts[t.id]}</span>` : ''}
+              ${t.checked_off_by ? `<span class="tk-card-meta" style="color:${txt};">✓ ${memberName(t.checked_off_by) || 'checked'}</span>` : ''}
             </div>
           </div>`;
         }).join('')}</div>` : '<div class="t-empty">No tasks in this project.</div>'}
@@ -563,18 +588,45 @@ async function openTaskModal(t) {
   document.getElementById('tk-due').value = t?.due_date || '';
   document.getElementById('tk-priority').value = t?.priority || 'medium';
   document.getElementById('tk-title').textContent = t ? 'Edit Task' : 'New Task';
-  document.getElementById('tk-delete').style.display = t ? '' : 'none';
+
+  const canEdit = _access.manage;
+  ['tk-name', 'tk-desc', 'tk-project', 'tk-assignee', 'tk-due', 'tk-priority'].forEach(id => {
+    document.getElementById(id).disabled = !canEdit;
+  });
+  document.getElementById('tk-delete').style.display = (t && canEdit) ? '' : 'none';
+  document.getElementById('tk-save').style.display = canEdit ? '' : 'none';
   const doneBtn = document.getElementById('tk-mark-done');
-  doneBtn.style.display = t ? '' : 'none';
+  doneBtn.style.display = (t && canEdit) ? '' : 'none';
   doneBtn.textContent = (t && t.status === 'finished_fixed') ? '↺ Mark as Not Done' : '✓ Mark as Done';
   document.getElementById('tk-error').style.display = 'none';
   document.getElementById('tk-comments-wrap').style.display = t ? '' : 'none';
 
   _editingStatus = t?.status || 'no_color';
   _editingCustomColor = t?.custom_color || null;
+  document.getElementById('tk-status-picker').closest('.form-group').style.display = canEdit ? '' : 'none';
   buildStatusPicker(_editingStatus);
   document.getElementById('tk-custom-color').value = _editingCustomColor || statusColor(_editingStatus);
   updateColorNote();
+
+  // Testing workflow: submit-for-check-off is available to anyone with task
+  // access on an existing task; the check-off toggle only to tester managers
+  // (or full managers) once it's actually been submitted or already checked.
+  const isCheckedOff = !!t?.checked_off_by;
+  const submitBtn = document.getElementById('tk-submit-checkoff');
+  submitBtn.style.display = (t && (_access.test || _access.checkoff || _access.manage)) ? '' : 'none';
+  const toggleBtn = document.getElementById('tk-checkoff-toggle');
+  const canToggle = t && (_access.checkoff || _access.manage) && (t.status === 'needs_manager_check_off' || isCheckedOff);
+  toggleBtn.style.display = canToggle ? '' : 'none';
+  toggleBtn.textContent = isCheckedOff ? '↺ Undo Check-off' : '✓ Check Off';
+
+  const noteEl = document.getElementById('tk-checkoff-note');
+  if (isCheckedOff) {
+    noteEl.style.display = '';
+    noteEl.style.color = '#2d7d2f';
+    noteEl.textContent = `✓ Checked off by ${memberName(t.checked_off_by) || 'a manager'}${t.checked_off_at ? ' on ' + new Date(t.checked_off_at).toLocaleDateString() : ''}`;
+  } else {
+    noteEl.style.display = 'none';
+  }
 
   if (t) await loadComments(t.id);
   document.getElementById('tk-modal').style.display = 'flex';
@@ -598,6 +650,24 @@ document.getElementById('tk-custom-color-clear').onclick = () => {
   _editingCustomColor = null;
   document.getElementById('tk-custom-color').value = statusColor(_editingStatus);
   updateColorNote();
+};
+
+document.getElementById('tk-submit-checkoff').onclick = async () => {
+  const id = document.getElementById('tk-id').value;
+  if (!id) return;
+  if (!confirm('Submit this task for manager check-off?')) return;
+  const { error } = await supabase.rpc('submit_task_for_checkoff', { p_task_id: id });
+  if (error) { alert('Error: ' + error.message); return; }
+  document.getElementById('tk-modal').style.display = 'none'; loadAll();
+};
+document.getElementById('tk-checkoff-toggle').onclick = async () => {
+  const id = document.getElementById('tk-id').value;
+  if (!id) return;
+  const t = _tasks.find(x => x.id === id);
+  const fn = t?.checked_off_by ? 'uncheck_task' : 'check_off_task';
+  const { error } = await supabase.rpc(fn, { p_task_id: id });
+  if (error) { alert('Error: ' + error.message); return; }
+  document.getElementById('tk-modal').style.display = 'none'; loadAll();
 };
 
 document.getElementById('tk-mark-done').onclick = async () => {

@@ -728,6 +728,7 @@ async function initNavAuth(_authReadyResolve) {
     let isAdmin = false;
     let canPublishNews = false;
     let canManageArchive = false;
+    let canAccessTasks = false;
 
     // Resolve role BEFORE the first render so other page scripts awaiting
     // _mcaAuthReady get the correct isAdmin status immediately, instead of
@@ -754,6 +755,7 @@ async function initNavAuth(_authReadyResolve) {
           <a class="nav-account-dropdown-item" href="shop.html">Shop</a>
           <a class="nav-account-dropdown-item" href="account.html">My Account</a>
           ${isAdmin ? `<a class="nav-account-dropdown-item" href="admin.html">Admin</a>` : ''}
+          ${canAccessTasks ? `<a class="nav-account-dropdown-item" href="tasks.html">Tasks</a>` : ''}
           ${canPublishNews ? `<a class="nav-account-dropdown-item" href="news-publish.html">Publish News</a>` : ''}
           ${canManageArchive ? `<a class="nav-account-dropdown-item" href="archive-publish.html">Manage Archive</a>` : ''}
           <button class="nav-account-dropdown-item" id="nav-signout-btn">Sign Out</button>
@@ -803,11 +805,19 @@ async function initNavAuth(_authReadyResolve) {
         ]);
         if (archiveResult?.data) canManageArchive = true;
       } catch(e) {}
-      if (isAdmin) { canPublishNews = true; canManageArchive = true; }
+      try {
+        const [manageResult, testResult, checkoffResult] = await Promise.all([
+          Promise.race([mod.supabase.rpc('user_has_permission', { perm: 'can_manage_tasks' }), new Promise(r => setTimeout(() => r({ data: null }), 1000))]),
+          Promise.race([mod.supabase.rpc('user_has_permission', { perm: 'can_test_tasks' }), new Promise(r => setTimeout(() => r({ data: null }), 1000))]),
+          Promise.race([mod.supabase.rpc('user_has_permission', { perm: 'can_check_off_tasks' }), new Promise(r => setTimeout(() => r({ data: null }), 1000))]),
+        ]);
+        if (manageResult?.data || testResult?.data || checkoffResult?.data) canAccessTasks = true;
+      } catch(e) {}
+      if (isAdmin) { canPublishNews = true; canManageArchive = true; canAccessTasks = true; }
     } catch(e) {}
 
     render(); // re-render with full data (name, admin link, etc.)
-    return { isAdmin, canPublishNews, canManageArchive };
+    return { isAdmin, canPublishNews, canManageArchive, canAccessTasks };
   }
 
   // If someone else changes this user's roles (or an admin/owner revokes/adds
