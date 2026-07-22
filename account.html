@@ -42,6 +42,8 @@
     .btn-outline:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
     .btn-discord { background: #5865F2; color: #fff; display: inline-flex; align-items: center; gap: 7px; }
     .btn-discord:hover { background: #4752c4; }
+    .btn-google { background: #fff; color: #3c4043; border: 1px solid var(--border); display: inline-flex; align-items: center; gap: 7px; }
+    .btn-google:hover { background: #f7f8f8; border-color: #c9ccd1; }
     .btn-danger { background: transparent; color: #c0392b; border: 1px solid var(--border); }
     .btn-danger:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
 
@@ -63,6 +65,7 @@
     .connected-provider { display: flex; align-items: center; gap: 10px; }
     .connected-provider-icon { width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .icon-discord { background: #5865F2; color: #fff; }
+    .icon-google { background: var(--bg); border: 1px solid var(--border); }
     .icon-email { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
     .icon-minecraft { background: #4d7a35; color: #fff; }
     .connected-provider-info { }
@@ -110,7 +113,7 @@
       /* Form inputs — comfortable touch targets */
       .form-input { padding: 11px 12px; font-size: 15px; }
       .btn { padding: 11px 18px; font-size: 13px; width: 100%; text-align: center; }
-      .btn-primary, .btn-outline, .btn-discord, .btn-danger { display: block; }
+      .btn-primary, .btn-outline, .btn-discord, .btn-google, .btn-danger { display: block; }
 
       /* Add-email inline form buttons */
       #add-email-form .btn { width: auto; display: inline-block; }
@@ -675,9 +678,10 @@ async function renderConnectedAccounts(skipFetch = false) {
   const el = document.getElementById('connected-accounts-body');
   const identities = _user.identities || [];
   const hasDiscord = identities.some(i => i.provider === 'discord') || !!_profile.discord_id;
+  const hasGoogle  = identities.some(i => i.provider === 'google');
   const hasEmail   = identities.some(i => i.provider === 'email');
 
-  // If auth.users still has an email but no email identity exists, Discord OAuth
+  // If auth.users still has an email but no email identity exists, Discord/Google OAuth
   // re-synced the email on session refresh. Clean it up silently.
   if (!hasEmail && _user.email) {
     await supabase.rpc('clear_user_email');
@@ -685,8 +689,10 @@ async function renderConnectedAccounts(skipFetch = false) {
     _profile = { ..._profile, email: null };
   }
   // Only allow unlink if user has more than one login method
-  const canUnlinkDiscord = hasDiscord && hasEmail;
-  const canUnlinkEmail   = hasEmail && hasDiscord;
+  const linkedCount = [hasEmail, hasDiscord, hasGoogle].filter(Boolean).length;
+  const canUnlinkDiscord = hasDiscord && linkedCount > 1;
+  const canUnlinkGoogle  = hasGoogle && linkedCount > 1;
+  const canUnlinkEmail   = hasEmail && linkedCount > 1;
 
   el.innerHTML = `
     <div class="connected-row">
@@ -722,6 +728,23 @@ async function renderConnectedAccounts(skipFetch = false) {
           ? `<button class="btn btn-danger" id="btn-unlink-discord">Unlink</button>`
           : `<span class="account-section-badge badge-linked">Connected</span>`
       }
+    </div>
+    <div class="connected-row">
+      <div class="connected-provider">
+        <div class="connected-provider-icon icon-google">
+          <svg width="15" height="15" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.47c-.28 1.5-1.13 2.78-2.4 3.63v3.02h3.88c2.27-2.09 3.57-5.17 3.57-8.84z"/><path fill="#34A853" d="M12 24c3.24 0 5.96-1.08 7.95-2.9l-3.88-3.02c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.12A11.998 11.998 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.27 14.27a7.2 7.2 0 0 1-.38-2.27c0-.79.14-1.56.38-2.27V6.61H1.27A11.998 11.998 0 0 0 0 12c0 1.94.46 3.77 1.27 5.39l4-3.12z"/><path fill="#EA4335" d="M12 4.77c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.69 1.27 6.61l4 3.12C6.22 6.88 8.87 4.77 12 4.77z"/></svg>
+        </div>
+        <div class="connected-provider-info">
+          <div class="connected-provider-name">Google</div>
+          <div class="connected-provider-detail">${hasGoogle ? 'Connected' : 'Not connected'}</div>
+        </div>
+      </div>
+      ${!hasGoogle
+        ? `<button class="btn btn-google" id="btn-link-google"><svg width="13" height="13" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.47c-.28 1.5-1.13 2.78-2.4 3.63v3.02h3.88c2.27-2.09 3.57-5.17 3.57-8.84z"/><path fill="#34A853" d="M12 24c3.24 0 5.96-1.08 7.95-2.9l-3.88-3.02c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.12A11.998 11.998 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.27 14.27a7.2 7.2 0 0 1-.38-2.27c0-.79.14-1.56.38-2.27V6.61H1.27A11.998 11.998 0 0 0 0 12c0 1.94.46 3.77 1.27 5.39l4-3.12z"/><path fill="#EA4335" d="M12 4.77c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.69 1.27 6.61l4 3.12C6.22 6.88 8.87 4.77 12 4.77z"/></svg> Link Google</button>`
+        : canUnlinkGoogle
+          ? `<button class="btn btn-danger" id="btn-unlink-google">Unlink</button>`
+          : `<span class="account-section-badge badge-linked">Connected</span>`
+      }
     </div>`;
 
   if (!hasDiscord) {
@@ -745,7 +768,7 @@ async function renderConnectedAccounts(skipFetch = false) {
   }
   if (canUnlinkDiscord) {
     document.getElementById('btn-unlink-discord')?.addEventListener('click', async () => {
-      if (!confirm('Unlink Discord from your account? You will still be able to sign in with email.')) return;
+      if (!confirm('Unlink Discord from your account? You will still be able to sign in with your other connected method.')) return;
       const btn = document.getElementById('btn-unlink-discord');
       if (btn) { btn.disabled = true; btn.textContent = 'Unlinking…'; }
       // Always fetch fresh user so we get the real identity objects, not cached ones
@@ -772,9 +795,46 @@ async function renderConnectedAccounts(skipFetch = false) {
       await renderConnectedAccounts(true);
     });
   }
+  if (!hasGoogle) {
+    document.getElementById('btn-link-google')?.addEventListener('click', async () => {
+      const btn = document.getElementById('btn-link-google');
+      if (btn) { btn.disabled = true; btn.textContent = 'Redirecting…'; }
+      // Use linkIdentity (not signInWithOAuth) so Google is attached to the
+      // currently signed-in account instead of starting a fresh sign-in flow.
+      const { error } = await supabase.auth.linkIdentity({
+        provider: 'google',
+        options: { redirectTo: window.location.origin + '/account.html' }
+      });
+      if (error) {
+        alert('Could not link Google: ' + error.message);
+        if (btn) { btn.disabled = false; btn.textContent = 'Link Google'; }
+      }
+    });
+  }
+  if (canUnlinkGoogle) {
+    document.getElementById('btn-unlink-google')?.addEventListener('click', async () => {
+      if (!confirm('Unlink Google from your account? You will still be able to sign in with your other methods.')) return;
+      const btn = document.getElementById('btn-unlink-google');
+      if (btn) { btn.disabled = true; btn.textContent = 'Unlinking…'; }
+      // Always fetch fresh user so we get the real identity objects, not cached ones
+      const { data: { user: freshUser }, error: fetchErr } = await supabase.auth.getUser();
+      if (fetchErr || !freshUser) { alert('Could not fetch user data. Please refresh and try again.'); if (btn) { btn.disabled = false; btn.textContent = 'Unlink'; } return; }
+      _user = freshUser;
+      const googleIdentity = (_user.identities || []).find(i => i.provider === 'google');
+      if (!googleIdentity) { alert('Google identity not found. Please refresh and try again.'); if (btn) { btn.disabled = false; btn.textContent = 'Unlink'; } return; }
+      const { error } = await supabase.auth.unlinkIdentity(googleIdentity);
+      if (error) { alert('Could not unlink Google: ' + error.message); if (btn) { btn.disabled = false; btn.textContent = 'Unlink'; } return; }
+      // Strip _user BEFORE re-rendering so the stale getUser() fetch doesn't overwrite.
+      _user = {
+        ..._user,
+        identities: (_user.identities || []).filter(i => i.provider !== 'google'),
+      };
+      await renderConnectedAccounts(true);
+    });
+  }
   if (canUnlinkEmail) {
     document.getElementById('btn-unlink-email')?.addEventListener('click', async () => {
-      if (!confirm('Unlink email/password from your account? You will only be able to sign in with Discord.')) return;
+      if (!confirm('Unlink email/password from your account? You will only be able to sign in with your other connected method.')) return;
       const btn = document.getElementById('btn-unlink-email');
       if (btn) { btn.disabled = true; btn.textContent = 'Unlinking…'; }
       // Always fetch fresh user so we get the real identity objects, not cached ones

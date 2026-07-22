@@ -123,6 +123,15 @@ export async function signInWithDiscord() {
   if (error) console.error('Discord sign-in error:', error.message);
 }
 
+/** Sign in with Google OAuth */
+export async function signInWithGoogle() {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin + '/shop.html' }
+  });
+  if (error) console.error('Google sign-in error:', error.message);
+}
+
 /** Sign in with email + password */
 export async function signInWithEmail(email, password) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });

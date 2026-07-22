@@ -1329,6 +1329,7 @@ function renderMembers(members) {
     const auth = _authUsers[m.id] || {};
     const emailVerified = auth.email_confirmed_at;
     const hasDiscord = (auth.providers||[]).includes('discord');
+    const hasGoogle  = (auth.providers||[]).includes('google');
     const accountStatus = m.account_status || 'active';
 
     const emailBadge = !m.email
@@ -1339,6 +1340,9 @@ function renderMembers(members) {
     const discordBadge = hasDiscord
       ? `<span class="badge badge-verified" style="background:#5865F2;color:#fff;">Discord</span>`
       : `<span class="badge badge-unlinked">No Discord</span>`;
+    const googleBadge = hasGoogle
+      ? `<span class="badge badge-verified" style="background:#fff;color:#3c4043;border:1px solid var(--border);">Google</span>`
+      : '';
     const statusBadge = accountStatus === 'frozen'
       ? `<span class="badge" style="background:#fff8e1;color:#b07d00;">⏸ Frozen</span>`
       : '';
@@ -1370,7 +1374,7 @@ function renderMembers(members) {
       <td><div class="member-email">${m.email||'—'}</div></td>
       <td>${rolesCell}</td>
       <td style="white-space:nowrap;">
-        <div style="display:flex;flex-direction:column;gap:4px;">${emailBadge}${discordBadge}${statusBadge}</div>
+        <div style="display:flex;flex-direction:column;gap:4px;">${emailBadge}${discordBadge}${googleBadge}${statusBadge}</div>
       </td>
       <td>${mcBadge}</td>
       <td>
