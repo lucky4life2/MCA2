@@ -1359,6 +1359,8 @@ function renderMembers(members) {
       ? `<button class="btn btn-danger btn-sm" onclick="revokeEmail('${m.id}')">Revoke Email</button>` : '';
     const revokeDiscordBtn = hasDiscord && _myPermissions.can_manage_users
       ? `<button class="btn btn-danger btn-sm" onclick="revokeDiscord('${m.id}')">Revoke Discord</button>` : '';
+    const revokeGoogleBtn = hasGoogle && _myPermissions.can_manage_users
+      ? `<button class="btn btn-danger btn-sm" onclick="revokeGoogle('${m.id}')">Revoke Google</button>` : '';
     const freezeBtn = accountStatus === 'active' && _myPermissions.can_manage_users
       ? `<button class="btn btn-outline btn-sm" onclick="freezeAccount('${m.id}')">Freeze</button>` : '';
     const unfreezeBtn = accountStatus === 'frozen' && _myPermissions.can_manage_users
@@ -1379,7 +1381,7 @@ function renderMembers(members) {
       <td>${mcBadge}</td>
       <td>
         <div class="btn-actions">
-          ${allowEmailBtn}${revokeEmailBtn}${revokeDiscordBtn}
+          ${allowEmailBtn}${revokeEmailBtn}${revokeDiscordBtn}${revokeGoogleBtn}
           ${freezeBtn}${unfreezeBtn}${deleteBtn}
         </div>
       </td>
@@ -2196,6 +2198,12 @@ window.revokeEmail = async (id) => {
 window.revokeDiscord = async (id) => {
   if (!confirm('Unlink Discord from this account?')) return;
   const { error } = await supabase.rpc('revoke_discord_identity', { user_id: id });
+  if (error) { alert('Error: ' + error.message); return; }
+  await loadAll();
+};
+window.revokeGoogle = async (id) => {
+  if (!confirm('Unlink Google from this account?')) return;
+  const { error } = await supabase.rpc('revoke_google_identity', { user_id: id });
   if (error) { alert('Error: ' + error.message); return; }
   await loadAll();
 };

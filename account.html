@@ -678,7 +678,7 @@ async function renderConnectedAccounts(skipFetch = false) {
   const el = document.getElementById('connected-accounts-body');
   const identities = _user.identities || [];
   const hasDiscord = identities.some(i => i.provider === 'discord') || !!_profile.discord_id;
-  const hasGoogle  = identities.some(i => i.provider === 'google');
+  const hasGoogle  = identities.some(i => i.provider === 'google') || !!_profile.google_id;
   const hasEmail   = identities.some(i => i.provider === 'email');
 
   // If auth.users still has an email but no email identity exists, Discord/Google OAuth
@@ -736,7 +736,7 @@ async function renderConnectedAccounts(skipFetch = false) {
         </div>
         <div class="connected-provider-info">
           <div class="connected-provider-name">Google</div>
-          <div class="connected-provider-detail">${hasGoogle ? 'Connected' : 'Not connected'}</div>
+          <div class="connected-provider-detail">${hasGoogle ? (_profile.google_id ? `ID: ${_profile.google_id}` : 'Connected') : 'Not connected'}</div>
         </div>
       </div>
       ${!hasGoogle
@@ -821,9 +821,17 @@ async function renderConnectedAccounts(skipFetch = false) {
       if (fetchErr || !freshUser) { alert('Could not fetch user data. Please refresh and try again.'); if (btn) { btn.disabled = false; btn.textContent = 'Unlink'; } return; }
       _user = freshUser;
       const googleIdentity = (_user.identities || []).find(i => i.provider === 'google');
-      if (!googleIdentity) { alert('Google identity not found. Please refresh and try again.'); if (btn) { btn.disabled = false; btn.textContent = 'Unlink'; } return; }
+      if (!googleIdentity) {
+        // Identity not in Supabase auth (linked via google_id only) — just clear the profile field
+        await supabase.from('profiles').update({ google_id: null }).eq('id', _user.id);
+        _profile.google_id = null;
+        await renderConnectedAccounts(true);
+        return;
+      }
       const { error } = await supabase.auth.unlinkIdentity(googleIdentity);
       if (error) { alert('Could not unlink Google: ' + error.message); if (btn) { btn.disabled = false; btn.textContent = 'Unlink'; } return; }
+      await supabase.from('profiles').update({ google_id: null }).eq('id', _user.id);
+      _profile.google_id = null;
       // Strip _user BEFORE re-rendering so the stale getUser() fetch doesn't overwrite.
       _user = {
         ..._user,
