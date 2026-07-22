@@ -669,6 +669,24 @@ function renderDeletionBanner() {
   });
 }
 
+// Forces a fresh TOTP verification before a sensitive action (linking a new
+// login provider), instead of trusting the session's current AAL — that AAL
+// can already be elevated from earlier in the session (e.g. from login),
+// which would otherwise let Link Google/Discord succeed with no 2FA prompt.
+async function requireFreshMfa() {
+  const { data } = await supabase.auth.mfa.listFactors();
+  const factor = (data?.totp || []).find(f => f.status === 'verified');
+  if (!factor) return true; // no 2FA enrolled — nothing to step up
+  const code = prompt('Enter your 6-digit authenticator code to continue:');
+  if (!code || !/^\d{6}$/.test(code.trim())) return false;
+  try {
+    const { data: challenge, error: chErr } = await supabase.auth.mfa.challenge({ factorId: factor.id });
+    if (chErr) return false;
+    const { error: verErr } = await supabase.auth.mfa.verify({ factorId: factor.id, challengeId: challenge.id, code: code.trim() });
+    return !verErr;
+  } catch(e) { return false; }
+}
+
 async function renderConnectedAccounts(skipFetch = false) {
   // Fetch fresh user unless the caller just updated _user optimistically
   if (!skipFetch) {
@@ -750,7 +768,13 @@ async function renderConnectedAccounts(skipFetch = false) {
   if (!hasDiscord) {
     document.getElementById('btn-link-discord')?.addEventListener('click', async () => {
       const btn = document.getElementById('btn-link-discord');
-      if (btn) { btn.disabled = true; btn.textContent = 'Redirecting…'; }
+      if (btn) { btn.disabled = true; btn.textContent = 'Verifying…'; }
+      if (!(await requireFreshMfa())) {
+        alert('Incorrect or missing authenticator code.');
+        if (btn) { btn.disabled = false; btn.textContent = 'Link Discord'; }
+        return;
+      }
+      if (btn) btn.textContent = 'Redirecting…';
       // Use linkIdentity (not signInWithOAuth) so Discord is attached to the
       // currently signed-in account instead of starting a fresh sign-in flow.
       // signInWithOAuth ignores the existing session and, when the Discord
@@ -798,7 +822,13 @@ async function renderConnectedAccounts(skipFetch = false) {
   if (!hasGoogle) {
     document.getElementById('btn-link-google')?.addEventListener('click', async () => {
       const btn = document.getElementById('btn-link-google');
-      if (btn) { btn.disabled = true; btn.textContent = 'Redirecting…'; }
+      if (btn) { btn.disabled = true; btn.textContent = 'Verifying…'; }
+      if (!(await requireFreshMfa())) {
+        alert('Incorrect or missing authenticator code.');
+        if (btn) { btn.disabled = false; btn.textContent = 'Link Google'; }
+        return;
+      }
+      if (btn) btn.textContent = 'Redirecting…';
       // Use linkIdentity (not signInWithOAuth) so Google is attached to the
       // currently signed-in account instead of starting a fresh sign-in flow.
       const { error } = await supabase.auth.linkIdentity({
