@@ -98,6 +98,14 @@
   .custom-color-row input[type=color] { width: 36px; height: 30px; padding: 0; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; background: none; }
   .custom-color-note { font-size: 11px; color: var(--muted); }
 
+  /* Tags */
+  .tk-tag-pill { font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .tag-mgr-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border); }
+  .tag-mgr-row:first-child { border-top: none; }
+  .tag-mgr-actions { display: flex; gap: 2px; }
+  .tag-mgr-actions button { background: none; border: none; cursor: pointer; font-size: 14px; padding: 2px 5px; }
+  .tag-mgr-actions button:hover { opacity: .7; }
+
   @media (max-width: 680px) {
     .admin-wrap { padding: 1.5rem 1rem 4rem; }
     .admin-hero { padding-bottom: 1.5rem; margin-bottom: 1.5rem; }
@@ -147,6 +155,7 @@
         <h1>Task Board</h1>
       </div>
       <div style="display:flex;gap:8px;">
+        <button class="btn btn-outline" id="btn-manage-tags" style="font-size:12px;padding:7px 16px;">🏷 Tags</button>
         <button class="btn btn-outline" id="btn-new-project" style="font-size:12px;padding:7px 16px;">+ Project</button>
         <button class="btn btn-primary" id="btn-new-task" style="font-size:12px;padding:7px 16px;">+ Task</button>
       </div>
@@ -163,6 +172,7 @@
     </div>
 
     <div id="tk-legend" class="tk-legend"></div>
+    <div id="tk-tag-filter" class="tk-legend"></div>
 
     <div id="board"></div>
   </div>
@@ -181,6 +191,28 @@
       <button class="btn btn-danger" id="pj-delete" style="display:none;font-size:13px;">Delete</button>
       <button class="btn btn-outline" id="pj-cancel" style="font-size:13px;">Cancel</button>
       <button class="btn btn-primary" id="pj-save" style="font-size:13px;">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tag manager modal (admins & owners only) -->
+<div class="modal-overlay" id="tagmgr-modal">
+  <div class="modal-box" style="max-width:440px;">
+    <div class="modal-head"><div class="modal-title">Manage Tags</div><button class="modal-close" id="tagmgr-close">✕</button></div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:1rem;">
+        Tags help testers find the tasks meant for them — everyone with board access can see and filter by tags, but only admins and owners can create, rename, or delete one.
+      </div>
+      <div id="tagmgr-list"></div>
+      <div style="display:flex;gap:8px;margin-top:1rem;border-top:1px solid var(--border);padding-top:1rem;">
+        <input type="color" id="tagmgr-new-color" value="#3366cc" style="width:36px;height:36px;padding:0;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:none;flex-shrink:0;">
+        <input type="text" id="tagmgr-new-name" class="form-input" placeholder="New tag name">
+        <button class="btn btn-primary" id="tagmgr-add" style="font-size:12px;white-space:nowrap;">+ Add</button>
+      </div>
+      <div id="tagmgr-error" style="font-size:13px;color:#c0392b;margin-top:.5rem;display:none;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" id="tagmgr-done" style="font-size:13px;">Done</button>
     </div>
   </div>
 </div>
@@ -207,6 +239,11 @@
             <option value="urgent">Urgent</option>
           </select>
         </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tags</label>
+        <div class="status-picker" id="tk-tags-picker"></div>
+        <div class="custom-color-note" id="tk-tags-note" style="display:none;">Only admins and owners can edit tags.</div>
       </div>
       <div class="form-group">
         <label class="form-label">Status &amp; Color</label>
@@ -277,6 +314,8 @@ let _commentCounts = {};
 let _view = 'list';
 let _projectFilter = '';
 let _statusFilter = null; // null = all, or a status key
+let _tags = [];
+let _tagFilter = new Set(); // tag ids; task matches if it has ANY selected tag
 const PRIORITY_ORDER = { urgent: 0, high: 1, medium: 2, low: 3 };
 
 let _projectSort = {}; // { [projectId]: 'color' | 'name' | 'due' | 'priority' }
@@ -344,6 +383,10 @@ async function resolveAccess(userId) {
 function applyAccessUI() {
   document.getElementById('btn-new-project').style.display = _access.manage ? '' : 'none';
   document.getElementById('btn-new-task').style.display = _access.manage ? '' : 'none';
+  // Custom tags: creating/editing them is admin & owner only (can_manage_tasks),
+  // NOT tester managers (can_check_off_tasks). Using testers can see and filter
+  // by tags regardless of _access, since that part is read-only for them.
+  document.getElementById('btn-manage-tags').style.display = _access.manage ? '' : 'none';
 }
 
 async function init() {
@@ -365,15 +408,17 @@ function show(which) {
 }
 
 async function loadAll() {
-  const [{ data: projects }, { data: tasks }, { data: profiles }, { data: userRoles }, { data: comments }] = await Promise.all([
+  const [{ data: projects }, { data: tasks }, { data: profiles }, { data: userRoles }, { data: comments }, { data: tags }] = await Promise.all([
     supabase.from('task_projects').select('*').order('sort_order').order('created_at'),
     supabase.from('tasks').select('*').order('due_date', { nullsFirst: false }),
     supabase.from('profiles').select('id, display_name, username, role'),
     supabase.from('user_roles').select('user_id, roles(level)'),
     supabase.from('task_comments').select('task_id'),
+    supabase.from('task_tags').select('*').order('name'),
   ]);
   _projects = projects || []; _tasks = tasks || [];
   _allProfiles = profiles || []; // used for name lookups (assignees, commenters, checked-off-by) regardless of level
+  _tags = tags || [];
 
   _commentCounts = {};
   (comments || []).forEach(c => { _commentCounts[c.task_id] = (_commentCounts[c.task_id] || 0) + 1; });
@@ -389,7 +434,7 @@ async function loadAll() {
     return lvl >= 50;
   });
 
-  fillSelects(); render();
+  fillSelects(); buildTagFilterBar(); render();
 }
 
 function fillSelects() {
@@ -412,7 +457,34 @@ function visibleTasks() {
   let list = _tasks;
   if (_projectFilter) list = list.filter(t => t.project_id === _projectFilter);
   if (_statusFilter) list = list.filter(t => t.status === _statusFilter);
+  if (_tagFilter.size) list = list.filter(t => (t.tag_ids || []).some(id => _tagFilter.has(id)));
   return list;
+}
+
+function tagsFor(t) {
+  return (t.tag_ids || []).map(id => _tags.find(tg => tg.id === id)).filter(Boolean);
+}
+function tagPillsHtml(t) {
+  return tagsFor(t).map(tg => `<span class="tk-tag-pill" style="background:${tg.color};color:${contrastText(tg.color)};">${tg.name}</span>`).join('');
+}
+
+// Tag filter chips — visible to everyone with board access (testers included),
+// so testers can use tags the admins/owners set up to find the tasks meant for them.
+function buildTagFilterBar() {
+  const el = document.getElementById('tk-tag-filter');
+  if (!_tags.length) { el.innerHTML = ''; return; }
+  el.innerHTML = _tags.map(tg => `
+    <div class="tk-legend-chip${_tagFilter.has(tg.id) ? ' active' : ''}" data-tag="${tg.id}">
+      <span class="tk-swatch" style="background:${tg.color};"></span>${tg.name}
+    </div>`).join('');
+  el.querySelectorAll('.tk-legend-chip').forEach(chip => {
+    chip.onclick = () => {
+      const id = chip.dataset.tag;
+      if (_tagFilter.has(id)) _tagFilter.delete(id); else _tagFilter.add(id);
+      chip.classList.toggle('active', _tagFilter.has(id));
+      render();
+    };
+  });
 }
 
 // ── Legend (also acts as color filter) ──
@@ -473,6 +545,7 @@ function renderList() {
         <div class="t-row" onclick="editTask('${t.id}')">
           <span class="t-color-dot" style="background:${color};"></span>
           <div class="t-title${t.status === 'finished_fixed' ? ' done' : ''}">${t.title}</div>
+          ${tagPillsHtml(t)}
           ${t.assignee_id ? `<div class="t-meta">${memberName(t.assignee_id)}</div>` : ''}
           ${t.due_date ? `<div class="t-meta">${t.due_date}</div>` : ''}
           ${_commentCounts[t.id] ? `<div class="t-meta">💬 ${_commentCounts[t.id]}</div>` : ''}
@@ -509,6 +582,7 @@ function renderGrid() {
           return `
           <div class="tk-card" style="background:${color};color:${txt};" onclick="editTask('${t.id}')">
             <div class="tk-card-title${t.status === 'finished_fixed' ? ' done' : ''}" style="color:${txt};">${t.title}</div>
+            ${tagPillsHtml(t)}
             <div class="tk-card-foot">
               <span class="tk-card-status" style="color:${txt};">${st.label}</span>
               ${t.due_date ? `<span class="tk-card-meta" style="color:${txt};">${t.due_date}</span>` : ''}
@@ -554,6 +628,33 @@ document.getElementById('pj-delete').onclick = async () => {
 // ── Task modal ──
 let _editingCustomColor = null; // holds pending custom_color for the open task ('' = cleared, null = untouched, '#hex' = set)
 let _editingStatus = null;
+let _editingTagIds = new Set();
+
+// Applying tags to a task is part of editing the task, so it's gated the
+// same way as title/project/etc — canEdit (= _access.manage). Testers still
+// see which tags are on a task, just can't change them.
+function buildTagPicker(canEdit) {
+  const el = document.getElementById('tk-tags-picker');
+  if (!_tags.length) {
+    el.innerHTML = `<div class="t-empty" style="padding:0;">No tags yet.${canEdit ? ' Use the Tags button above to create some.' : ''}</div>`;
+    document.getElementById('tk-tags-note').style.display = 'none';
+    return;
+  }
+  el.innerHTML = _tags.map(tg => `
+    <div class="status-pick${_editingTagIds.has(tg.id) ? ' selected' : ''}" data-tag="${tg.id}" style="${canEdit ? '' : 'cursor:default;opacity:.85;'}">
+      <span class="tk-swatch" style="background:${tg.color};"></span>${tg.name}
+    </div>`).join('');
+  if (canEdit) {
+    el.querySelectorAll('.status-pick').forEach(pick => {
+      pick.onclick = () => {
+        const id = pick.dataset.tag;
+        if (_editingTagIds.has(id)) _editingTagIds.delete(id); else _editingTagIds.add(id);
+        pick.classList.toggle('selected', _editingTagIds.has(id));
+      };
+    });
+  }
+  document.getElementById('tk-tags-note').style.display = canEdit ? 'none' : '';
+}
 
 function buildStatusPicker(selectedStatus) {
   const el = document.getElementById('tk-status-picker');
@@ -605,6 +706,9 @@ async function openTaskModal(t) {
   _editingCustomColor = t?.custom_color || null;
   document.getElementById('tk-status-picker').closest('.form-group').style.display = canEdit ? '' : 'none';
   buildStatusPicker(_editingStatus);
+
+  _editingTagIds = new Set(t?.tag_ids || []);
+  buildTagPicker(canEdit);
   document.getElementById('tk-custom-color').value = _editingCustomColor || statusColor(_editingStatus);
   updateColorNote();
 
@@ -691,6 +795,7 @@ document.getElementById('tk-save').onclick = async () => {
     priority: document.getElementById('tk-priority').value,
     status: _editingStatus || 'no_color',
     custom_color: _editingCustomColor || null,
+    tag_ids: Array.from(_editingTagIds),
     updated_at: new Date().toISOString(),
   };
   let error;
@@ -708,6 +813,66 @@ document.getElementById('tk-delete').onclick = async () => {
   if (!confirm('Delete this task?')) return;
   await supabase.from('tasks').delete().eq('id', id);
   document.getElementById('tk-modal').style.display = 'none'; loadAll();
+};
+
+// ── Tag manager (admins & owners only — gated via btn-manage-tags visibility) ──
+function renderTagMgrList() {
+  const el = document.getElementById('tagmgr-list');
+  el.innerHTML = _tags.length ? _tags.map(tg => `
+    <div class="tag-mgr-row">
+      <input type="color" class="tagmgr-color-input" data-id="${tg.id}" value="${tg.color}" style="width:30px;height:30px;padding:0;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:none;flex-shrink:0;">
+      <input type="text" class="form-input tagmgr-name-input" data-id="${tg.id}" value="${tg.name}" style="flex:1;">
+      <div class="tag-mgr-actions">
+        <button data-save="${tg.id}" title="Save changes">💾</button>
+        <button data-del="${tg.id}" title="Delete tag">🗑</button>
+      </div>
+    </div>`).join('') : '<div class="t-empty" style="padding:0;">No tags yet — add one below.</div>';
+
+  el.querySelectorAll('[data-save]').forEach(btn => {
+    btn.onclick = async () => {
+      const id = btn.dataset.save;
+      const name = el.querySelector(`.tagmgr-name-input[data-id="${id}"]`).value.trim();
+      const color = el.querySelector(`.tagmgr-color-input[data-id="${id}"]`).value;
+      const errEl = document.getElementById('tagmgr-error');
+      errEl.style.display = 'none';
+      if (!name) { errEl.textContent = 'Tag name can\'t be empty.'; errEl.style.display = 'block'; return; }
+      const { error } = await supabase.from('task_tags').update({ name, color }).eq('id', id);
+      if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+      await loadAll();
+      renderTagMgrList();
+    };
+  });
+  el.querySelectorAll('[data-del]').forEach(btn => {
+    btn.onclick = async () => {
+      if (!confirm('Delete this tag? It will be removed from any tasks that have it.')) return;
+      const id = btn.dataset.del;
+      await supabase.from('task_tags').delete().eq('id', id);
+      await loadAll();
+      renderTagMgrList();
+    };
+  });
+}
+
+document.getElementById('btn-manage-tags').onclick = () => {
+  document.getElementById('tagmgr-error').style.display = 'none';
+  document.getElementById('tagmgr-new-name').value = '';
+  renderTagMgrList();
+  document.getElementById('tagmgr-modal').style.display = 'flex';
+};
+document.getElementById('tagmgr-close').onclick = document.getElementById('tagmgr-done').onclick = () => {
+  document.getElementById('tagmgr-modal').style.display = 'none';
+};
+document.getElementById('tagmgr-add').onclick = async () => {
+  const name = document.getElementById('tagmgr-new-name').value.trim();
+  const color = document.getElementById('tagmgr-new-color').value;
+  const errEl = document.getElementById('tagmgr-error');
+  errEl.style.display = 'none';
+  if (!name) { errEl.textContent = 'Enter a tag name.'; errEl.style.display = 'block'; return; }
+  const { error } = await supabase.from('task_tags').insert({ name, color, created_by: _me.id });
+  if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+  document.getElementById('tagmgr-new-name').value = '';
+  await loadAll();
+  renderTagMgrList();
 };
 
 // ── Comments ──
