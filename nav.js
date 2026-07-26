@@ -788,6 +788,7 @@ async function initNavAuth(_authReadyResolve) {
     render(); // show nav immediately
 
     watchMyRoleChanges(user.id);
+    initRolePreviewBanner(); // fire-and-forget; shows/hides the "Previewing as" bar
 
     try {
       const mod = await import('./supabase.js');
@@ -936,4 +937,64 @@ async function initNavAuth(_authReadyResolve) {
     if (_authReadyResolve) { _authReadyResolve({ user: null, session: null, isAdmin: false, canPublishNews: false }); _authReadyResolve = null; }
     setSignedOut();
   }
+}
+
+// ── "Previewing as: <role>" banner ────────────────────────────────
+// Shown on every page (not just admin.html) whenever the signed-in user
+// has an active role_previews row, since a real "view as" needs to be
+// visible everywhere the simulated permissions actually change what
+// loads — not just in the admin panel where it was started.
+let _rolePreviewChecked = false;
+async function initRolePreviewBanner() {
+  if (_rolePreviewChecked) return; // one check per page load is enough
+  _rolePreviewChecked = true;
+  try {
+    const mod = await import('./supabase.js');
+    const preview = await mod.getMyRolePreview();
+    if (preview) renderRolePreviewBanner(preview, mod);
+  } catch(e) {}
+}
+
+function renderRolePreviewBanner(preview, mod) {
+  if (document.getElementById('role-preview-banner')) return;
+
+  if (!document.getElementById('role-preview-banner-style')) {
+    const style = document.createElement('style');
+    style.id = 'role-preview-banner-style';
+    style.textContent = `
+      #role-preview-banner {
+        position: sticky; top: 0; z-index: 9999;
+        display: flex; align-items: center; justify-content: center; gap: 12px;
+        flex-wrap: wrap;
+        padding: 8px 16px;
+        font-size: 13px; font-weight: 600;
+        color: #fff;
+        background: var(--role-preview-color, #7a3cf0);
+      }
+      #role-preview-banner .rpb-exit {
+        background: rgba(255,255,255,.18);
+        border: 1px solid rgba(255,255,255,.5);
+        color: #fff; border-radius: 4px;
+        font-size: 12px; font-weight: 700;
+        padding: 4px 10px; cursor: pointer;
+      }
+      #role-preview-banner .rpb-exit:hover { background: rgba(255,255,255,.3); }
+    `;
+    document.head.appendChild(style);
+  }
+
+  const banner = document.createElement('div');
+  banner.id = 'role-preview-banner';
+  banner.style.setProperty('--role-preview-color', preview.color || '#7a3cf0');
+  banner.innerHTML = `
+    <span>👁 Previewing the site as: <strong>${preview.label}</strong> — you're seeing exactly what this role can see, real data included.</span>
+    <button class="rpb-exit" id="role-preview-exit-btn">Exit preview</button>
+  `;
+  document.body.prepend(banner);
+
+  document.getElementById('role-preview-exit-btn').addEventListener('click', async () => {
+    banner.querySelector('.rpb-exit').textContent = 'Exiting…';
+    try { await mod.endRolePreview(); } catch(e) {}
+    window.location.reload();
+  });
 }

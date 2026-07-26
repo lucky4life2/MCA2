@@ -114,6 +114,37 @@ export async function canManageNews() {
   return hasPermission('can_manage_news');
 }
 
+// ── Role preview ("view as role") helpers ─────────────────────
+
+/**
+ * Starts a "view as role" session for the current user. Requires
+ * can_manage_roles for real, and the target role must be at or below
+ * the caller's own real level. Lasts 30 minutes or until endRolePreview().
+ * Throws if the server rejects it (not authorized / role above level).
+ */
+export async function startRolePreview(roleId) {
+  const { error } = await supabase.rpc('start_role_preview', { p_role_id: roleId });
+  if (error) throw error;
+}
+
+/** Ends the current preview (if any), returning to the user's real roles. */
+export async function endRolePreview() {
+  const { error } = await supabase.rpc('end_role_preview');
+  if (error) throw error;
+}
+
+/**
+ * Returns the active preview role for the current user, or null if
+ * there isn't one. { role_id, name, label, color, level, expires_at }
+ */
+export async function getMyRolePreview() {
+  try {
+    const { data, error } = await supabase.rpc('get_my_role_preview');
+    if (error || !data || !data.length) return null;
+    return data[0];
+  } catch { return null; }
+}
+
 /** Sign in with Discord OAuth */
 export async function signInWithDiscord() {
   const { error } = await supabase.auth.signInWithOAuth({
