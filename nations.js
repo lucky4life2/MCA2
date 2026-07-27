@@ -65,6 +65,7 @@ function openNationDetail(i) {
     ['Capital',    n.capital],
     ['Government', n.government],
     ['Founded',    n.founded],
+    ['Founder',    n.founder],
     ['Population', n.population],
     ['Territory',  n.territory],
     ['Status',     n.status],
@@ -98,6 +99,7 @@ function openNationDetail(i) {
         <div><label class="form-label">Capital</label><input type="text" id="noe-capital" class="form-input" value="${n.capital || ''}"></div>
         <div><label class="form-label">Government</label><input type="text" id="noe-government" class="form-input" value="${n.government || ''}"></div>
         <div><label class="form-label">Founded</label><input type="text" id="noe-founded" class="form-input" value="${n.founded || ''}"></div>
+        <div><label class="form-label">Founder</label><input type="text" id="noe-founder" class="form-input" value="${n.founder || ''}"></div>
         <div><label class="form-label">Population</label><input type="text" id="noe-population" class="form-input" value="${n.population || ''}"></div>
         <div><label class="form-label">Territory</label><input type="text" id="noe-territory" class="form-input" value="${n.territory || ''}"></div>
         <div style="grid-column:1/-1;"><label class="form-label">Status</label><input type="text" id="noe-status" class="form-input" value="${n.status || ''}"></div>
@@ -131,6 +133,7 @@ function openNationDetail(i) {
         p_capital:    document.getElementById('noe-capital').value,
         p_government: document.getElementById('noe-government').value,
         p_founded:    document.getElementById('noe-founded').value,
+        p_founder:    document.getElementById('noe-founder').value,
         p_population: document.getElementById('noe-population').value,
         p_territory:  document.getElementById('noe-territory').value,
         p_status:     document.getElementById('noe-status').value,
@@ -149,7 +152,7 @@ function openNationDetail(i) {
       const rows = await res.json();
       _nations = rows.map(r => ({
         id: r.id, name: r.name, leader: r.leader || '', capital: r.capital || '',
-        government: r.government || '', founded: r.founded || '', population: r.population || '',
+        government: r.government || '', founded: r.founded || '', founder: r.founder || '', population: r.population || '',
         territory: r.territory || '', status: r.status || '', flag: r.flag || '', body: r.body || '', fields: [],
       }));
       renderGrid(_nations);
@@ -200,6 +203,7 @@ window.applyFlagDetailClass = applyFlagDetailClass;
       capital:    r.capital    || '',
       government: r.government || '',
       founded:    r.founded    || '',
+      founder:    r.founder    || '',
       population: r.population || '',
       territory:  r.territory  || '',
       status:     r.status     || '',

@@ -906,16 +906,25 @@
       <div><label class="form-label">Capital</label><input type="text" id="nm-capital" class="form-input"></div>
       <div><label class="form-label">Government</label><input type="text" id="nm-government" class="form-input"></div>
       <div><label class="form-label">Founded (YYYY-MM-DD)</label><input type="text" id="nm-founded" class="form-input"></div>
+      <div><label class="form-label">Founder</label><input type="text" id="nm-founder" class="form-input"></div>
       <div><label class="form-label">Population</label><input type="text" id="nm-population" class="form-input"></div>
       <div><label class="form-label">Territory</label><input type="text" id="nm-territory" class="form-input"></div>
       <div><label class="form-label">Status</label><input type="text" id="nm-status" class="form-input"></div>
       <div><label class="form-label">Flag filename</label><input type="text" id="nm-flag" class="form-input"></div>
       <div><label class="form-label">Sort Order</label><input type="number" id="nm-sort_order" class="form-input" placeholder="0 = first"></div>
       <div style="grid-column:1/-1;">
-        <label class="form-label">Owner(s)</label>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Assign the site account(s) that own/govern this nation. Add one for a monarchy/dictatorship, several for a council or coalition.</div>
-        <input type="text" id="nm-owner-search" class="form-input" placeholder="Search members by name…" autocomplete="off">
-        <div id="nm-owner-results" style="display:none;border:1px solid var(--border);border-radius:4px;margin-top:4px;max-height:160px;overflow-y:auto;"></div>
+        <label class="form-label">Leader(s)</label>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Assign the site account(s) that lead/govern this nation and can edit its own page. Select one for a monarchy/dictatorship, several for a council or coalition.</div>
+        <div style="position:relative;">
+          <button type="button" id="nm-owner-dropdown-btn" class="form-input" style="text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:var(--white,#fff);">
+            <span id="nm-owner-dropdown-label" style="color:var(--muted);">Select leaders…</span>
+            <span style="color:var(--muted);">▾</span>
+          </button>
+          <div id="nm-owner-dropdown-panel" style="display:none;position:absolute;z-index:20;top:calc(100% + 4px);left:0;right:0;background:var(--white,#fff);border:1px solid var(--border);border-radius:4px;box-shadow:0 8px 24px rgba(10,15,30,.15);">
+            <input type="text" id="nm-owner-dropdown-search" class="form-input" placeholder="Search members…" style="border:none;border-bottom:1px solid var(--border);border-radius:4px 4px 0 0;" autocomplete="off">
+            <div id="nm-owner-dropdown-list" style="max-height:200px;overflow-y:auto;"></div>
+          </div>
+        </div>
         <div id="nm-owner-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;"></div>
       </div>
       <div style="grid-column:1/-1;"><label class="form-label">Description (optional)</label><textarea id="nm-body" class="form-input" rows="3" style="resize:vertical;"></textarea></div>
@@ -2517,7 +2526,7 @@ async function loadNationsAdmin() {
     const owners = (_nationOwnersById[n.id] || []).map(p => p?.display_name || p?.username).filter(Boolean);
     return `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 1.5rem;border-bottom:1px solid var(--border);">
-      <div><div style="font-weight:600;font-size:14px;">${n.name}</div><div style="font-size:12px;color:var(--muted);">${[n.government,n.leader?'Led by '+n.leader:'',n.founded].filter(Boolean).join(' · ')}</div><div style="font-size:12px;color:var(--muted);">${owners.length?'Owner(s): '+owners.join(', '):'No owner assigned'}</div></div>
+      <div><div style="font-weight:600;font-size:14px;">${n.name}</div><div style="font-size:12px;color:var(--muted);">${[n.government,n.leader?'Led by '+n.leader:'',n.founded].filter(Boolean).join(' · ')}</div><div style="font-size:12px;color:var(--muted);">${owners.length?'Leader(s): '+owners.join(', '):'No leader assigned'}</div></div>
       <div style="display:flex;gap:8px;"><button class="btn btn-outline btn-sm" onclick="openNationModal('${n.id}')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteNation('${n.id}')">Delete</button></div>
     </div>`;
   }).join('')
@@ -2529,30 +2538,39 @@ function renderOwnerChips() {
   box.innerHTML = _nmOwnerIds.map(id => {
     const m = _allMembers.find(x => x.id === id);
     const label = m?.display_name || m?.username || 'Unknown user';
-    return `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--light-blue,#eef3fb);color:var(--blue);font-size:12px;font-weight:600;padding:4px 8px;border-radius:20px;">${label}<button type="button" onclick="removeNationOwner('${id}')" style="background:none;border:none;cursor:pointer;color:inherit;font-size:14px;line-height:1;padding:0;">✕</button></span>`;
+    return `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--light-blue,#eef3fb);color:var(--blue);font-size:12px;font-weight:600;padding:4px 8px;border-radius:20px;">${label}<button type="button" onclick="toggleNationOwner('${id}')" style="background:none;border:none;cursor:pointer;color:inherit;font-size:14px;line-height:1;padding:0;">✕</button></span>`;
   }).join('');
+  const labelEl = document.getElementById('nm-owner-dropdown-label');
+  labelEl.textContent = _nmOwnerIds.length
+    ? _nmOwnerIds.length + (_nmOwnerIds.length === 1 ? ' leader selected' : ' leaders selected')
+    : 'Select leaders…';
+  labelEl.style.color = _nmOwnerIds.length ? 'inherit' : 'var(--muted)';
 }
-window.removeNationOwner = (id) => { _nmOwnerIds = _nmOwnerIds.filter(x => x !== id); renderOwnerChips(); };
-
-document.getElementById('nm-owner-search').addEventListener('input', function() {
-  const q = this.value.trim().toLowerCase();
-  const results = document.getElementById('nm-owner-results');
-  if (!q) { results.style.display = 'none'; results.innerHTML = ''; return; }
-  const matches = _allMembers
-    .filter(m => !_nmOwnerIds.includes(m.id))
-    .filter(m => (m.display_name || '').toLowerCase().includes(q) || (m.username || '').toLowerCase().includes(q))
-    .slice(0, 8);
-  results.innerHTML = matches.length
-    ? matches.map(m => `<div onclick="addNationOwner('${m.id}')" style="padding:8px 10px;cursor:pointer;font-size:13px;" onmouseover="this.style.background='var(--bg-alt,#f5f7fa)'" onmouseout="this.style.background=''">${m.display_name || m.username}${m.username && m.display_name ? ' <span style=\"color:var(--muted);\">@'+m.username+'</span>' : ''}</div>`).join('')
+function renderOwnerDropdownList() {
+  const q = document.getElementById('nm-owner-dropdown-search').value.trim().toLowerCase();
+  const list = document.getElementById('nm-owner-dropdown-list');
+  const matches = _allMembers.filter(m => !q || (m.display_name || '').toLowerCase().includes(q) || (m.username || '').toLowerCase().includes(q));
+  list.innerHTML = matches.length
+    ? matches.map(m => `<div onclick="toggleNationOwner('${m.id}')" style="padding:8px 10px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px;" onmouseover="this.style.background='var(--bg-alt,#f5f7fa)'" onmouseout="this.style.background=''"><input type="checkbox" ${_nmOwnerIds.includes(m.id) ? 'checked' : ''} style="pointer-events:none;">${m.display_name || m.username}${m.username && m.display_name ? ' <span style="color:var(--muted);">@'+m.username+'</span>' : ''}</div>`).join('')
     : '<div style="padding:8px 10px;font-size:13px;color:var(--muted);">No matches</div>';
-  results.style.display = 'block';
-});
-window.addNationOwner = (id) => {
-  if (!_nmOwnerIds.includes(id)) _nmOwnerIds.push(id);
-  document.getElementById('nm-owner-search').value = '';
-  document.getElementById('nm-owner-results').style.display = 'none';
+}
+window.toggleNationOwner = (id) => {
+  _nmOwnerIds = _nmOwnerIds.includes(id) ? _nmOwnerIds.filter(x => x !== id) : [..._nmOwnerIds, id];
   renderOwnerChips();
+  renderOwnerDropdownList();
 };
+document.getElementById('nm-owner-dropdown-search').addEventListener('input', renderOwnerDropdownList);
+document.getElementById('nm-owner-dropdown-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const panel = document.getElementById('nm-owner-dropdown-panel');
+  const opening = panel.style.display === 'none';
+  panel.style.display = opening ? 'block' : 'none';
+  if (opening) { document.getElementById('nm-owner-dropdown-search').value = ''; renderOwnerDropdownList(); document.getElementById('nm-owner-dropdown-search').focus(); }
+});
+document.addEventListener('click', (e) => {
+  const panel = document.getElementById('nm-owner-dropdown-panel');
+  if (panel && panel.style.display !== 'none' && !panel.contains(e.target) && e.target.id !== 'nm-owner-dropdown-btn') panel.style.display = 'none';
+});
 async function loadLeadershipAdmin() {
   const { data } = await supabase.from('leadership').select('*').order('sort_order', { ascending: true });
   _leadersAdmin = data || [];
@@ -2590,12 +2608,11 @@ async function loadLeadershipAdmin() {
 document.getElementById('btn-add-nation').addEventListener('click', () => openNationModal(null));
 window.openNationModal = (id) => {
   const n = id ? _nationsAdmin.find(x => x.id === id) : null;
-  ['id','name','leader','capital','government','founded','population','territory','status','flag','body','sort_order'].forEach(k => {
+  ['id','name','leader','capital','government','founded','founder','population','territory','status','flag','body','sort_order'].forEach(k => {
     const el = document.getElementById('nm-'+k); if (el) el.value = n?.[k] ?? '';
   });
   _nmOwnerIds = n ? (_nationOwnersById[n.id] || []).map(p => p?.id).filter(Boolean) : [];
-  document.getElementById('nm-owner-search').value = '';
-  document.getElementById('nm-owner-results').style.display = 'none';
+  document.getElementById('nm-owner-dropdown-panel').style.display = 'none';
   renderOwnerChips();
   document.getElementById('nm-error').style.display = 'none';
   document.getElementById('nm-title').textContent = n ? 'Edit Nation' : 'Add Nation';
@@ -2609,7 +2626,7 @@ document.getElementById('nm-save').addEventListener('click', async () => {
   if (!name) { const e = document.getElementById('nm-error'); e.textContent = 'Nation name is required.'; e.style.display = 'block'; return; }
   const id = document.getElementById('nm-id').value;
   const payload = { name };
-  ['leader','capital','government','founded','population','territory','status','flag','body'].forEach(k => { payload[k] = document.getElementById('nm-'+k)?.value.trim()||null; });
+  ['leader','capital','government','founded','founder','population','territory','status','flag','body'].forEach(k => { payload[k] = document.getElementById('nm-'+k)?.value.trim()||null; });
   const sortVal = document.getElementById('nm-sort_order')?.value.trim();
   if (sortVal !== '') payload.sort_order = parseInt(sortVal);
   const result = id ? await supabase.from('nations').update(payload).eq('id',id).select() : await supabase.from('nations').insert(payload).select();
