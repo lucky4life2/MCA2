@@ -222,20 +222,25 @@ document.getElementById('faq-category-select').addEventListener('change', functi
 
 loadFaqs();
 
-// ── Contact Us button — opens the default mail client directly ──
+// ── Contact Us button — copies the support email to clipboard ──
 // Uses the same site-config-driven email as the footer, falling back to
 // the hardcoded default immediately so the button works before config loads.
-function buildMailto() {
-  const email = window.EMAIL_US || 'minecraftclubofamerica@gmail.com';
-  const subject = encodeURIComponent('MCA Help Request');
-  return `mailto:${email}?subject=${subject}`;
+function getEmail() {
+  return window.EMAIL_US || 'minecraftclubofamerica@gmail.com';
+}
+function copyEmail(e, el) {
+  e.preventDefault();
+  navigator.clipboard.writeText(getEmail()).then(() => {
+    const original = el.dataset.originalText ?? (el.dataset.originalText = el.innerHTML);
+    el.textContent = 'Copied!';
+    setTimeout(() => { el.innerHTML = original; }, 1500);
+  });
 }
 function wireContactButtons() {
-  const href = buildMailto();
   const btn = document.getElementById('help-contact-btn');
   const inline = document.getElementById('help-contact-inline-link');
-  if (btn) btn.href = href;
-  if (inline) inline.href = href;
+  if (btn) btn.addEventListener('click', (e) => copyEmail(e, btn));
+  if (inline) inline.addEventListener('click', (e) => copyEmail(e, inline));
 }
 wireContactButtons();
 if (window._configReady) window._configReady.then(wireContactButtons);
