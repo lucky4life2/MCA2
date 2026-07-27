@@ -911,6 +911,13 @@
       <div><label class="form-label">Status</label><input type="text" id="nm-status" class="form-input"></div>
       <div><label class="form-label">Flag filename</label><input type="text" id="nm-flag" class="form-input"></div>
       <div><label class="form-label">Sort Order</label><input type="number" id="nm-sort_order" class="form-input" placeholder="0 = first"></div>
+      <div style="grid-column:1/-1;">
+        <label class="form-label">Owner(s)</label>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Assign the site account(s) that own/govern this nation. Add one for a monarchy/dictatorship, several for a council or coalition.</div>
+        <input type="text" id="nm-owner-search" class="form-input" placeholder="Search members by name…" autocomplete="off">
+        <div id="nm-owner-results" style="display:none;border:1px solid var(--border);border-radius:4px;margin-top:4px;max-height:160px;overflow-y:auto;"></div>
+        <div id="nm-owner-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;"></div>
+      </div>
       <div style="grid-column:1/-1;"><label class="form-label">Description (optional)</label><textarea id="nm-body" class="form-input" rows="3" style="resize:vertical;"></textarea></div>
     </div>
     <div id="nm-error" style="font-size:13px;color:#c0392b;padding:0 1.5rem .5rem;display:none;"></div>
@@ -2496,18 +2503,56 @@ document.getElementById('btn-save-config').addEventListener('click', async () =>
   if (!error) setTimeout(() => { statusEl.textContent = ''; }, 3000);
 });
 
-let _nationsAdmin = [], _leadersAdmin = [];
+let _nationsAdmin = [], _leadersAdmin = [], _nationOwnersById = {}, _nmOwnerIds = [];
 async function loadNationsAdmin() {
   const { data } = await supabase.from('nations').select('*').order('sort_order', { ascending: true });
   _nationsAdmin = data || [];
+
+  const { data: ownerRows } = await supabase.from('nation_owners').select('nation_id,user_id,profiles(id,display_name,username)');
+  _nationOwnersById = {};
+  (ownerRows || []).forEach(r => { (_nationOwnersById[r.nation_id] ??= []).push(r.profiles); });
+
   const el = document.getElementById('nations-admin-list');
-  el.innerHTML = _nationsAdmin.length ? _nationsAdmin.map(n => `
+  el.innerHTML = _nationsAdmin.length ? _nationsAdmin.map(n => {
+    const owners = (_nationOwnersById[n.id] || []).map(p => p?.display_name || p?.username).filter(Boolean);
+    return `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 1.5rem;border-bottom:1px solid var(--border);">
-      <div><div style="font-weight:600;font-size:14px;">${n.name}</div><div style="font-size:12px;color:var(--muted);">${[n.government,n.leader?'Led by '+n.leader:'',n.founded].filter(Boolean).join(' · ')}</div></div>
+      <div><div style="font-weight:600;font-size:14px;">${n.name}</div><div style="font-size:12px;color:var(--muted);">${[n.government,n.leader?'Led by '+n.leader:'',n.founded].filter(Boolean).join(' · ')}</div><div style="font-size:12px;color:var(--muted);">${owners.length?'Owner(s): '+owners.join(', '):'No owner assigned'}</div></div>
       <div style="display:flex;gap:8px;"><button class="btn btn-outline btn-sm" onclick="openNationModal('${n.id}')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteNation('${n.id}')">Delete</button></div>
-    </div>`).join('')
+    </div>`;
+  }).join('')
     : '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">No nations yet.</div>';
 }
+
+function renderOwnerChips() {
+  const box = document.getElementById('nm-owner-chips');
+  box.innerHTML = _nmOwnerIds.map(id => {
+    const m = _allMembers.find(x => x.id === id);
+    const label = m?.display_name || m?.username || 'Unknown user';
+    return `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--light-blue,#eef3fb);color:var(--blue);font-size:12px;font-weight:600;padding:4px 8px;border-radius:20px;">${label}<button type="button" onclick="removeNationOwner('${id}')" style="background:none;border:none;cursor:pointer;color:inherit;font-size:14px;line-height:1;padding:0;">✕</button></span>`;
+  }).join('');
+}
+window.removeNationOwner = (id) => { _nmOwnerIds = _nmOwnerIds.filter(x => x !== id); renderOwnerChips(); };
+
+document.getElementById('nm-owner-search').addEventListener('input', function() {
+  const q = this.value.trim().toLowerCase();
+  const results = document.getElementById('nm-owner-results');
+  if (!q) { results.style.display = 'none'; results.innerHTML = ''; return; }
+  const matches = _allMembers
+    .filter(m => !_nmOwnerIds.includes(m.id))
+    .filter(m => (m.display_name || '').toLowerCase().includes(q) || (m.username || '').toLowerCase().includes(q))
+    .slice(0, 8);
+  results.innerHTML = matches.length
+    ? matches.map(m => `<div onclick="addNationOwner('${m.id}')" style="padding:8px 10px;cursor:pointer;font-size:13px;" onmouseover="this.style.background='var(--bg-alt,#f5f7fa)'" onmouseout="this.style.background=''">${m.display_name || m.username}${m.username && m.display_name ? ' <span style=\"color:var(--muted);\">@'+m.username+'</span>' : ''}</div>`).join('')
+    : '<div style="padding:8px 10px;font-size:13px;color:var(--muted);">No matches</div>';
+  results.style.display = 'block';
+});
+window.addNationOwner = (id) => {
+  if (!_nmOwnerIds.includes(id)) _nmOwnerIds.push(id);
+  document.getElementById('nm-owner-search').value = '';
+  document.getElementById('nm-owner-results').style.display = 'none';
+  renderOwnerChips();
+};
 async function loadLeadershipAdmin() {
   const { data } = await supabase.from('leadership').select('*').order('sort_order', { ascending: true });
   _leadersAdmin = data || [];
@@ -2548,6 +2593,10 @@ window.openNationModal = (id) => {
   ['id','name','leader','capital','government','founded','population','territory','status','flag','body','sort_order'].forEach(k => {
     const el = document.getElementById('nm-'+k); if (el) el.value = n?.[k] ?? '';
   });
+  _nmOwnerIds = n ? (_nationOwnersById[n.id] || []).map(p => p?.id).filter(Boolean) : [];
+  document.getElementById('nm-owner-search').value = '';
+  document.getElementById('nm-owner-results').style.display = 'none';
+  renderOwnerChips();
   document.getElementById('nm-error').style.display = 'none';
   document.getElementById('nm-title').textContent = n ? 'Edit Nation' : 'Add Nation';
   document.getElementById('nation-modal').style.display = 'flex';
@@ -2566,6 +2615,11 @@ document.getElementById('nm-save').addEventListener('click', async () => {
   const result = id ? await supabase.from('nations').update(payload).eq('id',id).select() : await supabase.from('nations').insert(payload).select();
   const { data, error } = result;
   if (error) { const e = document.getElementById('nm-error'); e.textContent = 'Error: ' + error.message; e.style.display = 'block'; return; }
+  const nationId = id || data?.[0]?.id;
+  if (nationId) {
+    await supabase.from('nation_owners').delete().eq('nation_id', nationId);
+    if (_nmOwnerIds.length) await supabase.from('nation_owners').insert(_nmOwnerIds.map(user_id => ({ nation_id: nationId, user_id })));
+  }
   closeNationModal(); await loadNationsAdmin();
 });
 window.deleteNation = async (id) => { if (!confirm('Delete this nation?')) return; if (!confirm('Are you sure? This cannot be undone.')) return; await supabase.from('nations').delete().eq('id',id); await loadNationsAdmin(); };
