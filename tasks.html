@@ -105,6 +105,13 @@
   .tag-mgr-actions { display: flex; gap: 2px; }
   .tag-mgr-actions button { background: none; border: none; cursor: pointer; font-size: 14px; padding: 2px 5px; }
   .tag-mgr-actions button:hover { opacity: .7; }
+  .tk-tagpick-actions { display: flex; align-items: center; gap: 1px; margin-left: 2px; }
+  .tk-tagpick-actions button { background: none; border: none; cursor: pointer; font-size: 11px; padding: 0 2px; line-height: 1; opacity: .55; }
+  .tk-tagpick-actions button:hover { opacity: 1; }
+  .tk-tag-edit-row { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 20px; border: 2px solid var(--blue); background: var(--bg); }
+  .tk-tag-edit-row input[type="color"] { width: 24px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; background: none; flex-shrink: 0; }
+  .tk-tag-edit-row input[type="text"] { font-size: 11px; font-weight: 600; border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; width: 90px; }
+  .tk-tag-edit-row button { background: none; border: none; cursor: pointer; font-size: 13px; padding: 0 2px; }
 
   @media (max-width: 680px) {
     .admin-wrap { padding: 1.5rem 1rem 4rem; }
@@ -633,6 +640,8 @@ let _editingTagIds = new Set();
 // Applying tags to a task is part of editing the task, so it's gated the
 // same way as title/project/etc — canEdit (= _access.manage). Testers still
 // see which tags are on a task, just can't change them.
+let _tagPickEditingId = null; // id of the tag currently shown as an inline edit row, if any
+
 function buildTagPicker(canEdit) {
   const el = document.getElementById('tk-tags-picker');
   if (!_tags.length) {
@@ -640,20 +649,88 @@ function buildTagPicker(canEdit) {
     document.getElementById('tk-tags-note').style.display = 'none';
     return;
   }
-  el.innerHTML = _tags.map(tg => `
+  el.innerHTML = _tags.map(tg => {
+    if (canEdit && _tagPickEditingId === tg.id) {
+      return `
+      <div class="tk-tag-edit-row" data-tag="${tg.id}">
+        <input type="color" class="tk-tagpick-color" value="${tg.color}">
+        <input type="text" class="tk-tagpick-name" value="${tg.name}">
+        <button class="tk-tagpick-save" title="Save">✓</button>
+        <button class="tk-tagpick-cancel" title="Cancel">✕</button>
+      </div>`;
+    }
+    return `
     <div class="status-pick${_editingTagIds.has(tg.id) ? ' selected' : ''}" data-tag="${tg.id}" style="${canEdit ? '' : 'cursor:default;opacity:.85;'}">
       <span class="tk-swatch" style="background:${tg.color};"></span>${tg.name}
-    </div>`).join('');
+      ${canEdit ? `
+      <span class="tk-tagpick-actions">
+        <button class="tk-tagpick-edit" data-tag="${tg.id}" title="Rename or recolor">✎</button>
+        <button class="tk-tagpick-del" data-tag="${tg.id}" title="Delete tag">🗑</button>
+      </span>` : ''}
+    </div>`;
+  }).join('');
+
   if (canEdit) {
     el.querySelectorAll('.status-pick').forEach(pick => {
-      pick.onclick = () => {
+      pick.onclick = (e) => {
+        if (e.target.closest('.tk-tagpick-actions')) return; // clicks on edit/delete don't toggle selection
         const id = pick.dataset.tag;
         if (_editingTagIds.has(id)) _editingTagIds.delete(id); else _editingTagIds.add(id);
         pick.classList.toggle('selected', _editingTagIds.has(id));
       };
     });
+    el.querySelectorAll('.tk-tagpick-edit').forEach(btn => {
+      btn.onclick = (e) => { e.stopPropagation(); _tagPickEditingId = btn.dataset.tag; buildTagPicker(canEdit); };
+    });
+    el.querySelectorAll('.tk-tagpick-del').forEach(btn => {
+      btn.onclick = async (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.tag;
+        if (!confirm('Delete this tag? It will be removed from any tasks that have it.')) return;
+        await deleteTagEverywhere(id);
+      };
+    });
+    const editRow = el.querySelector('.tk-tag-edit-row');
+    if (editRow) {
+      editRow.querySelector('.tk-tagpick-save').onclick = async () => {
+        const id = editRow.dataset.tag;
+        const name = editRow.querySelector('.tk-tagpick-name').value.trim();
+        const color = editRow.querySelector('.tk-tagpick-color').value;
+        if (!name) return;
+        await saveTagEdit(id, name, color);
+      };
+      editRow.querySelector('.tk-tagpick-cancel').onclick = () => { _tagPickEditingId = null; buildTagPicker(canEdit); };
+    }
   }
   document.getElementById('tk-tags-note').style.display = canEdit ? 'none' : '';
+}
+
+// Rename/recolor a tag from the task modal's tag picker (same effect as
+// editing it in the Manage Tags modal — keeps both entry points in sync).
+async function saveTagEdit(id, name, color) {
+  const { error } = await supabase.from('task_tags').update({ name, color }).eq('id', id);
+  if (error) { alert(error.message); return; }
+  const tg = _tags.find(t => t.id === id);
+  if (tg) { tg.name = name; tg.color = color; }
+  _tagPickEditingId = null;
+  buildTagPicker(_access.manage);
+  buildTagFilterBar();
+  render();
+}
+
+// Delete a tag from the task modal's tag picker — removes it from the tag
+// list, the current filter, and every task's tag_ids, same as the Manage
+// Tags modal's delete action.
+async function deleteTagEverywhere(id) {
+  const { error } = await supabase.from('task_tags').delete().eq('id', id);
+  if (error) { alert(error.message); return; }
+  _tags = _tags.filter(t => t.id !== id);
+  _tagFilter.delete(id);
+  _editingTagIds.delete(id);
+  if (_tagPickEditingId === id) _tagPickEditingId = null;
+  buildTagPicker(_access.manage);
+  buildTagFilterBar();
+  render();
 }
 
 function buildStatusPicker(selectedStatus) {
