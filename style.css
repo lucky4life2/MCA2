@@ -497,6 +497,25 @@ nav {
   transition: background 0.15s, color 0.15s;
 }
 .btn-outline:hover { background: var(--blue); color: var(--white); }
+.btn-primary {
+  background: var(--blue); color: var(--white); font-size: 13px; font-weight: 600;
+  padding: 11px 22px; border: none; border-radius: 4px;
+  cursor: pointer; text-decoration: none; display: inline-block;
+  transition: background 0.15s;
+}
+.btn-primary:hover { background: var(--blue-dark); }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+
+/* ── FORMS ── */
+.form-group { margin-bottom: 1rem; }
+.form-label { display: block; font-size: 11px; font-weight: 600; color: var(--mid); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .5px; }
+.form-hint { font-size: 11px; color: var(--mid); margin-top: 4px; }
+.form-input {
+  width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px;
+  font-family: 'Open Sans', sans-serif; font-size: 13px;
+  background: var(--white); color: var(--black); box-sizing: border-box;
+}
+.form-input:focus { outline: none; border-color: var(--blue); }
 
 /* ── CONTENT ── */
 .content { max-width: 820px; margin: 0 auto; padding: 0 2.5rem; }
