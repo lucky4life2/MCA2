@@ -640,7 +640,7 @@ let _editingTagIds = new Set();
 // Applying tags to a task is part of editing the task, so it's gated the
 // same way as title/project/etc — canEdit (= _access.manage). Testers still
 // see which tags are on a task, just can't change them.
-let _tagPickEditingId = null; // id of the tag currently shown as an inline edit row, if any
+let _tagPickEditingIds = new Set(); // ids of tags currently shown as inline edit rows — any number at once
 
 function buildTagPicker(canEdit) {
   const el = document.getElementById('tk-tags-picker');
@@ -650,7 +650,7 @@ function buildTagPicker(canEdit) {
     return;
   }
   el.innerHTML = _tags.map(tg => {
-    if (canEdit && _tagPickEditingId === tg.id) {
+    if (canEdit && _tagPickEditingIds.has(tg.id)) {
       return `
       <div class="tk-tag-edit-row" data-tag="${tg.id}">
         <input type="color" class="tk-tagpick-color" value="${tg.color}">
@@ -680,7 +680,7 @@ function buildTagPicker(canEdit) {
       };
     });
     el.querySelectorAll('.tk-tagpick-edit').forEach(btn => {
-      btn.onclick = (e) => { e.stopPropagation(); _tagPickEditingId = btn.dataset.tag; buildTagPicker(canEdit); };
+      btn.onclick = (e) => { e.stopPropagation(); _tagPickEditingIds.add(btn.dataset.tag); buildTagPicker(canEdit); };
     });
     el.querySelectorAll('.tk-tagpick-del').forEach(btn => {
       btn.onclick = async (e) => {
@@ -690,17 +690,16 @@ function buildTagPicker(canEdit) {
         await deleteTagEverywhere(id);
       };
     });
-    const editRow = el.querySelector('.tk-tag-edit-row');
-    if (editRow) {
+    el.querySelectorAll('.tk-tag-edit-row').forEach(editRow => {
+      const id = editRow.dataset.tag;
       editRow.querySelector('.tk-tagpick-save').onclick = async () => {
-        const id = editRow.dataset.tag;
         const name = editRow.querySelector('.tk-tagpick-name').value.trim();
         const color = editRow.querySelector('.tk-tagpick-color').value;
         if (!name) return;
         await saveTagEdit(id, name, color);
       };
-      editRow.querySelector('.tk-tagpick-cancel').onclick = () => { _tagPickEditingId = null; buildTagPicker(canEdit); };
-    }
+      editRow.querySelector('.tk-tagpick-cancel').onclick = () => { _tagPickEditingIds.delete(id); buildTagPicker(canEdit); };
+    });
   }
   document.getElementById('tk-tags-note').style.display = canEdit ? 'none' : '';
 }
@@ -712,7 +711,7 @@ async function saveTagEdit(id, name, color) {
   if (error) { alert(error.message); return; }
   const tg = _tags.find(t => t.id === id);
   if (tg) { tg.name = name; tg.color = color; }
-  _tagPickEditingId = null;
+  _tagPickEditingIds.delete(id);
   buildTagPicker(_access.manage);
   buildTagFilterBar();
   render();
@@ -727,7 +726,7 @@ async function deleteTagEverywhere(id) {
   _tags = _tags.filter(t => t.id !== id);
   _tagFilter.delete(id);
   _editingTagIds.delete(id);
-  if (_tagPickEditingId === id) _tagPickEditingId = null;
+  _tagPickEditingIds.delete(id);
   buildTagPicker(_access.manage);
   buildTagFilterBar();
   render();
