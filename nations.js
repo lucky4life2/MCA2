@@ -175,7 +175,13 @@ function applyFlagDetailClass(img) {
   img.className = isBanner ? 'flag-detail-banner' : 'flag-detail-landscape';
 }
 
-/* ── INIT ───────────────────────────────────────────────────── */
+/* Module scripts don't leak top-level functions onto window, but the
+   HTML markup calls these via inline onclick/onload attributes — so
+   they need to be attached explicitly. */
+window.openNationDetail = openNationDetail;
+window.closeNationDetail = closeNationDetail;
+window.applyFlagClass = applyFlagClass;
+window.applyFlagDetailClass = applyFlagDetailClass;
 (async function init() {
   const grid = document.getElementById('nations-grid');
   if (!grid) return;
