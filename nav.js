@@ -963,7 +963,7 @@ function renderRolePreviewBanner(preview, mod) {
     style.id = 'role-preview-banner-style';
     style.textContent = `
       #role-preview-banner {
-        position: sticky; top: 0; z-index: 9999;
+        position: fixed; top: 0; left: 0; right: 0; z-index: 10000;
         display: flex; align-items: center; justify-content: center; gap: 12px;
         flex-wrap: wrap;
         padding: 8px 16px;
@@ -991,6 +991,29 @@ function renderRolePreviewBanner(preview, mod) {
     <button class="rpb-exit" id="role-preview-exit-btn">Exit preview</button>
   `;
   document.body.prepend(banner);
+
+  // Nav (and everything else anchored to its 58px height: .page-wrap,
+  // .scroll-progress, and the mobile .nav-links / .nav-account-dropdown
+  // overlays, which are fixed independently of the nav element itself)
+  // all ignore document flow, so they'd otherwise render underneath —
+  // and get hidden by — this banner. Push them all down directly via
+  // inline styles (highest-precedence, no stylesheet-cascade guesswork)
+  // instead of just the nav element, since several of these only need
+  // it once a mobile menu is actually open.
+  function applyOffset() {
+    const px = banner.offsetHeight + 'px';
+    document.querySelectorAll('nav').forEach(el => el.style.setProperty('top', px, 'important'));
+    document.querySelectorAll('.page-wrap').forEach(el =>
+      el.style.setProperty('padding-top', `calc(58px + ${px})`, 'important'));
+    document.querySelectorAll('.scroll-progress, .nav-links, .nav-account-dropdown').forEach(el =>
+      el.style.setProperty('top', `calc(58px + ${px})`, 'important'));
+  }
+  applyOffset();
+  // Banner height can change (text wraps to 2 lines on narrow screens,
+  // or the viewport is resized across that breakpoint), so keep the
+  // offset in sync with the actual rendered height rather than a
+  // one-time snapshot.
+  window.addEventListener('resize', applyOffset);
 
   document.getElementById('role-preview-exit-btn').addEventListener('click', async () => {
     banner.querySelector('.rpb-exit').textContent = 'Exiting…';
