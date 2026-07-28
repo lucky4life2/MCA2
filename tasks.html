@@ -46,10 +46,19 @@
   /* List view */
   .tp-group { margin-bottom: 2rem; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
   .tp-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--bg); gap: 10px; flex-wrap: wrap; }
-  .tp-head-name { font-weight: 700; color: var(--blue); font-size: 14px; }
+  .tp-head-name { font-weight: 700; color: var(--blue); font-size: 14px; margin-right: auto; }
   .tp-head-actions { display: flex; gap: 6px; align-items: center; }
   .tp-head-actions button { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 12px; }
   .tp-head-actions button:hover { color: var(--blue); }
+  .tp-collapse-btn { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 12px; padding: 2px 4px; line-height: 1; }
+  .tp-collapse-btn:hover { color: var(--blue); }
+
+  .tk-collapsed-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1.75rem; }
+  .tk-collapsed-chip { display: flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--white); cursor: pointer; transition: border-color .15s, color .15s; }
+  .tk-collapsed-chip:hover { border-color: var(--blue); }
+  .tk-collapsed-caret { font-size: 9px; color: var(--muted); }
+  .tk-collapsed-name { font-weight: 700; color: var(--blue); font-size: 12px; }
+  .tk-collapsed-count { font-size: 10px; font-weight: 700; color: var(--muted); background: var(--bg); border-radius: 10px; padding: 1px 7px; }
   .tp-sort { font-size: 11px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--white); color: var(--black); }
 
   .t-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--border); cursor: pointer; position: relative; }
@@ -180,6 +189,7 @@
 
     <div id="tk-legend" class="tk-legend"></div>
     <div id="tk-tag-filter" class="tk-legend"></div>
+    <div id="tk-collapsed-strip" class="tk-collapsed-strip" style="display:none;"></div>
 
     <div id="board"></div>
   </div>
@@ -327,6 +337,16 @@ const PRIORITY_ORDER = { urgent: 0, high: 1, medium: 2, low: 3 };
 
 let _projectSort = {}; // { [projectId]: 'color' | 'name' | 'due' | 'priority' }
 function sortKeyFor(projectId) { return _projectSort[projectId] || 'color'; }
+
+let _collapsedProjects = new Set(JSON.parse(localStorage.getItem('mca_tk_collapsed_projects') || '[]'));
+function isCollapsed(projectId) { return _collapsedProjects.has(projectId); }
+function saveCollapsedProjects() { localStorage.setItem('mca_tk_collapsed_projects', JSON.stringify([..._collapsedProjects])); }
+window.toggleProjectCollapse = (projectId) => {
+  if (_collapsedProjects.has(projectId)) _collapsedProjects.delete(projectId);
+  else _collapsedProjects.add(projectId);
+  saveCollapsedProjects();
+  render();
+};
 
 function sortSelectHtml(projectId) {
   const current = sortKeyFor(projectId);
@@ -522,6 +542,7 @@ function setView(v) {
 }
 
 function render() {
+  renderCollapsedStrip();
   if (_view === 'grid') renderGrid(); else renderList();
 }
 
@@ -529,15 +550,33 @@ function orderedProjects() {
   return _projectFilter ? _projects.filter(p => p.id === _projectFilter) : _projects.slice();
 }
 
+function renderCollapsedStrip() {
+  const strip = document.getElementById('tk-collapsed-strip');
+  const collapsed = orderedProjects().filter(p => isCollapsed(p.id));
+  if (!collapsed.length) { strip.innerHTML = ''; strip.style.display = 'none'; return; }
+  strip.style.display = 'flex';
+  strip.innerHTML = collapsed.map(p => {
+    const count = visibleTasks().filter(t => t.project_id === p.id).length;
+    return `
+    <div class="tk-collapsed-chip" onclick="toggleProjectCollapse('${p.id}')" title="Expand ${p.name}">
+      <span class="tk-collapsed-caret">▸</span>
+      <span class="tk-collapsed-name">${p.name}</span>
+      <span class="tk-collapsed-count">${count}</span>
+    </div>`;
+  }).join('');
+}
+
 function renderList() {
   const board = document.getElementById('board');
   if (!_projects.length) { board.innerHTML = '<div class="t-empty">No projects yet — create one to start adding tasks.</div>'; return; }
-  const projectsToShow = orderedProjects();
+  const projectsToShow = orderedProjects().filter(p => !isCollapsed(p.id));
+  if (!projectsToShow.length) { board.innerHTML = ''; return; }
   board.innerHTML = projectsToShow.map(p => {
     const rows = sortTasks(visibleTasks().filter(t => t.project_id === p.id), sortKeyFor(p.id));
     return `
     <div class="tp-group">
       <div class="tp-head">
+        <button class="tp-collapse-btn" onclick="toggleProjectCollapse('${p.id}')" title="Collapse">▾</button>
         <div class="tp-head-name">${p.name}</div>
         <div class="tp-head-actions">
           ${sortSelectHtml(p.id)}
@@ -569,12 +608,14 @@ function renderList() {
 function renderGrid() {
   const board = document.getElementById('board');
   if (!_projects.length) { board.innerHTML = '<div class="t-empty">No projects yet — create one to start adding tasks.</div>'; return; }
-  const projectsToShow = orderedProjects();
+  const projectsToShow = orderedProjects().filter(p => !isCollapsed(p.id));
+  if (!projectsToShow.length) { board.innerHTML = ''; return; }
   board.innerHTML = projectsToShow.map(p => {
     const cards = sortTasks(visibleTasks().filter(t => t.project_id === p.id), sortKeyFor(p.id));
     return `
     <div class="tp-group">
       <div class="tp-head">
+        <button class="tp-collapse-btn" onclick="toggleProjectCollapse('${p.id}')" title="Collapse">▾</button>
         <div class="tp-head-name">${p.name}</div>
         <div class="tp-head-actions">
           ${sortSelectHtml(p.id)}
