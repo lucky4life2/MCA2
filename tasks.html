@@ -202,6 +202,13 @@
     <div class="modal-body">
       <input type="hidden" id="pj-id">
       <div class="form-group"><label class="form-label">Project Name</label><input type="text" id="pj-name" class="form-input"></div>
+      <div class="form-group">
+        <label class="form-label">Visible to</label>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Leave everything unchecked for no restriction (visible to all board members).</div>
+        <div id="pj-roles" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;"></div>
+        <select id="pj-user-add" class="form-input"><option value="">+ Add specific person…</option></select>
+        <div id="pj-users" style="display:flex;flex-direction:column;gap:4px;margin-top:6px;"></div>
+      </div>
     </div>
     <div id="pj-error" style="font-size:13px;color:#c0392b;padding:0 1.5rem .5rem;display:none;"></div>
     <div class="modal-foot">
@@ -325,7 +332,7 @@ function contrastText(hex) {
   return yiq >= 150 ? '#111111' : '#ffffff';
 }
 
-let _projects = [], _tasks = [], _members = [], _allProfiles = [], _me = null;
+let _projects = [], _tasks = [], _members = [], _allProfiles = [], _me = null, _roles = [], _projectAccess = [];
 let _access = { manage: false, checkoff: false, test: false };
 let _commentCounts = {};
 let _view = 'list';
@@ -435,15 +442,18 @@ function show(which) {
 }
 
 async function loadAll() {
-  const [{ data: projects }, { data: tasks }, { data: profiles }, { data: userRoles }, { data: comments }, { data: tags }] = await Promise.all([
+  const [{ data: projects }, { data: tasks }, { data: profiles }, { data: userRoles }, { data: comments }, { data: tags }, { data: roles }, { data: access }] = await Promise.all([
     supabase.from('task_projects').select('*').order('sort_order').order('created_at'),
     supabase.from('tasks').select('*').order('due_date', { nullsFirst: false }),
     supabase.from('profiles').select('id, display_name, username, role'),
     supabase.from('user_roles').select('user_id, roles(level)'),
     supabase.from('task_comments').select('task_id'),
     supabase.from('task_tags').select('*').order('name'),
+    _access.manage ? supabase.from('roles').select('id, label').order('level', { ascending: false }) : Promise.resolve({ data: [] }),
+    _access.manage ? supabase.from('task_project_access').select('*') : Promise.resolve({ data: [] }),
   ]);
   _projects = projects || []; _tasks = tasks || [];
+  _roles = roles || []; _projectAccess = access || [];
   _allProfiles = profiles || []; // used for name lookups (assignees, commenters, checked-off-by) regardless of level
   _tags = tags || [];
 
@@ -577,7 +587,7 @@ function renderList() {
     <div class="tp-group">
       <div class="tp-head">
         <button class="tp-collapse-btn" onclick="toggleProjectCollapse('${p.id}')" title="Collapse">▾</button>
-        <div class="tp-head-name">${p.name}</div>
+        <div class="tp-head-name">${p.name}${_access.manage && _projectAccess.some(a => a.project_id === p.id) ? ' 🔒' : ''}</div>
         <div class="tp-head-actions">
           ${sortSelectHtml(p.id)}
           ${_access.manage ? `<button onclick="editProject('${p.id}')">Edit</button>` : ''}
@@ -616,7 +626,7 @@ function renderGrid() {
     <div class="tp-group">
       <div class="tp-head">
         <button class="tp-collapse-btn" onclick="toggleProjectCollapse('${p.id}')" title="Collapse">▾</button>
-        <div class="tp-head-name">${p.name}</div>
+        <div class="tp-head-name">${p.name}${_access.manage && _projectAccess.some(a => a.project_id === p.id) ? ' 🔒' : ''}</div>
         <div class="tp-head-actions">
           ${sortSelectHtml(p.id)}
           ${_access.manage ? `<button onclick="editProject('${p.id}')">Edit</button>` : ''}
@@ -646,24 +656,61 @@ function renderGrid() {
 }
 
 // ── Project modal ──
+let _pjUserPicks = [];
 function openProjectModal(p) {
   document.getElementById('pj-id').value = p?.id || '';
   document.getElementById('pj-name').value = p?.name || '';
   document.getElementById('pj-title').textContent = p ? 'Edit Project' : 'New Project';
   document.getElementById('pj-delete').style.display = p ? '' : 'none';
   document.getElementById('pj-error').style.display = 'none';
+  const rows = p ? _projectAccess.filter(a => a.project_id === p.id) : [];
+  const roleIds = new Set(rows.filter(a => a.role_id).map(a => a.role_id));
+  _pjUserPicks = rows.filter(a => a.user_id).map(a => a.user_id);
+  document.getElementById('pj-roles').innerHTML = _roles.map(r => `
+    <label style="font-size:12px;display:flex;align-items:center;gap:4px;">
+      <input type="checkbox" class="pj-role-cb" value="${r.id}" ${roleIds.has(r.id) ? 'checked' : ''}> ${r.label}
+    </label>`).join('');
+  renderPjUsers();
+  const addSel = document.getElementById('pj-user-add');
+  addSel.innerHTML = '<option value="">+ Add specific person…</option>' + _members.map(m => `<option value="${m.id}">${m.display_name || m.username}</option>`).join('');
   document.getElementById('pj-modal').style.display = 'flex';
 }
+function renderPjUsers() {
+  document.getElementById('pj-users').innerHTML = _pjUserPicks.map(uid => {
+    const m = _members.find(x => x.id === uid);
+    return `<div style="font-size:12px;display:flex;justify-content:space-between;align-items:center;background:var(--bg-soft,#f2f2f2);padding:3px 8px;border-radius:4px;">
+      <span>${m?.display_name || m?.username || uid}</span>
+      <button type="button" onclick="removePjUser('${uid}')" style="border:none;background:none;cursor:pointer;color:#c0392b;">✕</button>
+    </div>`;
+  }).join('');
+}
+window.removePjUser = (uid) => { _pjUserPicks = _pjUserPicks.filter(u => u !== uid); renderPjUsers(); };
+document.getElementById('pj-user-add').onchange = (e) => {
+  const uid = e.target.value;
+  if (uid && !_pjUserPicks.includes(uid)) _pjUserPicks.push(uid);
+  e.target.value = '';
+  renderPjUsers();
+};
 window.editProject = (id) => openProjectModal(_projects.find(p => p.id === id));
 document.getElementById('btn-new-project').onclick = () => openProjectModal(null);
 document.getElementById('pj-close').onclick = document.getElementById('pj-cancel').onclick = () => document.getElementById('pj-modal').style.display = 'none';
 document.getElementById('pj-save').onclick = async () => {
-  const id = document.getElementById('pj-id').value;
+  let id = document.getElementById('pj-id').value;
   const name = document.getElementById('pj-name').value.trim();
   const errEl = document.getElementById('pj-error');
   if (!name) { errEl.textContent = 'Name is required.'; errEl.style.display = 'block'; return; }
-  const { error } = id ? await supabase.from('task_projects').update({ name }).eq('id', id) : await supabase.from('task_projects').insert({ name });
-  if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+  if (id) {
+    const { error } = await supabase.from('task_projects').update({ name }).eq('id', id);
+    if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+  } else {
+    const { data, error } = await supabase.from('task_projects').insert({ name }).select().single();
+    if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+    id = data.id;
+  }
+  const roleIds = [...document.querySelectorAll('.pj-role-cb:checked')].map(cb => cb.value);
+  await supabase.from('task_project_access').delete().eq('project_id', id);
+  const rows = [...roleIds.map(role_id => ({ project_id: id, role_id })), ..._pjUserPicks.map(user_id => ({ project_id: id, user_id }))];
+  if (rows.length) { const { error } = await supabase.from('task_project_access').insert(rows); if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; } }
   document.getElementById('pj-modal').style.display = 'none'; loadAll();
 };
 document.getElementById('pj-delete').onclick = async () => {
