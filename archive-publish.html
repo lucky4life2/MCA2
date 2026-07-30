@@ -526,7 +526,12 @@ async function saveDoc(forcedStatus) {
 
   let error;
   if (id) {
-    ({ error } = await supabase.from('archive_documents').update(payload).eq('id', id));
+    // Keep slug text in sync with the title on every save
+    const existing = _myDocs.find(x => x.id === id);
+    const oldSlug  = existing?.slug || '';
+    const suffix   = oldSlug.includes('-') ? oldSlug.slice(oldSlug.lastIndexOf('-') + 1) : Date.now().toString(36);
+    const slug     = slugify(title) + '-' + suffix;
+    ({ error } = await supabase.from('archive_documents').update({ ...payload, slug }).eq('id', id));
   } else {
     const slug = slugify(title) + '-' + Date.now().toString(36);
     ({ error } = await supabase.from('archive_documents').insert({

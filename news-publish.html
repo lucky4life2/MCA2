@@ -554,8 +554,12 @@ async function saveArticle(forcedStatus) {
 
   let error;
   if (id) {
-    // Update — don't overwrite author
-    ({ error } = await supabase.from('news_articles').update(payload).eq('id', id));
+    // Update — don't overwrite author, but keep slug text in sync with the title
+    const existing = _myArticles.find(x => x.id === id);
+    const oldSlug  = existing?.slug || '';
+    const suffix   = oldSlug.includes('-') ? oldSlug.slice(oldSlug.lastIndexOf('-') + 1) : Date.now().toString(36);
+    const slug     = slugify(title) + '-' + suffix;
+    ({ error } = await supabase.from('news_articles').update({ ...payload, slug }).eq('id', id));
   } else {
     // Insert — set author
     const slug = slugify(title) + '-' + Date.now().toString(36);
