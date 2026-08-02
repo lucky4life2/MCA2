@@ -128,37 +128,8 @@
               <th>Description</th>
             </tr>
           </thead>
-          <tbody>
-            <tr>
-              <td><strong>First Server</strong></td>
-              <td>Dec 2021 – Jan 2022</td>
-              <td>First server of the group. Mostly on creative mode. Created by Aiden Skates.</td>
-            </tr>
-            <tr>
-              <td><strong>United Craft</strong></td>
-              <td>Mar 2022 – May 2022</td>
-              <td>First Realm of the group. Created by William Rector.</td>
-            </tr>
-            <tr>
-              <td><strong>Chameleon Server</strong></td>
-              <td>May 2022 – Oct 2022</td>
-              <td>Last of the major early servers. Marks the end of the beginning period. Created by Aiden Skates.</td>
-            </tr>
-            <tr>
-              <td><strong>Innovation Craft</strong></td>
-              <td>Jul 2023 – May 2024</td>
-              <td>First server on Minecraft Java and the first modded server. Marks the beginning of the current period.</td>
-            </tr>
-            <tr>
-              <td><strong>Medieval Craft</strong></td>
-              <td>Aug 2024 – Sep 2025</td>
-              <td>Second main server on Java. Heavily focused on a medieval structure with mods.</td>
-            </tr>
-            <tr class="current-row">
-              <td><strong>Global Dawn</strong></td>
-              <td>Nov 2025 – Present</td>
-              <td>Most recent and current server. A vanilla server with a 1:500 scale earth map.</td>
-            </tr>
+          <tbody id="history-servers-tbody">
+            <tr><td colspan="3" style="color:var(--muted);">Loading…</td></tr>
           </tbody>
         </table>
       </div>
@@ -168,5 +139,32 @@
 </div>
 
 <script type="module" src="nav.js"></script>
+<script>
+(async function loadHistoryServers() {
+  const SUPABASE_URL  = 'https://hjaywokvgdzhvsoygctc.supabase.co';
+  const SUPABASE_ANON = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
+  const tbody = document.getElementById('history-servers-tbody');
+
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/history_servers?select=*&order=sort_order.asc`,
+      { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } }
+    );
+    if (!res.ok) throw new Error('fetch failed');
+    const servers = await res.json();
+
+    tbody.innerHTML = servers.length
+      ? servers.map(s => `
+          <tr${s.is_current ? ' class="current-row"' : ''}>
+            <td><strong>${s.name}</strong></td>
+            <td>${s.period}</td>
+            <td>${s.description || ''}</td>
+          </tr>`).join('')
+      : '<tr><td colspan="3" style="color:var(--muted);">No servers listed yet.</td></tr>';
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="3" style="color:var(--muted);">Could not load server history.</td></tr>';
+  }
+})();
+</script>
 </body>
 </html>
