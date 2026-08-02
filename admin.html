@@ -399,10 +399,18 @@
         </div>
       </div>
 
-      <button class="admin-tab" data-tab="minecraft">Minecraft</button>
-      <button class="admin-tab" data-tab="shop">Shop</button>
-      <button class="admin-tab" data-tab="config">Config</button>
-      <a class="admin-tab admin-tab-link" href="tasks.html">Tasks</a>
+      <!-- Site group -->
+      <div class="admin-tab-group" id="tabgrp-site">
+        <button class="admin-tab admin-tab-group-trigger" id="tabgrp-site-trigger">
+          Site <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="admin-tab-group-menu">
+          <button class="admin-tab-group-item" data-tab="minecraft">Minecraft</button>
+          <button class="admin-tab-group-item" data-tab="shop">Shop</button>
+          <button class="admin-tab-group-item" data-tab="config">Config</button>
+          <a class="admin-tab-group-item admin-tab-link" href="tasks.html">Tasks</a>
+        </div>
+      </div>
     </div>
 
     <!-- ── OVERVIEW ─────────────────────────────────────── -->
@@ -2792,7 +2800,7 @@ document.querySelectorAll('.admin-tab:not(.admin-tab-group-trigger):not(.admin-t
 });
 
 // Group items
-document.querySelectorAll('.admin-tab-group-item').forEach(item => {
+document.querySelectorAll('.admin-tab-group-item:not(.admin-tab-link)').forEach(item => {
   item.addEventListener('click', () => switchTab(item.dataset.tab));
 });
 
