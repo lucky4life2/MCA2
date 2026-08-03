@@ -525,6 +525,30 @@ window.loadIntoEditor = async (id) => {
   toast('Article loaded into editor');
 };
 
+// ── Email subscribers when an article goes live ────────────────
+async function notifySubscribers(articleId) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/notify-news-subscribers', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ articleId }),
+    });
+    const result = await res.json();
+    if (!res.ok || result.error) {
+      toast('Published, but notification emails failed: ' + (result.error || 'unknown error'), true);
+    } else if (result.sent > 0) {
+      toast(`✓ Notified ${result.sent} subscriber${result.sent === 1 ? '' : 's'} by email`);
+    }
+  } catch (e) {
+    toast('Published, but notification emails failed: ' + e.message, true);
+  }
+}
+
 async function saveArticle(forcedStatus) {
   const id      = document.getElementById('np-editing-id').value;
   const title   = document.getElementById('np-title').value.trim();
@@ -553,19 +577,24 @@ async function saveArticle(forcedStatus) {
   };
 
   let error;
+  let newlyPublishedId = null;
   if (id) {
     // Update — don't overwrite author, but keep slug text in sync with the title
     const existing = _myArticles.find(x => x.id === id);
+    const wasPublished = existing?.status === 'published';
     const oldSlug  = existing?.slug || '';
     const suffix   = oldSlug.includes('-') ? oldSlug.slice(oldSlug.lastIndexOf('-') + 1) : Date.now().toString(36);
     const slug     = slugify(title) + '-' + suffix;
     ({ error } = await supabase.from('news_articles').update({ ...payload, slug }).eq('id', id));
+    if (!error && status === 'published' && !wasPublished) newlyPublishedId = id;
   } else {
     // Insert — set author
     const slug = slugify(title) + '-' + Date.now().toString(36);
-    ({ error } = await supabase.from('news_articles').insert({
+    const { data: inserted, error: insertErr } = await supabase.from('news_articles').insert({
       ...payload, slug, author_id: _user.id, author_name: authorName
-    }));
+    }).select('id').single();
+    error = insertErr;
+    if (!error && status === 'published' && inserted) newlyPublishedId = inserted.id;
   }
 
   if (error) {
@@ -576,6 +605,7 @@ async function saveArticle(forcedStatus) {
   toast(status === 'published' ? '✓ Article published!' : '✓ Draft saved');
   clearEditor();
   await loadArticles();
+  if (newlyPublishedId) await notifySubscribers(newlyPublishedId);
 }
 
 window.quickPublish = async (id) => {
@@ -585,6 +615,7 @@ window.quickPublish = async (id) => {
   if (error) { toast('Error: '+error.message, true); return; }
   toast('✓ Published!');
   await loadArticles();
+  await notifySubscribers(id);
 };
 window.quickUnpublish = async (id) => {
   const { error } = await supabase.from('news_articles').update({ status: 'draft' }).eq('id', id);

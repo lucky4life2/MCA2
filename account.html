@@ -285,6 +285,23 @@
       </div>
     </div>
 
+    <!-- Notifications -->
+    <div class="account-section" id="section-notifications">
+      <div class="account-section-header">
+        <div class="account-section-title">Notifications</div>
+      </div>
+      <div class="account-section-body">
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+          <input type="checkbox" id="field-news-opt-in" style="margin-top:3px;width:16px;height:16px;flex-shrink:0;">
+          <span>
+            <span style="display:block;font-weight:600;font-size:14px;">Email me when news is published</span>
+            <span class="form-hint" style="display:block;margin-top:2px;">Get an email whenever MCA publishes a new article. You can turn this off anytime.</span>
+          </span>
+        </label>
+        <div class="form-error" id="news-opt-in-error"></div>
+      </div>
+    </div>
+
     <!-- Contact Administrator -->
     <div class="account-section">
       <div class="account-section-header">
@@ -602,6 +619,7 @@ async function renderPage() {
   // Profile fields
   document.getElementById('field-display-name').value = _profile.display_name || '';
   document.getElementById('field-username').value = _profile.username || '';
+  document.getElementById('field-news-opt-in').checked = !!_profile.news_email_opt_in;
 
   // Connected accounts
   await renderConnectedAccounts();
@@ -1308,6 +1326,26 @@ async function render2FA() {
   }
 }
 
+
+document.getElementById('field-news-opt-in').addEventListener('change', async (e) => {
+  const checkbox = e.target;
+  const errEl = document.getElementById('news-opt-in-error');
+  errEl.style.display = 'none';
+  const newVal = checkbox.checked;
+  checkbox.disabled = true;
+  const { error } = await supabase
+    .from('profiles')
+    .update({ news_email_opt_in: newVal })
+    .eq('id', _user.id);
+  checkbox.disabled = false;
+  if (error) {
+    checkbox.checked = !newVal; // revert
+    errEl.textContent = 'Failed to save preference: ' + error.message;
+    errEl.style.display = 'block';
+  } else {
+    _profile.news_email_opt_in = newVal;
+  }
+});
 
 document.getElementById('btn-save-profile').addEventListener('click', async () => {
   const display_name = document.getElementById('field-display-name').value.trim();
