@@ -18,7 +18,7 @@
     .admin-tab { padding: 10px 20px; font-size: 12px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; color: var(--muted); transition: color .15s, border-color .15s; margin-bottom: -1px; white-space: nowrap; touch-action: manipulation; }
     .admin-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
     .admin-tab:hover:not(.active) { color: var(--black); }
-    .admin-tab.hidden { display: none; }
+    .admin-tab.hidden, .admin-tab-group-item.hidden { display: none; }
 
     /* Tab groups (dropdown) */
     .admin-tab-group { position: relative; display: inline-block; }
@@ -184,6 +184,21 @@
 
     /* News admin */
     .news-article-row { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .audit-row { padding: 12px 20px; border-bottom: 1px solid var(--border); }
+    .audit-row:last-child { border-bottom: none; }
+    .audit-row-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
+    .audit-row-main { flex: 1; min-width: 0; }
+    .audit-summary { font-size: 13px; font-weight: 600; color: var(--black); }
+    .audit-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .audit-action-badge { font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; white-space: nowrap; margin-right: 8px; display: inline-block; }
+    .audit-action-insert { background: #e8f8e8; color: #2d7d2f; }
+    .audit-action-update { background: #e8eeff; color: var(--blue); }
+    .audit-action-delete { background: #fdecea; color: #c0392b; }
+    .audit-row-toggle { font-size: 11px; color: var(--blue); flex-shrink: 0; }
+    .audit-row-detail { display: none; margin-top: 10px; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; }
+    .audit-row-detail.open { display: block; }
+    .audit-row-detail pre { font-size: 11px; font-family: monospace; white-space: pre-wrap; word-break: break-word; margin: 0 0 8px; color: var(--black); }
+    .audit-row-detail-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
     .news-article-row:last-child { border-bottom: none; }
     .news-article-title { font-weight: 600; font-size: 14px; color: var(--black); }
     .news-article-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
@@ -409,6 +424,7 @@
           <button class="admin-tab-group-item" data-tab="minecraft">Minecraft</button>
           <button class="admin-tab-group-item" data-tab="shop">Shop</button>
           <button class="admin-tab-group-item" data-tab="config">Config</button>
+          <button class="admin-tab-group-item" data-tab="audit-log" id="tab-btn-audit-log">Audit Log</button>
           <a class="admin-tab-group-item admin-tab-link" href="tasks.html">Tasks</a>
         </div>
       </div>
@@ -783,6 +799,35 @@
         <div style="padding:1rem 1.5rem;display:flex;gap:10px;align-items:center;border-top:1px solid var(--border);">
           <button class="btn btn-primary" id="btn-save-config" style="font-size:12px;padding:7px 16px;">Save Config</button>
           <span id="cfg-status" style="font-size:12px;color:var(--muted);"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── AUDIT LOG ─────────────────────────────────────── -->
+    <div class="admin-panel" id="tab-audit-log">
+      <div class="admin-section">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Audit Log</div>
+          <span style="font-size:11px;color:var(--muted);">Permanent record — cannot be edited or deleted</span>
+        </div>
+        <div class="filter-bar">
+          <input type="text" class="search-input search-input-grow" id="audit-search" placeholder="Search by actor or summary...">
+          <select class="filter-select" id="audit-filter-action">
+            <option value="">All Actions</option>
+            <option value="insert">Created</option>
+            <option value="update">Updated</option>
+            <option value="delete">Deleted</option>
+          </select>
+          <select class="filter-select" id="audit-filter-table">
+            <option value="">All Areas</option>
+          </select>
+        </div>
+        <div id="audit-log-list">
+          <div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">Loading audit log...</div>
+        </div>
+        <div style="padding:1rem 1.5rem;text-align:center;border-top:1px solid var(--border);">
+          <button class="btn btn-outline btn-sm" id="btn-audit-load-more" style="display:none;">Load More</button>
+          <span id="audit-log-end" style="font-size:12px;color:var(--muted);display:none;">No more entries.</span>
         </div>
       </div>
     </div>
@@ -1177,6 +1222,7 @@ const ALL_PERMISSIONS = [
   { key: 'can_manage_tasks',     label: 'Manage Task Board',       group: 'admin' },
   { key: 'can_test_tasks',       label: 'Tester: Submit Check-offs', group: 'admin' },
   { key: 'can_check_off_tasks',  label: 'Tester Manager: Check Off Tasks', group: 'admin' },
+  { key: 'can_view_audit_log',   label: 'View Audit Log',          group: 'admin' },
 ];
 
 // ── Init ─────────────────────────────────────────────────────
@@ -1195,6 +1241,9 @@ async function init() {
 
     if (!_myPermissions.can_manage_roles && !_myPermissions.can_create_roles) {
       document.getElementById('tab-btn-roles').classList.add('hidden');
+    }
+    if (!_myPermissions.can_view_audit_log) {
+      document.getElementById('tab-btn-audit-log').classList.add('hidden');
     }
 
     const levelLabel = _myLevel >= 100 ? 'Owner' : _myLevel >= 80 ? 'Administrator' : 'Staff';
@@ -2869,6 +2918,7 @@ function switchTab(tabName) {
   if (tabName === 'leadership')      loadLeadershipAdmin();
   if (tabName === 'club-presidents') loadClubPresidentsAdmin();
   if (tabName === 'nations')         loadNationsAdmin();
+  if (tabName === 'audit-log')       loadAuditLog();
 
   // Persist so a refresh (or reopening the page) lands back on this tab.
   // replaceState (not pushState) so tab switches don't pile up browser history.
@@ -3224,6 +3274,136 @@ async function loadUnreadCount() {
     badge.style.display = 'inline';
   }
 }
+
+// ── Audit Log ────────────────────────────────────────────────
+const AUDIT_PAGE_SIZE = 40;
+let _auditLog = [];
+let _auditOffset = 0;
+let _auditDone = false;
+let _auditLoading = false;
+let _auditTablesLoaded = false;
+let _auditFilter = { search: '', action: '', table: '' };
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function auditTableLabel(t) {
+  return String(t).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+async function populateAuditTableFilter() {
+  if (_auditTablesLoaded) return;
+  try {
+    const { data, error } = await supabase.from('audit_log').select('table_name');
+    if (error) throw error;
+    const tables = [...new Set((data || []).map(r => r.table_name))].sort();
+    const sel = document.getElementById('audit-filter-table');
+    tables.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t;
+      opt.textContent = auditTableLabel(t);
+      sel.appendChild(opt);
+    });
+    _auditTablesLoaded = true;
+  } catch (e) { /* non-fatal */ }
+}
+
+async function loadAuditLog(reset = true) {
+  if (_auditLoading) return;
+  _auditLoading = true;
+  const el = document.getElementById('audit-log-list');
+  const moreBtn = document.getElementById('btn-audit-load-more');
+  const endLabel = document.getElementById('audit-log-end');
+
+  if (reset) {
+    _auditLog = [];
+    _auditOffset = 0;
+    _auditDone = false;
+    el.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">Loading audit log...</div>';
+    populateAuditTableFilter();
+  }
+
+  try {
+    let q = supabase.from('audit_log').select('*').order('created_at', { ascending: false })
+      .range(_auditOffset, _auditOffset + AUDIT_PAGE_SIZE - 1);
+    if (_auditFilter.action) q = q.eq('action', _auditFilter.action);
+    if (_auditFilter.table)  q = q.eq('table_name', _auditFilter.table);
+    if (_auditFilter.search) q = q.or(`summary.ilike.%${_auditFilter.search}%,actor_name.ilike.%${_auditFilter.search}%`);
+
+    const { data, error } = await q;
+    if (error) throw error;
+
+    _auditLog = _auditLog.concat(data || []);
+    _auditOffset += (data || []).length;
+    if (!data || data.length < AUDIT_PAGE_SIZE) _auditDone = true;
+
+    renderAuditLog();
+    moreBtn.style.display = _auditDone ? 'none' : 'inline-block';
+    endLabel.style.display = (_auditDone && _auditLog.length) ? 'inline' : 'none';
+  } catch (e) {
+    el.innerHTML = `<div style="padding:1.5rem;color:#c0392b;font-size:13px;">Error loading audit log: ${e.message}</div>`;
+  } finally {
+    _auditLoading = false;
+  }
+}
+
+function renderAuditLog() {
+  const el = document.getElementById('audit-log-list');
+  if (!_auditLog.length) {
+    el.innerHTML = '<div style="text-align:center;padding:2.5rem;color:var(--muted);font-size:14px;">No audit log entries match your filters.</div>';
+    return;
+  }
+
+  el.innerHTML = _auditLog.map((r, idx) => {
+    const when = new Date(r.created_at).toLocaleString();
+    const actor = r.actor_name || 'Unknown';
+    const hasDetail = r.old_data || r.new_data;
+    return `<div class="audit-row">
+      <div class="audit-row-top" ${hasDetail ? `onclick="toggleAuditDetail(${idx})"` : ''}>
+        <div class="audit-row-main">
+          <div class="audit-summary">
+            <span class="audit-action-badge audit-action-${r.action}">${r.action}</span>${escapeHtml(r.summary || auditTableLabel(r.table_name))}
+          </div>
+          <div class="audit-meta">${escapeHtml(when)} · ${escapeHtml(actor)}${r.actor_role ? ' (' + escapeHtml(r.actor_role) + ')' : ''} · ${auditTableLabel(r.table_name)}</div>
+        </div>
+        ${hasDetail ? `<span class="audit-row-toggle" id="audit-toggle-${idx}">Details ▾</span>` : ''}
+      </div>
+      ${hasDetail ? `<div class="audit-row-detail" id="audit-detail-${idx}">
+        ${r.old_data ? `<div class="audit-row-detail-label">Before</div><pre>${escapeHtml(JSON.stringify(r.old_data, null, 2))}</pre>` : ''}
+        ${r.new_data ? `<div class="audit-row-detail-label">After</div><pre>${escapeHtml(JSON.stringify(r.new_data, null, 2))}</pre>` : ''}
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function toggleAuditDetail(idx) {
+  const detail = document.getElementById('audit-detail-' + idx);
+  const toggle = document.getElementById('audit-toggle-' + idx);
+  if (!detail) return;
+  const open = detail.classList.toggle('open');
+  if (toggle) toggle.textContent = open ? 'Details ▴' : 'Details ▾';
+}
+window.toggleAuditDetail = toggleAuditDetail;
+
+let _auditSearchDebounce;
+document.getElementById('audit-search').addEventListener('input', function() {
+  clearTimeout(_auditSearchDebounce);
+  const val = this.value;
+  _auditSearchDebounce = setTimeout(() => {
+    _auditFilter.search = val;
+    loadAuditLog(true);
+  }, 300);
+});
+document.getElementById('audit-filter-action').addEventListener('change', function() {
+  _auditFilter.action = this.value;
+  loadAuditLog(true);
+});
+document.getElementById('audit-filter-table').addEventListener('change', function() {
+  _auditFilter.table = this.value;
+  loadAuditLog(true);
+});
+document.getElementById('btn-audit-load-more').addEventListener('click', () => loadAuditLog(false));
 
 init();
 loadUnreadCount();
