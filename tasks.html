@@ -653,6 +653,7 @@ function renderGrid() {
             ${tagPillsHtml(t)}
             <div class="tk-card-foot">
               <span class="tk-card-status" style="color:${txt};">${st.label}</span>
+              ${t.assignee_id ? `<span class="tk-card-meta" style="color:${txt};">👤 ${memberName(t.assignee_id) || 'Unassigned'}</span>` : ''}
               ${t.due_date ? `<span class="tk-card-meta" style="color:${txt};">${t.due_date}</span>` : ''}
               ${_commentCounts[t.id] ? `<span class="tk-card-meta" style="color:${txt};">💬 ${_commentCounts[t.id]}</span>` : ''}
               ${t.checked_off_by ? `<span class="tk-card-meta" style="color:${txt};">✓ ${memberName(t.checked_off_by) || 'checked'}</span>` : ''}
