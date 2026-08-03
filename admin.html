@@ -3368,14 +3368,14 @@ async function loadAuditLog(reset = true) {
     if (_auditFilter.to)        q = q.lte('created_at', _auditFilter.to + 'T23:59:59');
     if (_auditFilter.search)    q = q.or(`summary.ilike.%${_auditFilter.search}%,actor_name.ilike.%${_auditFilter.search}%`);
 
-    const { data, error } = await q;
+    const { data, error } = await withTimeout(q, 10000);
     if (error) throw error;
 
     _auditLog = _auditLog.concat(data || []);
     _auditOffset += (data || []).length;
     if (!data || data.length < AUDIT_PAGE_SIZE) _auditDone = true;
 
-    await renderAuditLog();
+    await withTimeout(renderAuditLog(), 10000);
     moreBtn.style.display = _auditDone ? 'none' : 'inline-block';
     endLabel.style.display = (_auditDone && _auditLog.length) ? 'inline' : 'none';
   } catch (e) {
@@ -3385,23 +3385,26 @@ async function loadAuditLog(reset = true) {
   }
 }
 
-// Fields whose value is a uuid pointing at another table — resolved to a
-// human-readable name before being shown in the expanded details.
+// Fields whose value is a uuid pointing at a user — resolved to the
+// person's actual name before being shown in the expanded details.
 const AUDIT_REF_FIELDS = {
   user_id: 'profiles', author_id: 'profiles', created_by: 'profiles',
   checked_off_by: 'profiles', claimed_by: 'profiles', sender_id: 'profiles',
   granted_by: 'profiles', actor_id: 'profiles', assignee_id: 'profiles',
   approved_by: 'profiles', updated_by: 'profiles', deleted_by: 'profiles',
-  role_id: 'roles', project_id: 'task_projects', task_id: 'tasks',
 };
 const AUDIT_REF_TABLE_CONFIG = {
-  profiles:      { label: c => c.display_name || c.username || c.email || 'Unknown user' },
-  roles:         { label: c => c.name || 'Unknown role' },
-  task_projects: { label: c => c.name || 'Unknown project' },
-  tasks:         { label: c => c.title || 'Unknown task' },
+  profiles: { label: c => c.display_name || c.username || c.email || 'Unknown user' },
 };
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-let _auditRefCache = { profiles: {}, roles: {}, task_projects: {}, tasks: {} };
+let _auditRefCache = { profiles: {} };
+
+function withTimeout(promise, ms = 6000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out')), ms)),
+  ]);
+}
 
 const AUDIT_LABEL_OVERRIDES = { id: 'ID', uuid: 'UUID' };
 function humanizeFieldName(k) {
@@ -3410,7 +3413,7 @@ function humanizeFieldName(k) {
 }
 
 async function resolveAuditRefs(rows) {
-  const needed = { profiles: new Set(), roles: new Set(), task_projects: new Set(), tasks: new Set() };
+  const needed = { profiles: new Set() };
   rows.forEach(r => {
     [r.old_data, r.new_data].forEach(blob => {
       if (!blob) return;
@@ -3427,10 +3430,9 @@ async function resolveAuditRefs(rows) {
     const ids = [...needed[table]];
     if (!ids.length) continue;
     try {
-      const cols = table === 'profiles' ? 'id, display_name, username, email'
-                 : table === 'tasks'    ? 'id, title'
-                 : 'id, name';
-      const { data, error } = await supabase.from(table).select(cols).in('id', ids);
+      const { data, error } = await withTimeout(
+        supabase.from(table).select('id, display_name, username, email').in('id', ids)
+      );
       if (error) throw error;
       (data || []).forEach(row => {
         _auditRefCache[table][row.id] = AUDIT_REF_TABLE_CONFIG[table].label(row);
