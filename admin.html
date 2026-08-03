@@ -214,6 +214,7 @@
     .status-dot.published { background: #2d7d2f; }
     .status-dot.draft     { background: #b07d00; }
     .status-dot.archived  { background: var(--muted); }
+    .status-dot.pending_review { background: #c0392b; }
 
     /* Member role assignment popup */
     .role-popup { position: absolute; z-index: 100; background: var(--white); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 8px 24px rgba(10,15,30,.15); min-width: 220px; padding: 8px 0; }
@@ -401,10 +402,10 @@
       <!-- Content group -->
       <div class="admin-tab-group" id="tabgrp-content">
         <button class="admin-tab admin-tab-group-trigger" id="tabgrp-content-trigger">
-          Content <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          Content <span id="content-group-badge" style="display:none" class="admin-tab-group-badge"></span> <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="admin-tab-group-menu">
-          <button class="admin-tab-group-item" data-tab="news">News</button>
+          <button class="admin-tab-group-item" data-tab="news">News <span id="news-pending-badge" style="display:none" class="admin-tab-group-badge"></span></button>
           <button class="admin-tab-group-item" data-tab="archive">Archive</button>
           <button class="admin-tab-group-item" data-tab="faqs">FAQs</button>
           <button class="admin-tab-group-item" data-tab="history-servers">History</button>
@@ -449,6 +450,7 @@
           <div class="stat-cell"><div class="stat-label">Admins</div><div class="stat-value" id="stat-admins">—</div></div>
           <div class="stat-cell"><div class="stat-label">MC Verified</div><div class="stat-value" id="stat-mc-verified">—</div></div>
           <div class="stat-cell"><div class="stat-label">Pending Verify</div><div class="stat-value" id="stat-mc-pending">—</div></div>
+          <div class="stat-cell" id="stat-news-pending-cell" style="display:none;cursor:pointer;" onclick="document.querySelector('[data-tab=news]').click();"><div class="stat-label">News Awaiting Review</div><div class="stat-value" id="stat-news-pending" style="color:#c0392b;">—</div></div>
         </div>
       </div>
 
@@ -575,6 +577,7 @@
               <div><strong style="color:var(--black);font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Content & Config</strong></div>
               <div><code style="font-family:monospace;font-size:11px;">can_manage_news</code> — Write & edit news articles</div>
               <div><code style="font-family:monospace;font-size:11px;">can_publish_news</code> — Publish/unpublish articles</div>
+              <div><code style="font-family:monospace;font-size:11px;">can_approve_news</code> — Auto-publish own articles & approve/reject others' pending submissions</div>
               <div><code style="font-family:monospace;font-size:11px;">can_manage_archive</code> — Write & edit archive documents (Congress)</div>
               <div><code style="font-family:monospace;font-size:11px;">can_manage_faqs</code> — Write & edit the Help page FAQ</div>
               <div><code style="font-family:monospace;font-size:11px;">can_manage_shop</code> — Manage products</div>
@@ -604,6 +607,7 @@
           <select class="filter-select" id="news-filter-status">
             <option value="">All Status</option>
             <option value="published">Published</option>
+            <option value="pending_review">Pending Review</option>
             <option value="draft">Draft</option>
             <option value="archived">Archived</option>
           </select>
@@ -1091,6 +1095,7 @@
         <div class="form-group"><label class="form-label">Status</label>
           <select id="nm2-status" class="form-input">
             <option value="draft">Draft</option>
+            <option value="pending_review">Pending Review</option>
             <option value="published">Published</option>
             <option value="archived">Archived</option>
           </select>
@@ -1233,6 +1238,7 @@ const ALL_PERMISSIONS = [
   { key: 'can_create_roles',     label: 'Create / Delete Roles',   group: 'roles' },
   { key: 'can_manage_news',      label: 'Write & Edit News',       group: 'content' },
   { key: 'can_publish_news',     label: 'Publish / Unpublish',     group: 'content' },
+  { key: 'can_approve_news',     label: 'Approve Pending Articles', group: 'content' },
   { key: 'can_manage_archive',   label: 'Write & Edit Archive',    group: 'content' },
   { key: 'can_manage_faqs',      label: 'Write & Edit FAQs',       group: 'content' },
   { key: 'can_manage_shop',      label: 'Manage Shop Products',    group: 'content' },
@@ -1272,6 +1278,7 @@ async function init() {
     await Promise.all([loadAll(), loadAllRoles()]);
     checkPluginBridge();
     loadLockState();
+    loadPendingNewsCount();
   } catch(e) {
     console.error('Admin init error:', e);
     show('denied');
@@ -1823,6 +1830,19 @@ function renderNewsAdmin() {
   el.innerHTML = filtered.map(a => {
     const pub = a.published_at ? new Date(a.published_at).toLocaleDateString() : '';
     const created = new Date(a.created_at).toLocaleDateString();
+    const statusLabel = a.status === 'pending_review' ? 'Pending Review' : a.status;
+    const noteHtml = (a.status === 'draft' && a.rejection_note)
+      ? `<div style="font-size:11px;color:#c0392b;margin-top:2px;">Rejection note: ${a.rejection_note}</div>` : '';
+    let actionBtns;
+    if (a.status === 'pending_review') {
+      actionBtns = `
+        <button class="btn btn-success btn-sm" onclick="approveArticle('${a.id}')">Approve &amp; Publish</button>
+        <button class="btn btn-danger btn-sm" onclick="rejectArticle('${a.id}')">Reject</button>`;
+    } else if (a.status === 'published') {
+      actionBtns = `<button class="btn btn-outline btn-sm" onclick="unpublishArticle('${a.id}')">Unpublish</button>`;
+    } else {
+      actionBtns = `<button class="btn btn-success btn-sm" onclick="publishArticle('${a.id}')">Publish</button>`;
+    }
     return `<div class="news-article-row">
       <div style="flex:1;min-width:0;">
         <div class="news-article-title">
@@ -1831,11 +1851,12 @@ function renderNewsAdmin() {
         <div class="news-article-meta">
           ${a.category || 'General'} · By ${a.author_name||'Unknown'} · Created ${created}
           ${a.status === 'published' && pub ? ` · Published ${pub}` : ''}
+          ${a.status === 'pending_review' ? ` · <span style="color:#c0392b;font-weight:600;">${statusLabel}</span>` : ''}
         </div>
+        ${noteHtml}
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;">
-        ${a.status !== 'published' ? `<button class="btn btn-success btn-sm" onclick="publishArticle('${a.id}')">Publish</button>` : ''}
-        ${a.status === 'published'  ? `<button class="btn btn-outline btn-sm" onclick="unpublishArticle('${a.id}')">Unpublish</button>` : ''}
+        ${actionBtns}
         <button class="btn btn-outline btn-sm" onclick="editArticle('${a.id}')">Edit</button>
         <button class="btn btn-danger btn-sm" onclick="deleteArticle('${a.id}')">Delete</button>
       </div>
@@ -1890,6 +1911,7 @@ async function saveArticle(forceStatus = null) {
   if (!title) { errEl.textContent = 'Title is required.'; errEl.style.display = 'block'; return; }
 
   const status = forceStatus || document.getElementById('nm2-status').value;
+  const wasPublished = id ? (_newsArticles.find(x => x.id === id)?.status === 'published') : false;
   const { data: { user } } = await supabase.auth.getUser();
   const { data: profile }  = await supabase.from('profiles').select('display_name,username').eq('id', user.id).single();
   const defaultAuthorName = profile?.display_name || profile?.username || 'Unknown';
@@ -1914,19 +1936,29 @@ async function saveArticle(forceStatus = null) {
     author_name:  authorName,
     published_at: publishedAt,
   };
+  if (status === 'published' && !wasPublished) {
+    payload.reviewed_by = user.id;
+    payload.reviewed_at = new Date().toISOString();
+  }
   // author_id is only set on insert (new articles), not on update
   if (id) { delete payload.author_id; }
 
-  let error;
+  let error, newId = id;
   if (id) {
     ({ error } = await supabase.from('news_articles').update(payload).eq('id', id));
   } else {
     const slug = slugify(title) + '-' + Date.now().toString(36);
-    ({ error } = await supabase.from('news_articles').insert({ ...payload, slug, author_id: user.id, author_name: authorName }));
+    const { data: inserted, error: insertErr } = await supabase.from('news_articles')
+      .insert({ ...payload, slug, author_id: user.id, author_name: authorName })
+      .select('id').single();
+    error = insertErr;
+    newId = inserted?.id;
   }
   if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
   closeNewsModal();
   loadNewsAdmin();
+  loadPendingNewsCount();
+  if (status === 'published' && !wasPublished && newId) await notifySubscribers(newId);
 }
 
 document.getElementById('nm2-save-draft').addEventListener('click', () => saveArticle('draft'));
@@ -1936,9 +1968,52 @@ window.editArticle = (id) => {
   const a = _newsArticles.find(x => x.id === id);
   if (a) openNewsModal(a);
 };
+
+// ── Email subscribers when an article goes live ────────────────
+async function notifySubscribers(articleId) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/notify-news-subscribers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify({ articleId }),
+    });
+    const result = await res.json();
+    if (res.ok && !result.error && result.sent > 0) {
+      console.log(`Notified ${result.sent} subscriber(s) about article ${articleId}`);
+    } else if (!res.ok || result.error) {
+      console.error('notify-news-subscribers failed:', result.error);
+    }
+  } catch (e) {
+    console.error('notify-news-subscribers failed:', e.message);
+  }
+}
+
 window.publishArticle = async (id) => {
-  await supabase.from('news_articles').update({ status: 'published', published_at: new Date().toISOString() }).eq('id', id);
+  const { data: { user } } = await supabase.auth.getUser();
+  await supabase.from('news_articles').update({
+    status: 'published',
+    published_at: new Date().toISOString(),
+    reviewed_by: user.id,
+    reviewed_at: new Date().toISOString(),
+  }).eq('id', id);
   loadNewsAdmin();
+  loadPendingNewsCount();
+  await notifySubscribers(id);
+};
+window.approveArticle = window.publishArticle; // same action, different entry point
+window.rejectArticle = async (id) => {
+  const reason = prompt("Optional note for the author on why this was sent back (leave blank to skip):") || null;
+  const { data: { user } } = await supabase.auth.getUser();
+  await supabase.from('news_articles').update({
+    status: 'draft',
+    reviewed_by: user.id,
+    reviewed_at: new Date().toISOString(),
+    rejection_note: reason,
+  }).eq('id', id);
+  loadNewsAdmin();
+  loadPendingNewsCount();
 };
 window.unpublishArticle = async (id) => {
   await supabase.from('news_articles').update({ status: 'draft' }).eq('id', id);
@@ -1949,7 +2024,31 @@ window.deleteArticle = async (id) => {
   if (!confirm('Are you sure? This cannot be undone.')) return;
   await supabase.from('news_articles').delete().eq('id', id);
   loadNewsAdmin();
+  loadPendingNewsCount();
 };
+
+// Load pending-review count on page init so the badge shows before the News tab is opened
+async function loadPendingNewsCount() {
+  if (!_myPermissions.can_approve_news) return;
+  const { count } = await supabase
+    .from('news_articles')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'pending_review');
+  const newsBadge = document.getElementById('news-pending-badge');
+  const groupBadge = document.getElementById('content-group-badge');
+  const statCell = document.getElementById('stat-news-pending-cell');
+  const statValue = document.getElementById('stat-news-pending');
+  if (count) {
+    if (newsBadge) { newsBadge.textContent = count; newsBadge.style.display = 'inline'; }
+    if (groupBadge) { groupBadge.textContent = count; groupBadge.style.display = 'inline'; }
+    if (statCell) statCell.style.display = '';
+    if (statValue) statValue.textContent = count;
+  } else {
+    if (newsBadge) newsBadge.style.display = 'none';
+    if (groupBadge) groupBadge.style.display = 'none';
+    if (statCell) statCell.style.display = 'none';
+  }
+}
 
 // ── Archive admin ─────────────────────────────────────────────
 const ARCHIVE_BUCKET = 'archive-files';
