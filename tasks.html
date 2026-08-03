@@ -332,7 +332,7 @@ function contrastText(hex) {
   return yiq >= 150 ? '#111111' : '#ffffff';
 }
 
-let _projects = [], _tasks = [], _members = [], _allProfiles = [], _me = null, _roles = [], _projectAccess = [];
+let _projects = [], _tasks = [], _members = [], _allProfiles = [], _me = null, _roles = [], _projectAccess = [], _assigneesByTask = {};
 let _access = { manage: false, checkoff: false, test: false };
 let _commentCounts = {};
 let _view = 'list';
@@ -442,7 +442,7 @@ function show(which) {
 }
 
 async function loadAll() {
-  const [{ data: projects }, { data: tasks }, { data: profiles }, { data: userRoles }, { data: comments }, { data: tags }, { data: roles }, { data: access }] = await Promise.all([
+  const [{ data: projects }, { data: tasks }, { data: profiles }, { data: userRoles }, { data: comments }, { data: tags }, { data: roles }, { data: access }, { data: assignees }] = await Promise.all([
     supabase.from('task_projects').select('*').order('sort_order').order('created_at'),
     supabase.from('tasks').select('*').order('due_date', { nullsFirst: false }),
     supabase.from('profiles').select('id, display_name, username, role'),
@@ -451,11 +451,21 @@ async function loadAll() {
     supabase.from('task_tags').select('*').order('name'),
     _access.manage ? supabase.from('roles').select('id, label').order('level', { ascending: false }) : Promise.resolve({ data: [] }),
     _access.manage ? supabase.from('task_project_access').select('*') : Promise.resolve({ data: [] }),
+    supabase.from('task_assignees').select('task_id, user_id'),
   ]);
   _projects = projects || []; _tasks = tasks || [];
   _roles = roles || []; _projectAccess = access || [];
   _allProfiles = profiles || []; // used for name lookups (assignees, commenters, checked-off-by) regardless of level
   _tags = tags || [];
+
+  // Assignees live in the task_assignees join table (supports multiple per task).
+  // Build a task_id -> [user_id] map, and attach a convenience single-value
+  // assignee_id (first assignee) onto each task for the existing single-select UI.
+  _assigneesByTask = {};
+  (assignees || []).forEach(a => {
+    (_assigneesByTask[a.task_id] = _assigneesByTask[a.task_id] || []).push(a.user_id);
+  });
+  _tasks.forEach(t => { t.assignee_id = (_assigneesByTask[t.id] || [])[0] || null; });
 
   _commentCounts = {};
   (comments || []).forEach(c => { _commentCounts[c.task_id] = (_commentCounts[c.task_id] || 0) + 1; });
@@ -950,11 +960,11 @@ document.getElementById('tk-save').onclick = async () => {
   const title = document.getElementById('tk-name').value.trim();
   const errEl = document.getElementById('tk-error');
   if (!title) { errEl.textContent = 'Title is required.'; errEl.style.display = 'block'; return; }
+  const assigneeId = document.getElementById('tk-assignee').value || null;
   const payload = {
     title,
     description: document.getElementById('tk-desc').value.trim() || null,
     project_id: document.getElementById('tk-project').value,
-    assignee_id: document.getElementById('tk-assignee').value || null,
     due_date: document.getElementById('tk-due').value || null,
     priority: document.getElementById('tk-priority').value,
     status: _editingStatus || 'no_color',
@@ -962,14 +972,26 @@ document.getElementById('tk-save').onclick = async () => {
     tag_ids: Array.from(_editingTagIds),
     updated_at: new Date().toISOString(),
   };
-  let error;
+  let error, taskId = id;
   if (id) {
     ({ error } = await supabase.from('tasks').update(payload).eq('id', id));
   } else {
     payload.created_by = _me.id;
-    ({ error } = await supabase.from('tasks').insert(payload));
+    let inserted;
+    ({ data: inserted, error } = await supabase.from('tasks').insert(payload).select('id').single());
+    taskId = inserted?.id;
   }
   if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+
+  // Sync the single-select assignee against the task_assignees join table.
+  if (taskId) {
+    ({ error } = await supabase.from('task_assignees').delete().eq('task_id', taskId));
+    if (!error && assigneeId) {
+      ({ error } = await supabase.from('task_assignees').insert({ task_id: taskId, user_id: assigneeId }));
+    }
+    if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+  }
+
   document.getElementById('tk-modal').style.display = 'none'; loadAll();
 };
 document.getElementById('tk-delete').onclick = async () => {
