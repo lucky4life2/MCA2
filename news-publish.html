@@ -110,6 +110,7 @@
     .status-pip.published { background: #2d7d2f; }
     .status-pip.draft     { background: #b07d00; }
     .status-pip.archived  { background: var(--muted); }
+    .status-pip.pending_review { background: #c0392b; }
 
     /* ── Buttons ───────────────────────────── */
     .btn { font-size: 12px; font-weight: 600; padding: 8px 16px; border-radius: 4px; cursor: pointer; transition: background .15s, color .15s; border: none; white-space: nowrap; }
@@ -277,6 +278,17 @@ Regular paragraph text.
     </div><!-- /editor -->
   </div><!-- /top row -->
 
+  <!-- Pending review (approvers only) -->
+  <div class="np-panel" id="pending-review-panel" style="display:none;margin-bottom:1.5rem;">
+    <div class="np-panel-header">
+      <div class="np-panel-title">Pending Review</div>
+      <span id="pending-count" style="font-size:11px;color:var(--muted);"></span>
+    </div>
+    <div id="pending-review-list">
+      <div style="padding:1.5rem;text-align:center;color:var(--muted);font-size:13px;">Loading…</div>
+    </div>
+  </div>
+
   <!-- Bottom row: my articles + all articles -->
   <div class="np-split">
 
@@ -347,7 +359,9 @@ let _user      = null;
 let _profile   = null;
 let _myArticles  = [];
 let _allArticles = [];
+let _pendingArticles = [];
 let _editingId   = null;
+let _canApprove  = false;
 
 // ── Toast ─────────────────────────────────────────────────────
 function toast(msg, isError = false) {
@@ -387,6 +401,18 @@ async function init() {
 
   if (!hasAccess) { showState('denied'); return; }
 
+  // Check auto-publish / approval rights — admins & owners skip review, everyone else needs sign-off
+  try {
+    const { data, error } = await supabase.rpc('user_has_permission', { perm: 'can_approve_news' });
+    _canApprove = !error && data === true;
+  } catch { _canApprove = false; }
+  if (!_canApprove) {
+    // Legacy fallback: admin/owner always auto-publish
+    const { data: legacyProfile } = await supabase.from('profiles').select('role').eq('id', _user.id).single();
+    _canApprove = legacyProfile?.role === 'owner' || legacyProfile?.role === 'admin';
+  }
+  document.getElementById('pending-review-panel').style.display = _canApprove ? '' : 'none';
+
   // Get profile for display name
   const { data: profile } = await supabase.from('profiles').select('display_name,username').eq('id', _user.id).single();
   _profile = profile;
@@ -420,9 +446,77 @@ async function loadArticles() {
     .limit(20);
   _allArticles = all || [];
 
+  // Pending review (any author) — only approvers see/need this
+  if (_canApprove) {
+    const { data: pending } = await supabase
+      .from('news_articles').select('id,title,summary,category,author_name,created_at,status')
+      .eq('status', 'pending_review')
+      .order('created_at', { ascending: true });
+    _pendingArticles = pending || [];
+  }
+
   renderMyArticles();
   renderAllArticles();
+  if (_canApprove) renderPendingReview();
 }
+
+// ── Render pending review (approvers) ───────────────────────────
+function renderPendingReview() {
+  const el = document.getElementById('pending-review-list');
+  document.getElementById('pending-count').textContent =
+    `${_pendingArticles.length} awaiting review`;
+  if (!_pendingArticles.length) {
+    el.innerHTML = `<div style="padding:1.5rem;text-align:center;color:var(--muted);font-size:13px;">Nothing waiting on you right now.</div>`;
+    return;
+  }
+  el.innerHTML = _pendingArticles.map(a => {
+    const date = new Date(a.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    return `<div class="article-row">
+      <span class="status-pip pending_review"></span>
+      <div class="article-row-info">
+        <div class="article-row-title">${a.title}</div>
+        <div class="article-row-meta">${a.category||'General'} · By ${a.author_name||'Unknown'} · Submitted ${date}</div>
+      </div>
+      <div class="btn-row" style="flex-shrink:0;">
+        <button class="btn btn-outline btn-sm" onclick="loadIntoEditor('${a.id}')">Preview</button>
+        <button class="btn btn-success btn-sm" onclick="approveArticle('${a.id}')">Approve &amp; Publish</button>
+        <button class="btn btn-danger btn-sm" onclick="rejectArticle('${a.id}')">Reject</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.approveArticle = async (id) => {
+  const { error } = await supabase.from('news_articles')
+    .update({
+      status: 'published',
+      published_at: new Date().toISOString(),
+      reviewed_by: _user.id,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq('id', id);
+  if (error) { toast('Error: ' + error.message, true); return; }
+  toast('✓ Approved and published!');
+  if (_editingId === id) clearEditor();
+  await loadArticles();
+  await notifySubscribers(id);
+};
+
+window.rejectArticle = async (id) => {
+  const reason = prompt('Optional note for the author on why this was sent back (leave blank to skip):') || null;
+  const { error } = await supabase.from('news_articles')
+    .update({
+      status: 'draft',
+      reviewed_by: _user.id,
+      reviewed_at: new Date().toISOString(),
+      rejection_note: reason,
+    })
+    .eq('id', id);
+  if (error) { toast('Error: ' + error.message, true); return; }
+  toast('Sent back to draft');
+  if (_editingId === id) clearEditor();
+  await loadArticles();
+};
 
 // ── Render my articles ────────────────────────────────────────
 function renderMyArticles() {
@@ -436,17 +530,29 @@ function renderMyArticles() {
     const date = a.published_at
       ? new Date(a.published_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
       : new Date(a.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const statusLabel = a.status === 'pending_review' ? 'Pending Review' : capitalise(a.status);
+    const noteHtml = (a.status === 'draft' && a.rejection_note)
+      ? `<div class="article-row-meta" style="color:#c0392b;margin-top:2px;">Sent back: ${a.rejection_note}</div>` : '';
+    let actionBtn;
+    if (a.status === 'published') {
+      actionBtn = `<button class="btn btn-ghost btn-sm" onclick="quickUnpublish('${a.id}')">Unpublish</button>`;
+    } else if (a.status === 'pending_review') {
+      actionBtn = _canApprove
+        ? `<button class="btn btn-success btn-sm" onclick="approveArticle('${a.id}')">Approve</button>`
+        : `<span style="font-size:11px;color:var(--muted);padding:0 4px;">Awaiting approval</span>`;
+    } else {
+      actionBtn = `<button class="btn btn-success btn-sm" onclick="quickPublish('${a.id}')">${_canApprove ? 'Publish' : 'Submit for Review'}</button>`;
+    }
     return `<div class="article-row">
       <span class="status-pip ${a.status}"></span>
       <div class="article-row-info">
         <div class="article-row-title">${a.title}</div>
-        <div class="article-row-meta">${a.category||'General'} · ${capitalise(a.status)} · ${date}</div>
+        <div class="article-row-meta">${a.category||'General'} · ${statusLabel} · ${date}</div>
+        ${noteHtml}
       </div>
       <div style="display:flex;gap:5px;flex-shrink:0;">
         <button class="btn btn-outline btn-sm" onclick="loadIntoEditor('${a.id}')">Edit</button>
-        ${a.status !== 'published'
-          ? `<button class="btn btn-success btn-sm" onclick="quickPublish('${a.id}')">Publish</button>`
-          : `<button class="btn btn-ghost btn-sm" onclick="quickUnpublish('${a.id}')">Unpublish</button>`}
+        ${actionBtn}
         <button class="btn btn-danger btn-sm" onclick="deleteArticle('${a.id}')">✕</button>
       </div>
     </div>`;
@@ -555,7 +661,9 @@ async function saveArticle(forcedStatus) {
   const body    = document.getElementById('np-body').value.trim();
   if (!title) { toast('Please enter a headline.', true); return; }
 
-  const status    = forcedStatus || 'draft';
+  // Non-approvers (News Team) can't self-publish — their "Publish" goes to review instead
+  let status = forcedStatus || 'draft';
+  if (status === 'published' && !_canApprove) status = 'pending_review';
   const defaultAuthorName = _profile?.display_name || _profile?.username || _user.email;
   const overrideAuthor = document.getElementById('np-author-name').value.trim();
   const authorName = overrideAuthor || defaultAuthorName;
@@ -575,6 +683,7 @@ async function saveArticle(forcedStatus) {
     author_name: authorName,
     published_at: publishedAt,
   };
+  if (status === 'pending_review') payload.rejection_note = null; // clear old feedback on resubmission
 
   let error;
   let newlyPublishedId = null;
@@ -602,20 +711,24 @@ async function saveArticle(forcedStatus) {
     return;
   }
 
-  toast(status === 'published' ? '✓ Article published!' : '✓ Draft saved');
+  if (status === 'published') toast('✓ Article published!');
+  else if (status === 'pending_review') toast('Submitted for admin approval');
+  else toast('✓ Draft saved');
   clearEditor();
   await loadArticles();
   if (newlyPublishedId) await notifySubscribers(newlyPublishedId);
 }
 
 window.quickPublish = async (id) => {
-  const { error } = await supabase.from('news_articles')
-    .update({ status: 'published', published_at: new Date().toISOString() })
-    .eq('id', id);
+  const status = _canApprove ? 'published' : 'pending_review';
+  const payload = { status };
+  if (status === 'published') payload.published_at = new Date().toISOString();
+  else payload.rejection_note = null;
+  const { error } = await supabase.from('news_articles').update(payload).eq('id', id);
   if (error) { toast('Error: '+error.message, true); return; }
-  toast('✓ Published!');
+  toast(status === 'published' ? '✓ Published!' : 'Submitted for admin approval');
   await loadArticles();
-  await notifySubscribers(id);
+  if (status === 'published') await notifySubscribers(id);
 };
 window.quickUnpublish = async (id) => {
   const { error } = await supabase.from('news_articles').update({ status: 'draft' }).eq('id', id);
