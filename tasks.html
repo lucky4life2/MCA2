@@ -188,7 +188,6 @@
     </div>
 
     <div id="tk-legend" class="tk-legend"></div>
-    <div id="tk-tag-filter" class="tk-legend"></div>
     <div id="tk-collapsed-strip" class="tk-collapsed-strip" style="display:none;"></div>
 
     <div id="board"></div>
@@ -225,7 +224,7 @@
     <div class="modal-head"><div class="modal-title">Manage Tags</div><button class="modal-close" id="tagmgr-close">✕</button></div>
     <div class="modal-body">
       <div style="font-size:12px;color:var(--muted);margin-bottom:1rem;">
-        Tags help testers find the tasks meant for them — everyone with board access can see and filter by tags, but only admins and owners can create, rename, or delete one.
+        Tags are also a task's status and color — everyone with board access can see and filter by them, but only admins and owners can create, rename, recolor, or delete one. One tag can be marked as the check-off status and one as the done status.
       </div>
       <div id="tagmgr-list"></div>
       <div style="display:flex;gap:8px;margin-top:1rem;border-top:1px solid var(--border);padding-top:1rem;">
@@ -265,19 +264,9 @@
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Tags</label>
-        <div class="status-picker" id="tk-tags-picker"></div>
-        <div class="custom-color-note" id="tk-tags-note" style="display:none;">Only admins and owners can edit tags.</div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Status &amp; Color</label>
+        <label class="form-label">Tag</label>
         <div class="status-picker" id="tk-status-picker"></div>
-        <div class="custom-color-row">
-          <input type="color" id="tk-custom-color" value="#ffffff">
-          <button class="btn btn-outline" id="tk-custom-color-apply" style="font-size:11px;">Use custom color</button>
-          <button class="btn btn-outline" id="tk-custom-color-clear" style="font-size:11px;">Clear custom color</button>
-        </div>
-        <div class="custom-color-note" id="tk-color-note">Color follows the status above.</div>
+        <div class="custom-color-note" id="tk-tags-note" style="display:none;">Only admins and owners can change a task's tag.</div>
         <div style="font-size:12px;font-weight:600;margin-top:8px;display:none;" id="tk-checkoff-note"></div>
       </div>
 
@@ -306,24 +295,15 @@
 <script type="module">
 import { supabase } from './supabase.js';
 
-// ── Status / color system ──────────────────────────────────────
-// Order doubles as sort order for the grid view.
-const STATUSES = [
-  { key: 'needs_manager_check_off', label: 'Needs Manager Check-off', color: '#FF6EC7' },
-  { key: 'does_it_work',         label: 'Does It Work?',          color: '#A02B93' },
-  { key: 'in_progress',          label: 'In Progress',            color: '#FFD400' },
-  { key: 'required_for_release', label: 'Required for Release',   color: '#FF0000' },
-  { key: 'saved_for_later',      label: 'Saved for Later Testing',color: '#E97132' },
-  { key: 'undecided',            label: 'Undecided',              color: '#A5A5A5' },
-  { key: 'no_color',             label: 'No Color',               color: '#D9D9D9' },
-  { key: 'finished_fixed',       label: 'Finished / Fixed',       color: '#92D050' },
-  { key: 'not_possible',         label: 'Not Possible',           color: '#0F9ED5' },
-];
-const STATUS_MAP = Object.fromEntries(STATUSES.map(s => [s.key, s]));
-const STATUS_ORDER = Object.fromEntries(STATUSES.map((s, i) => [s.key, i]));
-
-function statusColor(key) { return (STATUS_MAP[key] || STATUS_MAP.no_color).color; }
-function taskColor(t) { return t.custom_color || statusColor(t.status); }
+// ── Tag / status / color system ─────────────────────────────────
+// A task's tag IS its status and its color — one field, no overrides.
+const NO_TAG = { name: 'No Tag', color: '#D9D9D9' };
+function tagById(id) { return _tags.find(tg => tg.id === id); }
+function taskTag(t) { return tagById(t.tag_id) || NO_TAG; }
+function taskColor(t) { return taskTag(t).color; }
+function tagOrder(t) { const i = _tags.findIndex(tg => tg.id === t.tag_id); return i < 0 ? 999 : i; }
+function isDoneTask(t) { return !!tagById(t.tag_id)?.is_done; }
+function isCheckoffTask(t) { return !!tagById(t.tag_id)?.is_checkoff; }
 function contrastText(hex) {
   if (!hex) return '#111';
   const h = hex.replace('#', '');
@@ -337,9 +317,8 @@ let _access = { manage: false, checkoff: false, test: false };
 let _commentCounts = {};
 let _view = 'list';
 let _projectFilter = '';
-let _statusFilter = null; // null = all, or a status key
 let _tags = [];
-let _tagFilter = new Set(); // tag ids; task matches if it has ANY selected tag
+let _tagFilter = new Set(); // tag ids; task matches if its tag is one of the selected
 const PRIORITY_ORDER = { urgent: 0, high: 1, medium: 2, low: 3 };
 
 let _projectSort = {}; // { [projectId]: 'color' | 'name' | 'due' | 'priority' }
@@ -387,7 +366,7 @@ function sortTasks(list, sortBy) {
     arr.sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9));
   } else { // color
     arr.sort((a, b) => {
-      const so = (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99);
+      const so = tagOrder(a) - tagOrder(b);
       if (so !== 0) return so;
       return a.title.localeCompare(b.title);
     });
@@ -448,7 +427,7 @@ async function loadAll() {
     supabase.from('profiles').select('id, display_name, username, role'),
     supabase.from('user_roles').select('user_id, roles(level)'),
     supabase.from('task_comments').select('task_id'),
-    supabase.from('task_tags').select('*').order('name'),
+    supabase.from('task_tags').select('*').order('created_at'),
     _access.manage ? supabase.from('roles').select('id, label').order('level', { ascending: false }) : Promise.resolve({ data: [] }),
     _access.manage ? supabase.from('task_project_access').select('*') : Promise.resolve({ data: [] }),
     supabase.from('task_assignees').select('task_id, user_id'),
@@ -481,7 +460,7 @@ async function loadAll() {
     return lvl >= 50;
   });
 
-  fillSelects(); buildTagFilterBar(); render();
+  fillSelects(); buildLegend(); render();
 }
 
 function fillSelects() {
@@ -503,23 +482,15 @@ function memberName(id) {
 function visibleTasks() {
   let list = _tasks;
   if (_projectFilter) list = list.filter(t => t.project_id === _projectFilter);
-  if (_statusFilter) list = list.filter(t => t.status === _statusFilter);
-  if (_tagFilter.size) list = list.filter(t => (t.tag_ids || []).some(id => _tagFilter.has(id)));
+  if (_tagFilter.size) list = list.filter(t => t.tag_id && _tagFilter.has(t.tag_id));
   return list;
 }
 
-function tagsFor(t) {
-  return (t.tag_ids || []).map(id => _tags.find(tg => tg.id === id)).filter(Boolean);
-}
-function tagPillsHtml(t) {
-  return tagsFor(t).map(tg => `<span class="tk-tag-pill" style="background:${tg.color};color:${contrastText(tg.color)};">${tg.name}</span>`).join('');
-}
-
-// Tag filter chips — visible to everyone with board access (testers included),
-// so testers can use tags the admins/owners set up to find the tasks meant for them.
-function buildTagFilterBar() {
-  const el = document.getElementById('tk-tag-filter');
-  if (!_tags.length) { el.innerHTML = ''; return; }
+// Legend chips — visible to everyone with board access (testers included), so
+// testers can filter by the tag/status/color admins set up. Multi-select: a
+// task matches if its one tag is any of the selected chips.
+function buildLegend() {
+  const el = document.getElementById('tk-legend');
   el.innerHTML = _tags.map(tg => `
     <div class="tk-legend-chip${_tagFilter.has(tg.id) ? ' active' : ''}" data-tag="${tg.id}">
       <span class="tk-swatch" style="background:${tg.color};"></span>${tg.name}
@@ -529,23 +500,6 @@ function buildTagFilterBar() {
       const id = chip.dataset.tag;
       if (_tagFilter.has(id)) _tagFilter.delete(id); else _tagFilter.add(id);
       chip.classList.toggle('active', _tagFilter.has(id));
-      render();
-    };
-  });
-}
-
-// ── Legend (also acts as color filter) ──
-function buildLegend() {
-  const el = document.getElementById('tk-legend');
-  el.innerHTML = STATUSES.map(s => `
-    <div class="tk-legend-chip" data-status="${s.key}">
-      <span class="tk-swatch" style="background:${s.color};"></span>${s.label}
-    </div>`).join('');
-  el.querySelectorAll('.tk-legend-chip').forEach(chip => {
-    chip.onclick = () => {
-      const key = chip.dataset.status;
-      _statusFilter = (_statusFilter === key) ? null : key;
-      el.querySelectorAll('.tk-legend-chip').forEach(c => c.classList.toggle('active', c.dataset.status === _statusFilter));
       render();
     };
   });
@@ -606,18 +560,17 @@ function renderList() {
       ${rows.length ? rows.map(t => {
         const color = taskColor(t);
         const txt = contrastText(color);
-        const st = STATUS_MAP[t.status] || STATUS_MAP.no_color;
+        const tg = taskTag(t);
         return `
         <div class="t-row" onclick="editTask('${t.id}')">
           <span class="t-color-dot" style="background:${color};"></span>
-          <div class="t-title${t.status === 'finished_fixed' ? ' done' : ''}">${t.title}</div>
-          ${tagPillsHtml(t)}
+          <div class="t-title${isDoneTask(t) ? ' done' : ''}">${t.title}</div>
           ${t.assignee_id ? `<div class="t-meta">${memberName(t.assignee_id)}</div>` : ''}
           ${t.due_date ? `<div class="t-meta">${t.due_date}</div>` : ''}
           ${_commentCounts[t.id] ? `<div class="t-meta">💬 ${_commentCounts[t.id]}</div>` : ''}
           ${t.checked_off_by ? `<div class="t-meta" style="color:#2d7d2f;">✓ ${memberName(t.checked_off_by) || 'checked'}</div>` : ''}
           <div class="t-badge ${t.priority}">${t.priority}</div>
-          <div class="t-status" style="background:${color};color:${txt};">${st.label}</div>
+          <div class="t-status" style="background:${color};color:${txt};">${tg.name}</div>
         </div>`;
       }).join('') : '<div class="t-empty">No tasks in this project.</div>'}
     </div>`;
@@ -646,13 +599,12 @@ function renderGrid() {
         ${cards.length ? `<div class="tk-grid">${cards.map(t => {
           const color = taskColor(t);
           const txt = contrastText(color);
-          const st = STATUS_MAP[t.status] || STATUS_MAP.no_color;
+          const tg = taskTag(t);
           return `
           <div class="tk-card" style="background:${color};color:${txt};" onclick="editTask('${t.id}')">
-            <div class="tk-card-title${t.status === 'finished_fixed' ? ' done' : ''}" style="color:${txt};">${t.title}</div>
-            ${tagPillsHtml(t)}
+            <div class="tk-card-title${isDoneTask(t) ? ' done' : ''}" style="color:${txt};">${t.title}</div>
             <div class="tk-card-foot">
-              <span class="tk-card-status" style="color:${txt};">${st.label}</span>
+              <span class="tk-card-status" style="color:${txt};">${tg.name}</span>
               ${t.assignee_id ? `<span class="tk-card-meta" style="color:${txt};">👤 ${memberName(t.assignee_id) || 'Unassigned'}</span>` : ''}
               ${t.due_date ? `<span class="tk-card-meta" style="color:${txt};">${t.due_date}</span>` : ''}
               ${_commentCounts[t.id] ? `<span class="tk-card-meta" style="color:${txt};">💬 ${_commentCounts[t.id]}</span>` : ''}
@@ -732,17 +684,16 @@ document.getElementById('pj-delete').onclick = async () => {
 };
 
 // ── Task modal ──
-let _editingCustomColor = null; // holds pending custom_color for the open task ('' = cleared, null = untouched, '#hex' = set)
-let _editingStatus = null;
-let _editingTagIds = new Set();
+let _editingTag = null; // id of the single tag/status/color chosen for this task, or null
 
-// Applying tags to a task is part of editing the task, so it's gated the
-// same way as title/project/etc — canEdit (= _access.manage). Testers still
-// see which tags are on a task, just can't change them.
+// Picking a tag for a task is gated the same way as title/project/etc —
+// canEdit (= _access.manage). Testers still see the task's tag, just can't
+// change it. Single-select: a task has exactly one tag, which is its status
+// and its color.
 let _tagPickEditingIds = new Set(); // ids of tags currently shown as inline edit rows — any number at once
 
 function buildTagPicker(canEdit) {
-  const el = document.getElementById('tk-tags-picker');
+  const el = document.getElementById('tk-status-picker');
   if (!_tags.length) {
     el.innerHTML = `<div class="t-empty" style="padding:0;">No tags yet.${canEdit ? ' Use the Tags button above to create some.' : ''}</div>`;
     document.getElementById('tk-tags-note').style.display = 'none';
@@ -759,7 +710,7 @@ function buildTagPicker(canEdit) {
       </div>`;
     }
     return `
-    <div class="status-pick${_editingTagIds.has(tg.id) ? ' selected' : ''}" data-tag="${tg.id}" style="${canEdit ? '' : 'cursor:default;opacity:.85;'}">
+    <div class="status-pick${_editingTag === tg.id ? ' selected' : ''}" data-tag="${tg.id}" style="${canEdit ? '' : 'cursor:default;opacity:.85;'}">
       <span class="tk-swatch" style="background:${tg.color};"></span>${tg.name}
       ${canEdit ? `
       <span class="tk-tagpick-actions">
@@ -774,8 +725,8 @@ function buildTagPicker(canEdit) {
       pick.onclick = (e) => {
         if (e.target.closest('.tk-tagpick-actions')) return; // clicks on edit/delete don't toggle selection
         const id = pick.dataset.tag;
-        if (_editingTagIds.has(id)) _editingTagIds.delete(id); else _editingTagIds.add(id);
-        pick.classList.toggle('selected', _editingTagIds.has(id));
+        _editingTag = (_editingTag === id) ? null : id;
+        el.querySelectorAll('.status-pick').forEach(p => p.classList.toggle('selected', p.dataset.tag === _editingTag));
       };
     });
     el.querySelectorAll('.tk-tagpick-edit').forEach(btn => {
@@ -803,8 +754,8 @@ function buildTagPicker(canEdit) {
   document.getElementById('tk-tags-note').style.display = canEdit ? 'none' : '';
 }
 
-// Rename/recolor a tag from the task modal's tag picker (same effect as
-// editing it in the Manage Tags modal — keeps both entry points in sync).
+// Rename/recolor a tag from the task modal's picker (same effect as editing
+// it in the Manage Tags modal — keeps both entry points in sync).
 async function saveTagEdit(id, name, color) {
   const { error } = await supabase.from('task_tags').update({ name, color }).eq('id', id);
   if (error) { alert(error.message); return; }
@@ -812,47 +763,23 @@ async function saveTagEdit(id, name, color) {
   if (tg) { tg.name = name; tg.color = color; }
   _tagPickEditingIds.delete(id);
   buildTagPicker(_access.manage);
-  buildTagFilterBar();
+  buildLegend();
   render();
 }
 
-// Delete a tag from the task modal's tag picker — removes it from the tag
-// list, the current filter, and every task's tag_ids, same as the Manage
-// Tags modal's delete action.
+// Delete a tag from the task modal's picker — removes it from the tag list,
+// the current filter, and every task's tag_id, same as the Manage Tags
+// modal's delete action.
 async function deleteTagEverywhere(id) {
   const { error } = await supabase.from('task_tags').delete().eq('id', id);
   if (error) { alert(error.message); return; }
   _tags = _tags.filter(t => t.id !== id);
   _tagFilter.delete(id);
-  _editingTagIds.delete(id);
+  if (_editingTag === id) _editingTag = null;
   _tagPickEditingIds.delete(id);
   buildTagPicker(_access.manage);
-  buildTagFilterBar();
+  buildLegend();
   render();
-}
-
-function buildStatusPicker(selectedStatus) {
-  const el = document.getElementById('tk-status-picker');
-  el.innerHTML = STATUSES.map(s => `
-    <div class="status-pick${s.key === selectedStatus ? ' selected' : ''}" data-status="${s.key}">
-      <span class="tk-swatch" style="background:${s.color};"></span>${s.label}
-    </div>`).join('');
-  el.querySelectorAll('.status-pick').forEach(pick => {
-    pick.onclick = () => {
-      _editingStatus = pick.dataset.status;
-      el.querySelectorAll('.status-pick').forEach(p => p.classList.toggle('selected', p.dataset.status === _editingStatus));
-      updateColorNote();
-    };
-  });
-}
-
-function updateColorNote() {
-  const note = document.getElementById('tk-color-note');
-  if (_editingCustomColor) {
-    note.textContent = `Using custom color ${_editingCustomColor} instead of the status color.`;
-  } else {
-    note.textContent = 'Color follows the status selected above.';
-  }
 }
 
 async function openTaskModal(t) {
@@ -873,19 +800,12 @@ async function openTaskModal(t) {
   document.getElementById('tk-save').style.display = canEdit ? '' : 'none';
   const doneBtn = document.getElementById('tk-mark-done');
   doneBtn.style.display = (t && canEdit) ? '' : 'none';
-  doneBtn.textContent = (t && t.status === 'finished_fixed') ? '↺ Mark as Not Done' : '✓ Mark as Done';
+  doneBtn.textContent = (t && isDoneTask(t)) ? '↺ Mark as Not Done' : '✓ Mark as Done';
   document.getElementById('tk-error').style.display = 'none';
   document.getElementById('tk-comments-wrap').style.display = t ? '' : 'none';
 
-  _editingStatus = t?.status || 'no_color';
-  _editingCustomColor = t?.custom_color || null;
-  document.getElementById('tk-status-picker').closest('.form-group').style.display = canEdit ? '' : 'none';
-  buildStatusPicker(_editingStatus);
-
-  _editingTagIds = new Set(t?.tag_ids || []);
+  _editingTag = t?.tag_id || null;
   buildTagPicker(canEdit);
-  document.getElementById('tk-custom-color').value = _editingCustomColor || statusColor(_editingStatus);
-  updateColorNote();
 
   // Testing workflow: submit-for-check-off is available to anyone with task
   // access on an existing task; the check-off toggle only to tester managers
@@ -894,7 +814,7 @@ async function openTaskModal(t) {
   const submitBtn = document.getElementById('tk-submit-checkoff');
   submitBtn.style.display = (t && (_access.test || _access.checkoff || _access.manage)) ? '' : 'none';
   const toggleBtn = document.getElementById('tk-checkoff-toggle');
-  const canToggle = t && (_access.checkoff || _access.manage) && (t.status === 'needs_manager_check_off' || isCheckedOff);
+  const canToggle = t && (_access.checkoff || _access.manage) && (isCheckoffTask(t) || isCheckedOff);
   toggleBtn.style.display = canToggle ? '' : 'none';
   toggleBtn.textContent = isCheckedOff ? '↺ Undo Check-off' : '✓ Check Off';
 
@@ -912,7 +832,9 @@ async function openTaskModal(t) {
 }
 window.editTask = (id) => openTaskModal(_tasks.find(t => t.id === id));
 window.markDone = async (id) => {
-  await supabase.from('tasks').update({ status: 'finished_fixed', updated_at: new Date().toISOString() }).eq('id', id);
+  const doneTag = _tags.find(tg => tg.is_done);
+  if (!doneTag) { alert('No tag is marked as the done status — set one in Manage Tags first.'); return; }
+  await supabase.from('tasks').update({ tag_id: doneTag.id, updated_at: new Date().toISOString() }).eq('id', id);
   loadAll();
 };
 document.getElementById('btn-new-task').onclick = () => {
@@ -920,16 +842,6 @@ document.getElementById('btn-new-task').onclick = () => {
   openTaskModal(null);
 };
 document.getElementById('tk-close').onclick = document.getElementById('tk-cancel').onclick = () => document.getElementById('tk-modal').style.display = 'none';
-
-document.getElementById('tk-custom-color-apply').onclick = () => {
-  _editingCustomColor = document.getElementById('tk-custom-color').value;
-  updateColorNote();
-};
-document.getElementById('tk-custom-color-clear').onclick = () => {
-  _editingCustomColor = null;
-  document.getElementById('tk-custom-color').value = statusColor(_editingStatus);
-  updateColorNote();
-};
 
 document.getElementById('tk-submit-checkoff').onclick = async () => {
   const id = document.getElementById('tk-id').value;
@@ -952,8 +864,13 @@ document.getElementById('tk-checkoff-toggle').onclick = async () => {
 document.getElementById('tk-mark-done').onclick = async () => {
   const id = document.getElementById('tk-id').value;
   const t = _tasks.find(x => x.id === id);
-  const newStatus = t?.status === 'finished_fixed' ? 'no_color' : 'finished_fixed';
-  await supabase.from('tasks').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', id);
+  const doneTag = _tags.find(tg => tg.is_done);
+  if (isDoneTask(t)) {
+    await supabase.from('tasks').update({ tag_id: null, updated_at: new Date().toISOString() }).eq('id', id);
+  } else {
+    if (!doneTag) { alert('No tag is marked as the done status — set one in Manage Tags first.'); return; }
+    await supabase.from('tasks').update({ tag_id: doneTag.id, updated_at: new Date().toISOString() }).eq('id', id);
+  }
   document.getElementById('tk-modal').style.display = 'none'; loadAll();
 };
 document.getElementById('tk-save').onclick = async () => {
@@ -968,9 +885,7 @@ document.getElementById('tk-save').onclick = async () => {
     project_id: document.getElementById('tk-project').value,
     due_date: document.getElementById('tk-due').value || null,
     priority: document.getElementById('tk-priority').value,
-    status: _editingStatus || 'no_color',
-    custom_color: _editingCustomColor || null,
-    tag_ids: Array.from(_editingTagIds),
+    tag_id: _editingTag || null,
     updated_at: new Date().toISOString(),
   };
   let error, taskId = id;
@@ -1009,6 +924,12 @@ function renderTagMgrList() {
     <div class="tag-mgr-row">
       <input type="color" class="tagmgr-color-input" data-id="${tg.id}" value="${tg.color}" style="width:30px;height:30px;padding:0;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:none;flex-shrink:0;">
       <input type="text" class="form-input tagmgr-name-input" data-id="${tg.id}" value="${tg.name}" style="flex:1;">
+      <label style="font-size:11px;display:flex;align-items:center;gap:3px;white-space:nowrap;">
+        <input type="checkbox" class="tagmgr-checkoff-input" data-id="${tg.id}" ${tg.is_checkoff ? 'checked' : ''}> Check-off
+      </label>
+      <label style="font-size:11px;display:flex;align-items:center;gap:3px;white-space:nowrap;">
+        <input type="checkbox" class="tagmgr-done-input" data-id="${tg.id}" ${tg.is_done ? 'checked' : ''}> Done
+      </label>
       <div class="tag-mgr-actions">
         <button data-save="${tg.id}" title="Save changes">💾</button>
         <button data-del="${tg.id}" title="Delete tag">🗑</button>
@@ -1020,10 +941,15 @@ function renderTagMgrList() {
       const id = btn.dataset.save;
       const name = el.querySelector(`.tagmgr-name-input[data-id="${id}"]`).value.trim();
       const color = el.querySelector(`.tagmgr-color-input[data-id="${id}"]`).value;
+      const isCheckoff = el.querySelector(`.tagmgr-checkoff-input[data-id="${id}"]`).checked;
+      const isDone = el.querySelector(`.tagmgr-done-input[data-id="${id}"]`).checked;
       const errEl = document.getElementById('tagmgr-error');
       errEl.style.display = 'none';
       if (!name) { errEl.textContent = 'Tag name can\'t be empty.'; errEl.style.display = 'block'; return; }
-      const { error } = await supabase.from('task_tags').update({ name, color }).eq('id', id);
+      // Only one tag can hold each flag — clear it from any other tag first.
+      if (isCheckoff) await supabase.from('task_tags').update({ is_checkoff: false }).neq('id', id).eq('is_checkoff', true);
+      if (isDone) await supabase.from('task_tags').update({ is_done: false }).neq('id', id).eq('is_done', true);
+      const { error } = await supabase.from('task_tags').update({ name, color, is_checkoff: isCheckoff, is_done: isDone }).eq('id', id);
       if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
       await loadAll();
       renderTagMgrList();
