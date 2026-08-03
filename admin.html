@@ -194,6 +194,10 @@
     .audit-action-insert { background: #e8f8e8; color: #2d7d2f; }
     .audit-action-update { background: #e8eeff; color: var(--blue); }
     .audit-action-delete { background: #fdecea; color: #c0392b; }
+    .audit-actor-badge { font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; white-space: nowrap; margin-right: 8px; display: inline-block; }
+    .audit-actor-admin  { background: #f3e8ff; color: #7a2fc4; }
+    .audit-actor-member { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+    .audit-actor-system { background: #fff8e1; color: #b07d00; }
     .audit-row-toggle { font-size: 11px; color: var(--blue); flex-shrink: 0; }
     .audit-row-detail { display: none; margin-top: 10px; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; }
     .audit-row-detail.open { display: block; }
@@ -821,6 +825,18 @@
           <select class="filter-select" id="audit-filter-table">
             <option value="">All Areas</option>
           </select>
+          <select class="filter-select" id="audit-filter-actor-type">
+            <option value="">Staff &amp; Members</option>
+            <option value="admin">Staff Only</option>
+            <option value="member">Members Only</option>
+            <option value="system">System Only</option>
+          </select>
+          <select class="filter-select" id="audit-filter-actor">
+            <option value="">All People</option>
+          </select>
+          <input type="date" class="filter-select" id="audit-filter-from" title="From date">
+          <input type="date" class="filter-select" id="audit-filter-to" title="To date">
+          <button class="btn btn-outline btn-sm" id="btn-audit-clear-filters" type="button">Clear</button>
         </div>
         <div id="audit-log-list">
           <div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">Loading audit log...</div>
@@ -3282,7 +3298,7 @@ let _auditOffset = 0;
 let _auditDone = false;
 let _auditLoading = false;
 let _auditTablesLoaded = false;
-let _auditFilter = { search: '', action: '', table: '' };
+let _auditFilter = { search: '', action: '', table: '', actorType: '', actor: '', from: '', to: '' };
 
 function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -3295,7 +3311,7 @@ function auditTableLabel(t) {
 async function populateAuditTableFilter() {
   if (_auditTablesLoaded) return;
   try {
-    const { data, error } = await supabase.from('audit_log').select('table_name');
+    const { data, error } = await supabase.from('audit_log').select('table_name, actor_id, actor_name');
     if (error) throw error;
     const tables = [...new Set((data || []).map(r => r.table_name))].sort();
     const sel = document.getElementById('audit-filter-table');
@@ -3305,6 +3321,19 @@ async function populateAuditTableFilter() {
       opt.textContent = auditTableLabel(t);
       sel.appendChild(opt);
     });
+
+    const actorsSeen = new Map();
+    (data || []).forEach(r => {
+      if (r.actor_id && !actorsSeen.has(r.actor_id)) actorsSeen.set(r.actor_id, r.actor_name || 'Unknown');
+    });
+    const actorSel = document.getElementById('audit-filter-actor');
+    [...actorsSeen.entries()].sort((a,b) => a[1].localeCompare(b[1])).forEach(([id, name]) => {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = name;
+      actorSel.appendChild(opt);
+    });
+
     _auditTablesLoaded = true;
   } catch (e) { /* non-fatal */ }
 }
@@ -3327,9 +3356,13 @@ async function loadAuditLog(reset = true) {
   try {
     let q = supabase.from('audit_log').select('*').order('created_at', { ascending: false })
       .range(_auditOffset, _auditOffset + AUDIT_PAGE_SIZE - 1);
-    if (_auditFilter.action) q = q.eq('action', _auditFilter.action);
-    if (_auditFilter.table)  q = q.eq('table_name', _auditFilter.table);
-    if (_auditFilter.search) q = q.or(`summary.ilike.%${_auditFilter.search}%,actor_name.ilike.%${_auditFilter.search}%`);
+    if (_auditFilter.action)    q = q.eq('action', _auditFilter.action);
+    if (_auditFilter.table)     q = q.eq('table_name', _auditFilter.table);
+    if (_auditFilter.actorType) q = q.eq('actor_type', _auditFilter.actorType);
+    if (_auditFilter.actor)     q = q.eq('actor_id', _auditFilter.actor);
+    if (_auditFilter.from)      q = q.gte('created_at', _auditFilter.from + 'T00:00:00');
+    if (_auditFilter.to)        q = q.lte('created_at', _auditFilter.to + 'T23:59:59');
+    if (_auditFilter.search)    q = q.or(`summary.ilike.%${_auditFilter.search}%,actor_name.ilike.%${_auditFilter.search}%`);
 
     const { data, error } = await q;
     if (error) throw error;
@@ -3358,12 +3391,13 @@ function renderAuditLog() {
   el.innerHTML = _auditLog.map((r, idx) => {
     const when = new Date(r.created_at).toLocaleString();
     const actor = r.actor_name || 'Unknown';
+    const actorType = r.actor_type || 'system';
     const hasDetail = r.old_data || r.new_data;
     return `<div class="audit-row">
       <div class="audit-row-top" ${hasDetail ? `onclick="toggleAuditDetail(${idx})"` : ''}>
         <div class="audit-row-main">
           <div class="audit-summary">
-            <span class="audit-action-badge audit-action-${r.action}">${r.action}</span>${escapeHtml(r.summary || auditTableLabel(r.table_name))}
+            <span class="audit-actor-badge audit-actor-${actorType}">${actorType}</span><span class="audit-action-badge audit-action-${r.action}">${r.action}</span>${escapeHtml(r.summary || auditTableLabel(r.table_name))}
           </div>
           <div class="audit-meta">${escapeHtml(when)} · ${escapeHtml(actor)}${r.actor_role ? ' (' + escapeHtml(r.actor_role) + ')' : ''} · ${auditTableLabel(r.table_name)}</div>
         </div>
@@ -3401,6 +3435,33 @@ document.getElementById('audit-filter-action').addEventListener('change', functi
 });
 document.getElementById('audit-filter-table').addEventListener('change', function() {
   _auditFilter.table = this.value;
+  loadAuditLog(true);
+});
+document.getElementById('audit-filter-actor-type').addEventListener('change', function() {
+  _auditFilter.actorType = this.value;
+  loadAuditLog(true);
+});
+document.getElementById('audit-filter-actor').addEventListener('change', function() {
+  _auditFilter.actor = this.value;
+  loadAuditLog(true);
+});
+document.getElementById('audit-filter-from').addEventListener('change', function() {
+  _auditFilter.from = this.value;
+  loadAuditLog(true);
+});
+document.getElementById('audit-filter-to').addEventListener('change', function() {
+  _auditFilter.to = this.value;
+  loadAuditLog(true);
+});
+document.getElementById('btn-audit-clear-filters').addEventListener('click', () => {
+  _auditFilter = { search: '', action: '', table: '', actorType: '', actor: '', from: '', to: '' };
+  document.getElementById('audit-search').value = '';
+  document.getElementById('audit-filter-action').value = '';
+  document.getElementById('audit-filter-table').value = '';
+  document.getElementById('audit-filter-actor-type').value = '';
+  document.getElementById('audit-filter-actor').value = '';
+  document.getElementById('audit-filter-from').value = '';
+  document.getElementById('audit-filter-to').value = '';
   loadAuditLog(true);
 });
 document.getElementById('btn-audit-load-more').addEventListener('click', () => loadAuditLog(false));
