@@ -203,6 +203,10 @@
     .audit-row-detail.open { display: block; }
     .audit-row-detail pre { font-size: 11px; font-family: monospace; white-space: pre-wrap; word-break: break-word; margin: 0 0 8px; color: var(--black); }
     .audit-row-detail-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+    .audit-field-row { display: flex; gap: 10px; padding: 3px 0; font-size: 12px; border-bottom: 1px dashed var(--border); }
+    .audit-field-row:last-of-type { border-bottom: none; }
+    .audit-field-key { flex: 0 0 160px; color: var(--muted); font-weight: 600; }
+    .audit-field-val { flex: 1; color: var(--black); word-break: break-word; }
     .news-article-row:last-child { border-bottom: none; }
     .news-article-title { font-weight: 600; font-size: 14px; color: var(--black); }
     .news-article-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
@@ -3371,7 +3375,7 @@ async function loadAuditLog(reset = true) {
     _auditOffset += (data || []).length;
     if (!data || data.length < AUDIT_PAGE_SIZE) _auditDone = true;
 
-    renderAuditLog();
+    await renderAuditLog();
     moreBtn.style.display = _auditDone ? 'none' : 'inline-block';
     endLabel.style.display = (_auditDone && _auditLog.length) ? 'inline' : 'none';
   } catch (e) {
@@ -3381,12 +3385,90 @@ async function loadAuditLog(reset = true) {
   }
 }
 
-function renderAuditLog() {
+// Fields whose value is a uuid pointing at another table — resolved to a
+// human-readable name before being shown in the expanded details.
+const AUDIT_REF_FIELDS = {
+  user_id: 'profiles', author_id: 'profiles', created_by: 'profiles',
+  checked_off_by: 'profiles', claimed_by: 'profiles', sender_id: 'profiles',
+  granted_by: 'profiles', actor_id: 'profiles', assignee_id: 'profiles',
+  approved_by: 'profiles', updated_by: 'profiles', deleted_by: 'profiles',
+  role_id: 'roles', project_id: 'task_projects', task_id: 'tasks',
+};
+const AUDIT_REF_TABLE_CONFIG = {
+  profiles:      { label: c => c.display_name || c.username || c.email || 'Unknown user' },
+  roles:         { label: c => c.name || 'Unknown role' },
+  task_projects: { label: c => c.name || 'Unknown project' },
+  tasks:         { label: c => c.title || 'Unknown task' },
+};
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+let _auditRefCache = { profiles: {}, roles: {}, task_projects: {}, tasks: {} };
+
+const AUDIT_LABEL_OVERRIDES = { id: 'ID', uuid: 'UUID' };
+function humanizeFieldName(k) {
+  if (AUDIT_LABEL_OVERRIDES[k]) return AUDIT_LABEL_OVERRIDES[k];
+  return k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+async function resolveAuditRefs(rows) {
+  const needed = { profiles: new Set(), roles: new Set(), task_projects: new Set(), tasks: new Set() };
+  rows.forEach(r => {
+    [r.old_data, r.new_data].forEach(blob => {
+      if (!blob) return;
+      Object.entries(blob).forEach(([k, v]) => {
+        const table = AUDIT_REF_FIELDS[k];
+        if (table && typeof v === 'string' && UUID_RE.test(v) && !_auditRefCache[table][v]) {
+          needed[table].add(v);
+        }
+      });
+    });
+  });
+
+  for (const table of Object.keys(needed)) {
+    const ids = [...needed[table]];
+    if (!ids.length) continue;
+    try {
+      const cols = table === 'profiles' ? 'id, display_name, username, email'
+                 : table === 'tasks'    ? 'id, title'
+                 : 'id, name';
+      const { data, error } = await supabase.from(table).select(cols).in('id', ids);
+      if (error) throw error;
+      (data || []).forEach(row => {
+        _auditRefCache[table][row.id] = AUDIT_REF_TABLE_CONFIG[table].label(row);
+      });
+    } catch (e) { /* non-fatal — falls back to raw id */ }
+  }
+}
+
+function resolveAuditValue(key, value) {
+  const table = AUDIT_REF_FIELDS[key];
+  if (table && typeof value === 'string' && UUID_RE.test(value)) {
+    const name = _auditRefCache[table][value];
+    return name ? `${name} (${value.slice(0, 8)}…)` : value;
+  }
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) {
+    const d = new Date(value);
+    if (!isNaN(d)) return d.toLocaleString();
+  }
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function formatAuditBlob(blob) {
+  return Object.entries(blob).map(([k, v]) => {
+    return `<div class="audit-field-row"><span class="audit-field-key">${escapeHtml(humanizeFieldName(k))}</span><span class="audit-field-val">${escapeHtml(resolveAuditValue(k, v))}</span></div>`;
+  }).join('');
+}
+
+async function renderAuditLog() {
   const el = document.getElementById('audit-log-list');
   if (!_auditLog.length) {
     el.innerHTML = '<div style="text-align:center;padding:2.5rem;color:var(--muted);font-size:14px;">No audit log entries match your filters.</div>';
     return;
   }
+
+  await resolveAuditRefs(_auditLog);
 
   el.innerHTML = _auditLog.map((r, idx) => {
     const when = new Date(r.created_at).toLocaleString();
@@ -3404,8 +3486,8 @@ function renderAuditLog() {
         ${hasDetail ? `<span class="audit-row-toggle" id="audit-toggle-${idx}">Details ▾</span>` : ''}
       </div>
       ${hasDetail ? `<div class="audit-row-detail" id="audit-detail-${idx}">
-        ${r.old_data ? `<div class="audit-row-detail-label">Before</div><pre>${escapeHtml(JSON.stringify(r.old_data, null, 2))}</pre>` : ''}
-        ${r.new_data ? `<div class="audit-row-detail-label">After</div><pre>${escapeHtml(JSON.stringify(r.new_data, null, 2))}</pre>` : ''}
+        ${r.old_data ? `<div class="audit-row-detail-label">Before</div>${formatAuditBlob(r.old_data)}` : ''}
+        ${r.new_data ? `<div class="audit-row-detail-label" style="margin-top:8px;">After</div>${formatAuditBlob(r.new_data)}` : ''}
       </div>` : ''}
     </div>`;
   }).join('');
