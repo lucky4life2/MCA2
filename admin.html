@@ -2731,7 +2731,9 @@ document.getElementById('btn-save-config').addEventListener('click', async () =>
   statusEl.textContent = 'Saving...';
   const cfg = {};
   ['discord-url','youtube-url','email-us','stat1-label','stat1-value','stat1-sub','stat2-label','stat2-value','stat2-sub','stat3-label','stat3-value','stat3-sub','stat4-label','stat4-value','stat4-sub'].forEach(k => {
-    cfg[k.replace('-','_')] = document.getElementById('cfg-'+k)?.value.trim()||'';
+    let v = document.getElementById('cfg-'+k)?.value.trim()||'';
+    if ((k === 'discord-url' || k === 'youtube-url') && v && !/^https?:\/\//i.test(v)) v = 'https://' + v;
+    cfg[k.replace('-','_')] = v;
   });
   const { error } = await supabase.from('settings').upsert({ key:'site_config', value: JSON.stringify(cfg) }, { onConflict:'key' });
   statusEl.textContent = error ? 'Error: '+error.message : '✓ Saved';

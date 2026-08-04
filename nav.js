@@ -37,8 +37,9 @@ const _configReady = new Promise(r => { _configResolve = r; });
       const rows = await res.json();
       if (rows.length) {
         try { SITE_CONFIG = JSON.parse(rows[0].value); } catch(e) {}
-        if (SITE_CONFIG.discord_url) DISCORD_URL = SITE_CONFIG.discord_url;
-        if (SITE_CONFIG.youtube_url) YOUTUBE_URL = SITE_CONFIG.youtube_url;
+        const withProtocol = (u) => u && !/^https?:\/\//i.test(u) ? 'https://' + u : u;
+        if (SITE_CONFIG.discord_url) DISCORD_URL = withProtocol(SITE_CONFIG.discord_url);
+        if (SITE_CONFIG.youtube_url) YOUTUBE_URL = withProtocol(SITE_CONFIG.youtube_url);
         if (SITE_CONFIG.email_us) EMAIL_US = SITE_CONFIG.email_us;
       }
     }
