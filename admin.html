@@ -1457,7 +1457,13 @@ function renderMembers(members) {
     const overflowRoles = sortedRoles.slice(VISIBLE_ROLE_COUNT);
     const roleBadgesHtml = visibleRoles.map(roleBadge).join('') +
       (overflowRoles.length
-        ? `<span class="role-badge role-more-toggle" style="cursor:pointer;background:var(--bg);color:var(--muted);border:1px dashed var(--border);" title="${overflowRoles.map(r=>r.label).join(', ')}" onclick="this.style.display='none';this.nextElementSibling.style.display='inline';">+${overflowRoles.length} more</span><span style="display:none;">${overflowRoles.map(roleBadge).join('')}</span>`
+        ? `<span class="role-badge role-more-toggle" style="cursor:pointer;background:var(--bg);color:var(--muted);border:1px dashed var(--border);" title="${overflowRoles.map(r=>r.label).join(', ')}" onclick="
+            const hidden=this.nextElementSibling, less=hidden.nextElementSibling;
+            this.style.display='none'; hidden.style.display='inline'; less.style.display='inline-flex';
+          ">+${overflowRoles.length} more</span><span style="display:none;">${overflowRoles.map(roleBadge).join('')}</span><span class="role-badge role-less-toggle" style="display:none;cursor:pointer;background:var(--bg);color:var(--muted);border:1px dashed var(--border);" onclick="
+            const less=this, hidden=less.previousElementSibling, more=hidden.previousElementSibling;
+            less.style.display='none'; hidden.style.display='none'; more.style.display='inline';
+          ">− less</span>`
         : '');
 
     // Can this user's roles be changed by current viewer?
