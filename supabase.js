@@ -133,6 +133,29 @@ export async function endRolePreview() {
   if (error) throw error;
 }
 
+// Same as endRolePreview(), but issued with fetch(..., { keepalive: true })
+// instead of supabase.rpc(), so the request actually survives a tab close /
+// navigation-away instead of getting cancelled mid-flight. Used from nav.js's
+// pagehide handler, not from the "Exit preview" button (that one already
+// works fine with the normal endRolePreview()).
+export async function endRolePreviewBeacon() {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const token = data?.session?.access_token;
+    if (!token) return;
+    fetch(`${SUPABASE_URL}/rest/v1/rpc/end_role_preview`, {
+      method: 'POST',
+      keepalive: true,
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${token}`
+      },
+      body: '{}'
+    });
+  } catch (e) {}
+}
+
 /**
  * Returns the active preview role for the current user, or null if
  * there isn't one. { role_id, name, label, color, level, expires_at }

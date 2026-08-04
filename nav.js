@@ -12,6 +12,16 @@ let DISCORD_URL = 'https://discord.gg/hZrt28vG29';
 let YOUTUBE_URL = 'https://www.youtube.com/@MinecraftClubOfAmerica';
 let EMAIL_US = 'minecraftclubofamerica@gmail.com';
 let SITE_CONFIG = {};
+// Set right before a same-site navigation happens (link click / form
+// submit), so the role-preview pagehide handler below can tell "moving to
+// another page on the site" apart from "actually closing the tab" — both
+// fire the same pagehide event.
+let _mcaInternalNav = false;
+document.addEventListener('click', (e) => {
+  const a = e.target.closest && e.target.closest('a[href]');
+  if (a && a.href && a.origin === window.location.origin) _mcaInternalNav = true;
+}, true);
+document.addEventListener('submit', () => { _mcaInternalNav = true; }, true);
 let _configResolve;
 const _configReady = new Promise(r => { _configResolve = r; });
 
@@ -1014,6 +1024,18 @@ function renderRolePreviewBanner(preview, mod) {
   // offset in sync with the actual rendered height rather than a
   // one-time snapshot.
   window.addEventListener('resize', applyOffset);
+
+  window.addEventListener('pagehide', () => {
+    if (_mcaInternalNav) {
+      // Just navigating to another page on the site — the preview row
+      // in role_previews has no expiry now, so it's still active when
+      // the next page's initRolePreviewBanner() checks it. Nothing to do.
+      _mcaInternalNav = false;
+      return;
+    }
+    // Tab/window actually closing (or navigating off-site) — end it for real.
+    mod.endRolePreviewBeacon();
+  });
 
   document.getElementById('role-preview-exit-btn').addEventListener('click', async () => {
     banner.querySelector('.rpb-exit').textContent = 'Exiting…';
