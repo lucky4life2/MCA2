@@ -1793,11 +1793,11 @@ window.deleteRole = async (id) => {
 // Starts a real "view as role" session: from this point on, every RLS
 // check server-side (news, archive, tasks, faqs, admin messages, etc.)
 // evaluates against the previewed role's actual permissions instead of
-// the admin's own, for up to 30 minutes or until they exit. Opens the
+// the admin's own, until they exit or close the tab. Opens the
 // live site in a new tab so this admin panel stays open with the
 // admin's real access.
 window.viewAsRole = async (roleId, roleLabel) => {
-  if (!confirm(`View the site as "${roleLabel}"?\n\nFor the next 30 minutes, real data will be shown exactly as this role would see it, until you exit the preview. Your own admin access here is unaffected.`)) return;
+  if (!confirm(`View the site as "${roleLabel}"?\n\nReal data will be shown exactly as this role would see it, until you exit the preview or close this tab. Your own admin access here is unaffected.`)) return;
   try {
     await startRolePreview(roleId);
   } catch (e) {
