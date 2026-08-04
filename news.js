@@ -49,7 +49,7 @@ function truncate(str, len = 180) {
 // ── Featured banner ───────────────────────────────────────────
 function renderFeaturedBanner(article) {
   const storageKey = `mca-featured-dismissed-${article.id}`;
-  if (sessionStorage.getItem(storageKey)) return;
+  if (localStorage.getItem(storageKey)) return;
 
   const inner = `
     <div class="featured-banner-inner">
@@ -91,7 +91,7 @@ function renderFeaturedBanner(article) {
   });
   document.getElementById('featured-banner-close').addEventListener('click', e => {
     e.stopPropagation();
-    sessionStorage.setItem(storageKey, '1');
+    localStorage.setItem(storageKey, '1');
     banner.style.display = 'none';
   });
 }
