@@ -95,7 +95,15 @@
   .modal-foot { padding: 0 1.5rem 1.5rem; display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
 
   .comment { padding: 8px 0; border-top: 1px solid var(--border); font-size: 12px; }
-  .comment-meta { color: var(--muted); font-size: 11px; margin-bottom: 2px; }
+  .comment-meta { color: var(--muted); font-size: 11px; margin-bottom: 2px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .comment-edited-tag { font-style: italic; color: var(--muted); }
+  .comment-deleted { font-style: italic; color: var(--muted); }
+  .comment-actions { margin-left: auto; display: flex; gap: 8px; }
+  .comment-action-btn { background: none; border: none; padding: 0; font-size: 11px; color: var(--blue); cursor: pointer; text-decoration: underline; }
+  .comment-action-btn.danger { color: #b3261e; }
+  .comment-edit-box { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+  .comment-edit-box textarea { font-size: 12px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; resize: vertical; min-height: 50px; }
+  .comment-edit-actions { display: flex; gap: 8px; }
 
   /* Status swatch picker inside task modal */
   .status-picker { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -997,15 +1005,102 @@ document.getElementById('tagmgr-add').onclick = async () => {
 };
 
 // ── Comments ──
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+
+let _comments = [];
+
 async function loadComments(taskId) {
   const { data } = await supabase.from('task_comments').select('*').eq('task_id', taskId).order('created_at');
-  const list = data || [];
-  document.getElementById('tk-comments-label').textContent = `Comments: ${list.length}`;
-  document.getElementById('tk-comments').innerHTML = list.map(c => `
-    <div class="comment"><div class="comment-meta">${memberName(c.author_id) || 'Staff'} · ${new Date(c.created_at).toLocaleString()}</div>${c.body}</div>
-  `).join('') || '<div class="t-empty">No comments yet.</div>';
-  _commentCounts[taskId] = list.length;
+  _comments = data || [];
+  document.getElementById('tk-comments-label').textContent = `Comments: ${_comments.length}`;
+  renderComments();
+  _commentCounts[taskId] = _comments.length;
 }
+
+function renderComments() {
+  document.getElementById('tk-comments').innerHTML = _comments.map(c => {
+    const isMine = _me && c.author_id === _me.id;
+    const when = new Date(c.created_at).toLocaleString();
+
+    if (c.deleted_at) {
+      return `<div class="comment" data-comment-id="${c.id}">
+        <div class="comment-meta">${escapeHtml(memberName(c.author_id) || 'Staff')} · ${when}</div>
+        <div class="comment-deleted">This message was deleted.</div>
+      </div>`;
+    }
+
+    const editedTag = c.edited_at ? '<span class="comment-edited-tag">(edited)</span>' : '';
+    const actions = isMine ? `
+        <span class="comment-actions">
+          <button type="button" class="comment-action-btn" data-action="edit" data-id="${c.id}">Edit</button>
+          <button type="button" class="comment-action-btn danger" data-action="delete" data-id="${c.id}">Delete</button>
+        </span>` : '';
+
+    return `<div class="comment" data-comment-id="${c.id}">
+      <div class="comment-meta">${escapeHtml(memberName(c.author_id) || 'Staff')} · ${when} ${editedTag}${actions}</div>
+      <div class="comment-body">${escapeHtml(c.body)}</div>
+    </div>`;
+  }).join('') || '<div class="t-empty">No comments yet.</div>';
+}
+
+document.getElementById('tk-comments').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  const id = btn.dataset.id;
+  const comment = _comments.find(c => c.id === id);
+  if (!comment) return;
+
+  if (btn.dataset.action === 'delete') {
+    if (!confirm('Delete this comment? It will be replaced with "This message was deleted."')) return;
+    const { error } = await supabase.from('task_comments')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) { alert(error.message || 'Could not delete comment.'); return; }
+    comment.deleted_at = new Date().toISOString();
+    renderComments();
+    return;
+  }
+
+  if (btn.dataset.action === 'edit') {
+    const wrap = document.querySelector(`.comment[data-comment-id="${id}"]`);
+    if (!wrap) return;
+    wrap.querySelector('.comment-body')?.remove();
+    wrap.querySelector('.comment-actions')?.remove();
+    const editBox = document.createElement('div');
+    editBox.className = 'comment-edit-box';
+    editBox.innerHTML = `
+      <textarea>${escapeHtml(comment.body)}</textarea>
+      <div class="comment-edit-actions">
+        <button type="button" class="btn btn-primary" style="font-size:11px;padding:4px 10px;" data-action="save-edit" data-id="${id}">Save</button>
+        <button type="button" class="btn btn-outline" style="font-size:11px;padding:4px 10px;" data-action="cancel-edit" data-id="${id}">Cancel</button>
+      </div>`;
+    wrap.appendChild(editBox);
+    editBox.querySelector('textarea').focus();
+    return;
+  }
+
+  if (btn.dataset.action === 'cancel-edit') {
+    renderComments();
+    return;
+  }
+
+  if (btn.dataset.action === 'save-edit') {
+    const wrap = document.querySelector(`.comment[data-comment-id="${id}"]`);
+    const newBody = wrap?.querySelector('.comment-edit-box textarea')?.value.trim();
+    if (!newBody) { alert('Comment cannot be empty.'); return; }
+    const { error } = await supabase.from('task_comments')
+      .update({ body: newBody, edited_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) { alert(error.message || 'Could not save edit.'); return; }
+    comment.body = newBody;
+    comment.edited_at = new Date().toISOString();
+    renderComments();
+    return;
+  }
+});
+
 document.getElementById('tk-comment-add').onclick = async () => {
   const taskId = document.getElementById('tk-id').value;
   const input = document.getElementById('tk-comment-input');

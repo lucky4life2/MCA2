@@ -1279,6 +1279,7 @@ async function init() {
     checkPluginBridge();
     loadLockState();
     loadPendingNewsCount();
+    restoreActiveTab();
   } catch(e) {
     console.error('Admin init error:', e);
     show('denied');
@@ -3121,7 +3122,22 @@ let _hashTab = window.location.hash.replace('#','');
 if (!_hashTab) {
   try { _hashTab = localStorage.getItem('admin-active-tab') || ''; } catch (e) {}
 }
-if (_hashTab) switchTab(_hashTab);
+// NOTE: switchTab(_hashTab) is intentionally NOT called here. At this point
+// in the script, init() (called at the bottom of the file) hasn't run yet —
+// the session isn't authenticated, permissions haven't loaded, and #admin-main
+// is still display:none. Calling switchTab() this early used to fire
+// loadAuditLog() against a not-yet-ready supabase session on a hidden panel,
+// and nothing re-ran it once the tab actually became visible. Restoring the
+// saved tab now happens at the end of init(), once the panel is shown and
+// permissions are known — see restoreActiveTab() below.
+function restoreActiveTab() {
+  if (!_hashTab || _hashTab === 'overview') return;
+  // Don't switch to a tab the user isn't permitted to see (e.g. a stale
+  // audit-log hash for someone who no longer has can_view_audit_log).
+  const trigger = document.querySelector(`[data-tab="${_hashTab}"]`);
+  if (!trigger || trigger.classList.contains('hidden')) return;
+  switchTab(_hashTab);
+}
 
 // ── Admin Messages ────────────────────────────────────────────
 let _messages = [];   // threads
@@ -3615,7 +3631,7 @@ async function renderAuditLog() {
           <div class="audit-summary">
             <span class="audit-actor-badge audit-actor-${actorType}">${actorType}</span><span class="audit-action-badge audit-action-${r.action}">${r.action}</span>${escapeHtml(r.summary || auditTableLabel(r.table_name))}
           </div>
-          <div class="audit-meta">${escapeHtml(when)} · ${escapeHtml(actor)}${r.actor_role ? ' (' + escapeHtml(r.actor_role) + ')' : ''} · ${auditTableLabel(r.table_name)}</div>
+          <div class="audit-meta">${escapeHtml(when)} · ${escapeHtml(actor)}${r.actor_role ? ' (' + escapeHtml(r.actor_role) + ')' : ''} · ${auditTableLabel(r.table_name)}${r.table_name === 'tasks' && r.record_id ? ` · Task ID: <span title="${escapeHtml(r.record_id)}">${escapeHtml(r.record_id.slice(0, 8))}…</span>` : ''}</div>
         </div>
         ${hasDetail ? `<span class="audit-row-toggle" id="audit-toggle-${idx}">Details ▾</span>` : ''}
       </div>
