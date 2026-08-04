@@ -262,6 +262,10 @@
         <div class="account-section-title">Change Password</div>
       </div>
       <div class="account-section-body">
+        <div class="form-group" id="current-password-group">
+          <label class="form-label" for="field-current-password">Current Password</label>
+          <input type="password" id="field-current-password" class="form-input" placeholder="Enter your current password" autocomplete="current-password">
+        </div>
         <div class="form-group">
           <label class="form-label" for="field-new-password">New Password</label>
           <input type="password" id="field-new-password" class="form-input" placeholder="8+ characters" autocomplete="new-password">
@@ -270,6 +274,11 @@
         <div class="form-group">
           <label class="form-label" for="field-confirm-password">Confirm New Password</label>
           <input type="password" id="field-confirm-password" class="form-input" placeholder="Repeat password" autocomplete="new-password">
+        </div>
+        <div class="form-group" id="password-2fa-group" style="display:none;">
+          <label class="form-label" for="field-password-2fa">Authenticator Code</label>
+          <input type="text" id="field-password-2fa" class="form-input" placeholder="6-digit code" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code">
+          <div class="form-hint">Two-factor authentication is enabled on your account — enter the current code from your authenticator app.</div>
         </div>
         <div class="form-group" id="reset-code-group" style="display:none;">
           <label class="form-label" for="reset-code-input">Verification Code</label>
@@ -385,6 +394,7 @@ let _user = null;
 let _profile = null;
 let _verifyCode = null;
 let _isRecoverySession = false;
+let _pwTotpFactorId = null;
 
 // ── Init ─────────────────────────────────────────────────────
 async function init() {
@@ -656,6 +666,22 @@ async function renderPage() {
   const identitiesForPw = _user.identities || [];
   const hasEmailIdentity = identitiesForPw.some(i => i.provider === 'email') || _isRecoverySession;
   document.getElementById('section-password').style.display = hasEmailIdentity ? '' : 'none';
+
+  // Current-password confirmation only applies when the user already knows their
+  // password (a normal in-session change) — in a recovery session they got here
+  // precisely because they don't have it, so that field is hidden there.
+  const curPassGroup = document.getElementById('current-password-group');
+  curPassGroup.style.display = (_isRecoverySession) ? 'none' : '';
+
+  // If the account has TOTP 2FA enrolled, require a fresh code on top of the
+  // password confirmation, in both the normal and recovery-session flows.
+  _pwTotpFactorId = null;
+  try {
+    const { data } = await supabase.auth.mfa.listFactors();
+    const verified = (data?.totp || []).filter(f => f.status === 'verified');
+    if (verified.length) _pwTotpFactorId = verified[0].id;
+  } catch(e) {}
+  document.getElementById('password-2fa-group').style.display = _pwTotpFactorId ? '' : 'none';
 
   // Pending-deletion banner
   renderDeletionBanner();
@@ -1397,11 +1423,23 @@ document.getElementById('btn-save-profile').addEventListener('click', async () =
 
 // ── Password change ───────────────────────────────────────────
 document.getElementById('btn-change-password').addEventListener('click', async () => {
+  const curPass  = document.getElementById('field-current-password').value;
   const newPass  = document.getElementById('field-new-password').value;
   const confPass = document.getElementById('field-confirm-password').value;
+  const twofaCode = document.getElementById('field-password-2fa').value.trim();
   const errEl    = document.getElementById('password-error');
   const succEl   = document.getElementById('password-success');
+  const submitBtn = document.getElementById('btn-change-password');
   errEl.style.display = 'none'; succEl.style.display = 'none';
+
+  // Current password is required for a normal in-session change. During a
+  // recovery session the user doesn't have it (that's why they're here), so
+  // this check is skipped — see the display toggle in renderPage().
+  const requireCurrentPassword = document.getElementById('current-password-group').style.display !== 'none';
+  if (requireCurrentPassword && !curPass) {
+    errEl.textContent = 'Enter your current password.'; errEl.style.display = 'block'; return;
+  }
+
   if (newPass.length < 8) {
     errEl.textContent = 'Password must be at least 8 characters.'; errEl.style.display = 'block'; return;
   }
@@ -1414,10 +1452,41 @@ document.getElementById('btn-change-password').addEventListener('click', async (
   if (newPass !== confPass) {
     errEl.textContent = 'Passwords do not match.'; errEl.style.display = 'block'; return;
   }
+  if (_pwTotpFactorId && !/^\d{6}$/.test(twofaCode)) {
+    errEl.textContent = 'Enter your 6-digit authenticator code.'; errEl.style.display = 'block'; return;
+  }
+
+  submitBtn.disabled = true; submitBtn.textContent = 'Verifying...';
+
+  // Re-verify the current password before touching anything.
+  if (requireCurrentPassword) {
+    const { error: pwErr } = await supabase.auth.signInWithPassword({ email: _user.email, password: curPass });
+    if (pwErr) {
+      submitBtn.disabled = false; submitBtn.textContent = 'Update Password';
+      errEl.textContent = 'Current password is incorrect.'; errEl.style.display = 'block'; return;
+    }
+  }
+
+  // Re-verify a fresh 2FA code before touching anything, same as the delete-account flow.
+  if (_pwTotpFactorId) {
+    try {
+      const { data: challenge, error: chErr } = await supabase.auth.mfa.challenge({ factorId: _pwTotpFactorId });
+      if (chErr) throw chErr;
+      const { error: verErr } = await supabase.auth.mfa.verify({ factorId: _pwTotpFactorId, challengeId: challenge.id, code: twofaCode });
+      if (verErr) throw verErr;
+    } catch(e) {
+      submitBtn.disabled = false; submitBtn.textContent = 'Update Password';
+      errEl.textContent = 'Invalid or expired authenticator code. Enter the current code from your app and try again.'; errEl.style.display = 'block'; return;
+    }
+  }
+
   const { error } = await supabase.auth.updateUser({ password: newPass });
+  submitBtn.disabled = false; submitBtn.textContent = 'Update Password';
   if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+  document.getElementById('field-current-password').value = '';
   document.getElementById('field-new-password').value = '';
   document.getElementById('field-confirm-password').value = '';
+  document.getElementById('field-password-2fa').value = '';
   // Clear recovery token from URL
   if (_isRecoverySession) {
     history.replaceState(null, '', window.location.pathname);
@@ -1459,6 +1528,10 @@ document.getElementById('btn-reset-password').addEventListener('click', async ()
   const vJson = await vRes.json();
   if (!vRes.ok || vJson.error) { errEl.textContent = vJson.error || 'Invalid or expired code.'; errEl.style.display = 'block'; return; }
   if (vJson.access_token && vJson.refresh_token) await supabase.auth.setSession({ access_token: vJson.access_token, refresh_token: vJson.refresh_token });
+
+  // Identity has now been proven via the emailed code, so the current-password
+  // field (which the user may not remember) is no longer required.
+  document.getElementById('current-password-group').style.display = 'none';
 
   succEl.textContent = 'Code verified — enter your new password above and click Update Password.';
   succEl.style.display = 'block';
