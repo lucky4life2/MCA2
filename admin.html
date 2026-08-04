@@ -3158,6 +3158,24 @@ async function uploadMsgAttachments(files) {
   return uploaded;
 }
 
+// Local thumbnail preview of just-selected files, before upload, so an
+// admin can confirm it's the right photo. Bound once via delegation below
+// since reply forms are re-created on every renderMessages().
+function renderFilePreview(fileInput, previewEl) {
+  if (!previewEl) return;
+  previewEl.innerHTML = '';
+  [...(fileInput.files || [])].forEach(f => {
+    const url = URL.createObjectURL(f);
+    previewEl.insertAdjacentHTML('beforeend', `<img src="${url}" alt="${f.name}" style="width:56px;height:56px;object-fit:cover;border-radius:5px;border:1px solid var(--border);">`);
+  });
+}
+document.getElementById('messages-inbox').addEventListener('change', (e) => {
+  if (e.target.matches('input[type="file"]')) {
+    const id = e.target.id.replace('reply-file-', '');
+    renderFilePreview(e.target, document.getElementById(`reply-preview-${id}`));
+  }
+});
+
 async function loadMessages() {
   const inbox = document.getElementById('messages-inbox');
   inbox.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--muted);font-size:13px;">Loading...</div>';
@@ -3250,6 +3268,7 @@ function renderMessages() {
             </label>
           </div>
           <div style="font-size:10px;color:var(--muted);margin-top:2px;">Photos up to 10 MB total.</div>
+          <div id="reply-preview-${m.id}" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;"></div>
           <button class="btn btn-primary btn-sm" style="margin-top:6px;" onclick="sendMessageReply('${m.id}')">Send</button>
         </div>` : ''}
       </div>
@@ -3294,11 +3313,11 @@ window.sendMessageReply = async (id) => {
   const fileInput = document.getElementById(`reply-file-${id}`);
   const shareNameBox = document.getElementById(`reply-share-name-${id}`);
   const reply = input?.value.trim();
-  if (!reply) return;
+  const files = fileInput?.files ? [...fileInput.files] : [];
+  if (!reply && !files.length) return;
   const btn = input.parentElement.querySelector('.btn-primary');
   if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
 
-  const files = fileInput?.files ? [...fileInput.files] : [];
   const totalBytes = files.reduce((s, f) => s + f.size, 0);
   if (totalBytes > 10 * 1024 * 1024) {
     alert('Attached photos exceed 10 MB total. Please remove some and try again.');

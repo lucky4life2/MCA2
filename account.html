@@ -1709,6 +1709,21 @@ async function uploadMsgAttachments(files) {
   return uploaded;
 }
 
+// Renders local thumbnail previews of just-selected files (before upload),
+// so the sender can confirm it's the right photo. Reused for the new-thread
+// modal and, via event delegation, for the per-thread reply forms below.
+function renderFilePreview(fileInput, previewEl) {
+  if (!previewEl) return;
+  previewEl.innerHTML = '';
+  [...(fileInput.files || [])].forEach(f => {
+    const url = URL.createObjectURL(f);
+    previewEl.insertAdjacentHTML('beforeend', `<img src="${url}" alt="${f.name}" style="width:56px;height:56px;object-fit:cover;border-radius:5px;border:1px solid var(--border);">`);
+  });
+}
+document.getElementById('contact-files').addEventListener('change', function() {
+  renderFilePreview(this, document.getElementById('contact-files-preview'));
+});
+
 let _myMessages = [];
 let _myExpandedThreads = new Set();
 
@@ -1745,6 +1760,12 @@ window.toggleMyThreadExpand = (id) => {
   else _myExpandedThreads.add(id);
   renderMyMessages();
 };
+document.getElementById('my-messages-list')?.addEventListener('change', (e) => {
+  if (e.target.matches('input[type="file"]')) {
+    const id = e.target.id.replace('my-reply-file-', '');
+    renderFilePreview(e.target, document.getElementById(`my-reply-preview-${id}`));
+  }
+});
 
 function renderMyMessages() {
   const listEl = document.getElementById('my-messages-list');
@@ -1784,6 +1805,7 @@ function renderMyMessages() {
         <textarea class="form-input" id="my-reply-input-${m.id}" rows="2" placeholder="Add another message..." style="resize:vertical;min-height:50px;width:100%;box-sizing:border-box;font-size:13px;"></textarea>
         <input type="file" id="my-reply-file-${m.id}" accept="image/*" multiple style="font-size:11px;max-width:200px;margin-top:6px;display:block;">
         <div style="font-size:10px;color:var(--muted);margin-top:2px;">Photos up to 10 MB total.</div>
+        <div id="my-reply-preview-${m.id}" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;"></div>
         <button class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="sendMyMessageReply('${m.id}')">Send</button>
       </div>` : ''}
     </div>`;
@@ -1794,11 +1816,11 @@ window.sendMyMessageReply = async (id) => {
   const input = document.getElementById(`my-reply-input-${id}`);
   const fileInput = document.getElementById(`my-reply-file-${id}`);
   const body = input?.value.trim();
-  if (!body) return;
+  const files = fileInput?.files ? [...fileInput.files] : [];
+  if (!body && !files.length) return;
   const btn = input.parentElement.querySelector('.btn-outline');
   if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
 
-  const files = fileInput?.files ? [...fileInput.files] : [];
   const totalBytes = files.reduce((s, f) => s + f.size, 0);
   if (totalBytes > 10 * 1024 * 1024) {
     alert('Attached photos exceed 10 MB total. Please remove some and try again.');
@@ -1840,6 +1862,7 @@ function closeContactModal() {
   document.getElementById('contact-subject').value = '';
   document.getElementById('contact-body').value = '';
   document.getElementById('contact-files').value = '';
+  document.getElementById('contact-files-preview').innerHTML = '';
   document.getElementById('contact-char-count').textContent = '0 / 2000';
   document.getElementById('contact-send').disabled = false;
 }
@@ -1858,9 +1881,10 @@ document.getElementById('contact-send').addEventListener('click', async () => {
   const succEl  = document.getElementById('contact-success');
   errEl.style.display = 'none'; succEl.style.display = 'none';
   if (!subject) { errEl.textContent = 'Please enter a subject.'; errEl.style.display = 'block'; return; }
-  if (!body)    { errEl.textContent = 'Please enter a message.'; errEl.style.display = 'block'; return; }
+  const filesForCheck = [...(document.getElementById('contact-files').files || [])];
+  if (!body && !filesForCheck.length) { errEl.textContent = 'Please enter a message or attach a photo.'; errEl.style.display = 'block'; return; }
   document.getElementById('contact-send').disabled = true;
-  const files = [...(document.getElementById('contact-files').files || [])];
+  const files = filesForCheck;
   const totalBytes = files.reduce((s, f) => s + f.size, 0);
   if (totalBytes > 10 * 1024 * 1024) {
     errEl.textContent = 'Attached photos exceed 10 MB total. Please remove some and try again.';
@@ -1888,6 +1912,8 @@ document.getElementById('contact-send').addEventListener('click', async () => {
   succEl.style.display = 'block';
   document.getElementById('contact-subject').value = '';
   document.getElementById('contact-body').value = '';
+  document.getElementById('contact-files').value = '';
+  document.getElementById('contact-files-preview').innerHTML = '';
   loadMyMessages();
   setTimeout(closeContactModal, 2200);
 });
@@ -1916,6 +1942,7 @@ init();
         <label class="form-label" for="contact-files">Attach Photos (optional)</label>
         <input type="file" id="contact-files" accept="image/*" multiple>
         <div class="form-hint">For evidence of bans or other issues. Up to 10 MB total.</div>
+        <div id="contact-files-preview" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;"></div>
       </div>
       <div class="form-error" id="contact-error"></div>
       <div class="form-success" id="contact-success"></div>
