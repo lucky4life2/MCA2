@@ -349,6 +349,17 @@
       </div>
     </div>
 
+    <!-- Deactivate Account -->
+    <div class="account-section">
+      <div class="account-section-header">
+        <div class="account-section-title">Deactivate Account</div>
+      </div>
+      <div class="account-section-body">
+        <p class="form-hint" style="margin-bottom:1rem;">Deactivating puts your account to sleep — nothing is changed or deleted. You'll be signed out, and simply signing back in reactivates it.</p>
+        <button class="btn btn-outline" id="btn-deactivate-account">Deactivate My Account</button>
+      </div>
+    </div>
+
     <!-- Delete Account -->
     <div class="account-section" style="border-color:#fca5a5;">
       <div class="account-section-header" style="border-bottom-color:#fca5a5;">
@@ -475,6 +486,11 @@ async function init() {
     elNotSignedIn.querySelector('p').textContent = 'Your account has been frozen by an administrator. You can submit an appeal below.';
     elNotSignedIn.querySelector('a').style.display = 'none';
     initAppealForm('Account Frozen Appeal');
+    return;
+  }
+  if (_profile.account_status === 'deactivated') {
+    await signOut();
+    window.location.replace('login.html?deactivated=1');
     return;
   }
   if (_profile.account_status === 'terminated') {
@@ -1532,6 +1548,20 @@ function closeDeleteModal() {
 }
 
 document.getElementById('btn-delete-account').addEventListener('click', openDeleteModal);
+
+document.getElementById('btn-deactivate-account').addEventListener('click', async () => {
+  if (!confirm('Deactivate your account? You\'ll be signed out, and signing back in reactivates it.')) return;
+  const btn = document.getElementById('btn-deactivate-account');
+  btn.disabled = true; btn.textContent = 'Deactivating...';
+  const { error } = await supabase.rpc('deactivate_own_account');
+  if (error) {
+    alert(error.message || 'Could not deactivate account.');
+    btn.disabled = false; btn.textContent = 'Deactivate My Account';
+    return;
+  }
+  await signOut();
+  window.location.replace('login.html?deactivated=1');
+});
 document.getElementById('delete-modal-close').addEventListener('click', closeDeleteModal);
 document.getElementById('del-cancel').addEventListener('click', closeDeleteModal);
 document.getElementById('delete-modal').addEventListener('click', e => {
