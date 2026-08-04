@@ -363,7 +363,13 @@ function sortTasks(list, sortBy) {
       return a.due_date.localeCompare(b.due_date);
     });
   } else if (sortBy === 'priority') {
-    arr.sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9));
+    arr.sort((a, b) => {
+      const da = isDoneTask(a) ? 1 : 0, db = isDoneTask(b) ? 1 : 0;
+      if (da !== db) return da - db; // finished tasks always last — no longer relevant
+      const pd = (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9);
+      if (pd !== 0) return pd;
+      return tagOrder(a) - tagOrder(b); // secondary: custom color/tag order
+    });
   } else { // color
     arr.sort((a, b) => {
       const so = tagOrder(a) - tagOrder(b);
@@ -427,7 +433,7 @@ async function loadAll() {
     supabase.from('profiles').select('id, display_name, username, role'),
     supabase.from('user_roles').select('user_id, roles(level)'),
     supabase.from('task_comments').select('task_id'),
-    supabase.from('task_tags').select('*').order('created_at'),
+    supabase.from('task_tags').select('*').order('sort_order').order('created_at'),
     _access.manage ? supabase.from('roles').select('id, label').order('level', { ascending: false }) : Promise.resolve({ data: [] }),
     _access.manage ? supabase.from('task_project_access').select('*') : Promise.resolve({ data: [] }),
     supabase.from('task_assignees').select('task_id, user_id'),
@@ -924,6 +930,7 @@ function renderTagMgrList() {
     <div class="tag-mgr-row">
       <input type="color" class="tagmgr-color-input" data-id="${tg.id}" value="${tg.color}" style="width:30px;height:30px;padding:0;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:none;flex-shrink:0;">
       <input type="text" class="form-input tagmgr-name-input" data-id="${tg.id}" value="${tg.name}" style="flex:1;">
+      <input type="number" class="form-input tagmgr-sort-input" data-id="${tg.id}" value="${tg.sort_order ?? 0}" title="Sort order (lower = earlier)" style="width:56px;flex-shrink:0;">
       <label style="font-size:11px;display:flex;align-items:center;gap:3px;white-space:nowrap;">
         <input type="checkbox" class="tagmgr-checkoff-input" data-id="${tg.id}" ${tg.is_checkoff ? 'checked' : ''}> Check-off
       </label>
@@ -941,6 +948,7 @@ function renderTagMgrList() {
       const id = btn.dataset.save;
       const name = el.querySelector(`.tagmgr-name-input[data-id="${id}"]`).value.trim();
       const color = el.querySelector(`.tagmgr-color-input[data-id="${id}"]`).value;
+      const sortOrder = parseInt(el.querySelector(`.tagmgr-sort-input[data-id="${id}"]`).value, 10) || 0;
       const isCheckoff = el.querySelector(`.tagmgr-checkoff-input[data-id="${id}"]`).checked;
       const isDone = el.querySelector(`.tagmgr-done-input[data-id="${id}"]`).checked;
       const errEl = document.getElementById('tagmgr-error');
@@ -949,7 +957,7 @@ function renderTagMgrList() {
       // Only one tag can hold each flag — clear it from any other tag first.
       if (isCheckoff) await supabase.from('task_tags').update({ is_checkoff: false }).neq('id', id).eq('is_checkoff', true);
       if (isDone) await supabase.from('task_tags').update({ is_done: false }).neq('id', id).eq('is_done', true);
-      const { error } = await supabase.from('task_tags').update({ name, color, is_checkoff: isCheckoff, is_done: isDone }).eq('id', id);
+      const { error } = await supabase.from('task_tags').update({ name, color, sort_order: sortOrder, is_checkoff: isCheckoff, is_done: isDone }).eq('id', id);
       if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
       await loadAll();
       renderTagMgrList();
