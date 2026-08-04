@@ -1449,10 +1449,16 @@ function renderMembers(members) {
     const name = m.display_name || m.username || '—';
     const memberRoles = m.roles || [];
 
-    // Role badges + assignment button
-    const roleBadgesHtml = memberRoles.map(r =>
-      `<span class="role-badge" style="background:${r.color}22;color:${r.color};border:1px solid ${r.color}44;">${r.label}</span>`
-    ).join('');
+    // Role badges + assignment button — sort highest-level first, collapse past 3 to reduce clutter
+    const sortedRoles = [...memberRoles].sort((a, b) => (b.level||0) - (a.level||0));
+    const roleBadge = r => `<span class="role-badge" style="background:${r.color}22;color:${r.color};border:1px solid ${r.color}44;">${r.label}</span>`;
+    const VISIBLE_ROLE_COUNT = 3;
+    const visibleRoles = sortedRoles.slice(0, VISIBLE_ROLE_COUNT);
+    const overflowRoles = sortedRoles.slice(VISIBLE_ROLE_COUNT);
+    const roleBadgesHtml = visibleRoles.map(roleBadge).join('') +
+      (overflowRoles.length
+        ? `<span class="role-badge role-more-toggle" style="cursor:pointer;background:var(--bg);color:var(--muted);border:1px dashed var(--border);" title="${overflowRoles.map(r=>r.label).join(', ')}" onclick="this.style.display='none';this.nextElementSibling.style.display='inline';">+${overflowRoles.length} more</span><span style="display:none;">${overflowRoles.map(roleBadge).join('')}</span>`
+        : '');
 
     // Can this user's roles be changed by current viewer?
     const targetMaxLevel = memberRoles.reduce((max, r) => Math.max(max, r.level||0), 0);
