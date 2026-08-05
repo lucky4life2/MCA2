@@ -80,8 +80,9 @@ function renderFeaturedBanner(article) {
     banner.className = 'featured-banner';
     banner.style.cursor = 'pointer';
     banner.innerHTML = inner;
-    const pageWrap = document.querySelector('.page-wrap') || document.body.firstElementChild;
-    document.body.insertBefore(banner, pageWrap);
+    const pageWrap = document.querySelector('.page-wrap');
+    if (pageWrap) pageWrap.insertBefore(banner, pageWrap.firstChild);
+    else document.body.insertBefore(banner, document.body.firstElementChild);
   }
 
   banner.addEventListener('click', e => {
