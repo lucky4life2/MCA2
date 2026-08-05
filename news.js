@@ -87,6 +87,7 @@ function renderFeaturedBanner(article) {
 
   banner.addEventListener('click', e => {
     if (e.target.id === 'featured-banner-close') return;
+    localStorage.setItem(storageKey, '1');
     if (article.slug) location.href = `article.html?slug=${encodeURIComponent(article.slug)}`;
     else openArticleModal(article);
   });
