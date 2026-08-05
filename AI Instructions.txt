@@ -1,0 +1,1 @@
+this repo is from https://github.com/lucky4life2/MCA2. fix the issue i give you using graphify, supabase, and the files you copy
