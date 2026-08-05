@@ -252,9 +252,17 @@ try {
   if (error) throw error;
 
   if (articles && articles.length > 0) {
-    // Featured banner — runs on any page that has #featured-banner or a .page-wrap
+    // Featured banner — shows on every page except admin, news, account, help,
+    // tasks, news-publish, archive-publish, and shop
+    const BANNER_EXCLUDED_PAGES = [
+      'admin.html', 'news.html', 'account.html', 'help.html',
+      'tasks.html', 'news-publish.html', 'archive-publish.html', 'shop.html'
+    ];
+    const currentPage = location.pathname.split('/').pop() || 'index.html';
+    const bannerAllowed = !BANNER_EXCLUDED_PAGES.includes(currentPage);
+
     const featuredArticle = articles.find(a => a.category?.toLowerCase() === 'featured');
-    if (featuredArticle) renderFeaturedBanner(featuredArticle);
+    if (featuredArticle && bannerAllowed) renderFeaturedBanner(featuredArticle);
 
     // News index — only on news.html
     if (indexEl) {
