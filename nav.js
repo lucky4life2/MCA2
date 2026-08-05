@@ -703,7 +703,14 @@ async function initNavAuth(_authReadyResolve) {
       const track = () => _presenceChannel.track({ ...payload, page, since: Date.now() });
       if (_presenceChannel) { track(); return; }
       _presenceChannel = _sb.channel('site-presence', { config: { presence: { key: sid } } });
-      _presenceChannel.subscribe(status => { if (status === 'SUBSCRIBED') track(); });
+      _presenceChannel.subscribe(status => {
+        if (status === 'SUBSCRIBED') {
+          track();
+          if (!window._mcaPresenceHeartbeat) {
+            window._mcaPresenceHeartbeat = setInterval(track, 20000);
+          }
+        }
+      });
     } catch(e) {}
   }
 

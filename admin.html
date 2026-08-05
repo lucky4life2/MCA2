@@ -1331,6 +1331,9 @@ function initPresenceWatcher() {
       .on('presence', { event: 'join' }, render)
       .on('presence', { event: 'leave' }, render)
       .subscribe();
+
+    // Safety-net refresh in case a sync/join/leave event is ever missed
+    setInterval(render, 8000);
   } catch(e) { console.error('Presence watcher error:', e); }
 }
 
