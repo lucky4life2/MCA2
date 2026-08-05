@@ -1299,8 +1299,7 @@ async function init() {
 // ── Active viewers (Supabase Realtime Presence) ──────────────────
 function initPresenceWatcher() {
   try {
-    const channel = supabase.channel('site-presence');
-    const render = () => {
+    const render = (channel) => {
       const state = channel.presenceState();
       const entries = Object.values(state).flat();
       const countEl = document.getElementById('stat-active-now');
@@ -1326,29 +1325,28 @@ function initPresenceWatcher() {
       }
       listEl.innerHTML = html;
     };
-    channel
-      .on('presence', { event: 'sync' }, render)
-      .on('presence', { event: 'join' }, render)
-      .on('presence', { event: 'leave' }, render)
-      .subscribe(status => {
-        if (status === 'SUBSCRIBED') {
-          render();
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          const listEl = document.getElementById('active-viewers-list');
-          if (listEl) listEl.textContent = 'Unable to load active viewers right now.';
-        }
-      });
 
-    // Safety-net refresh in case a sync/join/leave event is ever missed
-    setInterval(render, 8000);
-
-    // Fallback in case subscribe() never calls back at all
-    setTimeout(() => {
-      const listEl = document.getElementById('active-viewers-list');
-      if (listEl && listEl.textContent === 'Loading…') {
-        listEl.textContent = 'Unable to load active viewers right now.';
+    // nav.js (loaded on every page, including this one) already opens and
+    // subscribes to the 'site-presence' channel to track this admin's own
+    // presence. Reuse that same channel instead of opening a second join
+    // to the same topic, which conflicts with the first.
+    let attempts = 0;
+    const waitForChannel = setInterval(() => {
+      attempts++;
+      const channel = window._mcaPresenceChannel;
+      if (channel) {
+        clearInterval(waitForChannel);
+        channel.on('presence', { event: 'sync' }, () => render(channel));
+        channel.on('presence', { event: 'join' }, () => render(channel));
+        channel.on('presence', { event: 'leave' }, () => render(channel));
+        render(channel); // draw immediately with whatever state is already synced
+        setInterval(() => render(channel), 8000); // safety-net refresh
+      } else if (attempts >= 30) { // ~6s
+        clearInterval(waitForChannel);
+        const listEl = document.getElementById('active-viewers-list');
+        if (listEl) listEl.textContent = 'Unable to load active viewers right now.';
       }
-    }, 6000);
+    }, 200);
   } catch(e) { console.error('Presence watcher error:', e); }
 }
 

@@ -703,6 +703,7 @@ async function initNavAuth(_authReadyResolve) {
       const track = () => _presenceChannel.track({ ...payload, page, since: Date.now() });
       if (_presenceChannel) { track(); return; }
       _presenceChannel = _sb.channel('site-presence', { config: { presence: { key: sid } } });
+      window._mcaPresenceChannel = _presenceChannel;
       _presenceChannel.subscribe(status => {
         if (status === 'SUBSCRIBED') {
           track();
