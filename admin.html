@@ -450,17 +450,22 @@
           <div class="stat-cell"><div class="stat-label">Admins</div><div class="stat-value" id="stat-admins">—</div></div>
           <div class="stat-cell"><div class="stat-label">MC Verified</div><div class="stat-value" id="stat-mc-verified">—</div></div>
           <div class="stat-cell"><div class="stat-label">Pending Verify</div><div class="stat-value" id="stat-mc-pending">—</div></div>
+          <!-- Active Now stat disabled — see commented block below stats-row
           <div class="stat-cell"><div class="stat-label">Active Now</div><div class="stat-value" id="stat-active-now" style="color:#22c55e;">—</div></div>
+          -->
           <div class="stat-cell" id="stat-news-pending-cell" style="display:none;cursor:pointer;" onclick="document.querySelector('[data-tab=news]').click();"><div class="stat-label">News Awaiting Review</div><div class="stat-value" id="stat-news-pending" style="color:#c0392b;">—</div></div>
         </div>
       </div>
 
+      <!-- Active Viewers panel disabled — not loading correctly. Commented
+           out (not deleted) so it can be re-enabled later if wanted.
       <div class="admin-section" id="active-viewers-section">
         <div class="admin-section-header">
           <div class="admin-section-title">Active Viewers</div>
         </div>
         <div id="active-viewers-list" style="padding:1rem 1.5rem;font-size:13px;color:var(--muted);">Loading…</div>
       </div>
+      -->
 
       <div class="admin-section" id="site-lock-section">
         <div class="admin-section-header">
@@ -1288,7 +1293,7 @@ async function init() {
     loadLockState();
     loadPendingNewsCount();
     restoreActiveTab();
-    initPresenceWatcher();
+    // initPresenceWatcher(); // disabled — see commented block below
   } catch(e) {
     console.error('Admin init error:', e);
     show('denied');
@@ -1297,6 +1302,9 @@ async function init() {
 }
 
 // ── Active viewers (Supabase Realtime Presence) ──────────────────
+// Disabled — was getting stuck / not loading. Commented out (not deleted)
+// so it can be re-enabled later if wanted.
+/*
 function initPresenceWatcher() {
   try {
     const render = (channel) => {
@@ -1349,6 +1357,7 @@ function initPresenceWatcher() {
     }, 200);
   } catch(e) { console.error('Presence watcher error:', e); }
 }
+*/
 
 async function loadMyPermissions(user) {
   _myPermissions = {};

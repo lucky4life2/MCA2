@@ -693,6 +693,9 @@ async function initNavAuth(_authReadyResolve) {
 
   // Always re-query elements so stale closure refs never cause silent no-ops
   // ── Active viewers (Supabase Realtime Presence) ────────────────
+  // Disabled — was getting stuck / not loading. Commented out (not deleted)
+  // so it can be re-enabled later if wanted.
+  /*
   let _presenceChannel = null;
   async function trackPresence(payload) {
     try {
@@ -714,6 +717,7 @@ async function initNavAuth(_authReadyResolve) {
       });
     } catch(e) {}
   }
+  */
 
   function getAccountEls() {
     return {
@@ -726,7 +730,7 @@ async function initNavAuth(_authReadyResolve) {
   setSignedOut();
 
   function setSignedOut() {
-    trackPresence({ name: null });
+    // trackPresence({ name: null }); // disabled — see commented block above
     const { el: accountEl, elMobile: accountElMobile } = getAccountEls();
     const returnPage = encodeURIComponent(window.location.pathname.split('/').pop() || 'index.html');
     const html = `
@@ -777,7 +781,7 @@ async function initNavAuth(_authReadyResolve) {
       }
     } catch(e) {}
 
-    trackPresence({ name: label });
+    // trackPresence({ name: label }); // disabled — see commented block above
 
     // Render immediately with what we have so the nav never disappears during async fetches
     function render() {
