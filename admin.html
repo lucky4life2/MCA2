@@ -1330,10 +1330,25 @@ function initPresenceWatcher() {
       .on('presence', { event: 'sync' }, render)
       .on('presence', { event: 'join' }, render)
       .on('presence', { event: 'leave' }, render)
-      .subscribe();
+      .subscribe(status => {
+        if (status === 'SUBSCRIBED') {
+          render();
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          const listEl = document.getElementById('active-viewers-list');
+          if (listEl) listEl.textContent = 'Unable to load active viewers right now.';
+        }
+      });
 
     // Safety-net refresh in case a sync/join/leave event is ever missed
     setInterval(render, 8000);
+
+    // Fallback in case subscribe() never calls back at all
+    setTimeout(() => {
+      const listEl = document.getElementById('active-viewers-list');
+      if (listEl && listEl.textContent === 'Loading…') {
+        listEl.textContent = 'Unable to load active viewers right now.';
+      }
+    }, 6000);
   } catch(e) { console.error('Presence watcher error:', e); }
 }
 
