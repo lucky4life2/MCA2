@@ -450,8 +450,16 @@
           <div class="stat-cell"><div class="stat-label">Admins</div><div class="stat-value" id="stat-admins">—</div></div>
           <div class="stat-cell"><div class="stat-label">MC Verified</div><div class="stat-value" id="stat-mc-verified">—</div></div>
           <div class="stat-cell"><div class="stat-label">Pending Verify</div><div class="stat-value" id="stat-mc-pending">—</div></div>
+          <div class="stat-cell"><div class="stat-label">Active Now</div><div class="stat-value" id="stat-active-now" style="color:#22c55e;">—</div></div>
           <div class="stat-cell" id="stat-news-pending-cell" style="display:none;cursor:pointer;" onclick="document.querySelector('[data-tab=news]').click();"><div class="stat-label">News Awaiting Review</div><div class="stat-value" id="stat-news-pending" style="color:#c0392b;">—</div></div>
         </div>
+      </div>
+
+      <div class="admin-section" id="active-viewers-section">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Active Viewers</div>
+        </div>
+        <div id="active-viewers-list" style="padding:1rem 1.5rem;font-size:13px;color:var(--muted);">Loading…</div>
       </div>
 
       <div class="admin-section" id="site-lock-section">
@@ -1280,11 +1288,50 @@ async function init() {
     loadLockState();
     loadPendingNewsCount();
     restoreActiveTab();
+    initPresenceWatcher();
   } catch(e) {
     console.error('Admin init error:', e);
     show('denied');
     document.querySelector('.admin-denied p').textContent = 'Error loading admin panel: ' + e.message;
   }
+}
+
+// ── Active viewers (Supabase Realtime Presence) ──────────────────
+function initPresenceWatcher() {
+  try {
+    const channel = supabase.channel('site-presence');
+    const render = () => {
+      const state = channel.presenceState();
+      const entries = Object.values(state).flat();
+      const countEl = document.getElementById('stat-active-now');
+      const listEl  = document.getElementById('active-viewers-list');
+      if (countEl) countEl.textContent = entries.length;
+      if (!listEl) return;
+      if (entries.length === 0) {
+        listEl.textContent = 'No one is currently on the site.';
+        return;
+      }
+      const named = entries.filter(e => e.name).sort((a, b) => a.name.localeCompare(b.name));
+      const anonCount = entries.length - named.length;
+      let html = '';
+      if (named.length) {
+        html += named.map(e => `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+            <span style="color:var(--black);font-weight:600;">${e.name}</span>
+            <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">${(e.page || '').replace('.html','') || 'home'}</span>
+          </div>`).join('');
+      }
+      if (anonCount > 0) {
+        html += `<div style="padding:8px 0;color:var(--muted);">${anonCount} anonymous visitor${anonCount !== 1 ? 's' : ''}</div>`;
+      }
+      listEl.innerHTML = html;
+    };
+    channel
+      .on('presence', { event: 'sync' }, render)
+      .on('presence', { event: 'join' }, render)
+      .on('presence', { event: 'leave' }, render)
+      .subscribe();
+  } catch(e) { console.error('Presence watcher error:', e); }
 }
 
 async function loadMyPermissions(user) {

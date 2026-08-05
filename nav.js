@@ -692,6 +692,21 @@ async function initNavAuth(_authReadyResolve) {
   if (!document.getElementById('nav-account') && !document.getElementById('nav-account-mobile')) return;
 
   // Always re-query elements so stale closure refs never cause silent no-ops
+  // ── Active viewers (Supabase Realtime Presence) ────────────────
+  let _presenceChannel = null;
+  async function trackPresence(payload) {
+    try {
+      const { supabase: _sb } = await import('./supabase.js');
+      let sid = sessionStorage.getItem('mca_presence_id');
+      if (!sid) { sid = crypto.randomUUID(); sessionStorage.setItem('mca_presence_id', sid); }
+      const page = window.location.pathname.split('/').pop() || 'index.html';
+      const track = () => _presenceChannel.track({ ...payload, page, since: Date.now() });
+      if (_presenceChannel) { track(); return; }
+      _presenceChannel = _sb.channel('site-presence', { config: { presence: { key: sid } } });
+      _presenceChannel.subscribe(status => { if (status === 'SUBSCRIBED') track(); });
+    } catch(e) {}
+  }
+
   function getAccountEls() {
     return {
       el:       document.getElementById('nav-account'),
@@ -703,6 +718,7 @@ async function initNavAuth(_authReadyResolve) {
   setSignedOut();
 
   function setSignedOut() {
+    trackPresence({ name: null });
     const { el: accountEl, elMobile: accountElMobile } = getAccountEls();
     const returnPage = encodeURIComponent(window.location.pathname.split('/').pop() || 'index.html');
     const html = `
@@ -752,6 +768,8 @@ async function initNavAuth(_authReadyResolve) {
         isAdmin = roleData.role === 'admin' || roleData.role === 'owner';
       }
     } catch(e) {}
+
+    trackPresence({ name: label });
 
     // Render immediately with what we have so the nav never disappears during async fetches
     function render() {
