@@ -768,16 +768,28 @@ async function initNavAuth(_authReadyResolve) {
     let canPublishNews = false;
     let canManageArchive = false;
     let canAccessTasks = false;
+    let isPreviewing = false;
 
     // Resolve role BEFORE the first render so other page scripts awaiting
     // _mcaAuthReady get the correct isAdmin status immediately, instead of
     // each page having to make its own duplicate (slow) profiles query.
     try {
       const mod0 = await import('./supabase.js');
-      const { data: roleData } = await mod0.supabase.from('profiles').select('display_name, username, role').eq('id', user.id).single();
+      const [{ data: roleData }, preview] = await Promise.all([
+        mod0.supabase.from('profiles').select('display_name, username, role').eq('id', user.id).single(),
+        mod0.getMyRolePreview().catch(() => null)
+      ]);
       if (roleData) {
         label = roleData.display_name || roleData.username || label;
         isAdmin = roleData.role === 'admin' || roleData.role === 'owner';
+      }
+      isPreviewing = !!preview;
+      if (isPreviewing) {
+        // A "view as" preview is active — don't trust the real profiles.role
+        // for isAdmin (that would show the Admin link / bypass restrictions
+        // while previewing a lower role). Ask the preview-aware RPC instead,
+        // which checks role_previews before falling back to the real role.
+        try { isAdmin = !!(await mod0.hasPermission('can_view_admin')); } catch(e) { isAdmin = false; }
       }
     } catch(e) {}
 
@@ -855,7 +867,10 @@ async function initNavAuth(_authReadyResolve) {
         ]);
         if (manageResult?.data || testResult?.data || checkoffResult?.data) canAccessTasks = true;
       } catch(e) {}
-      if (isAdmin) { canPublishNews = true; canManageArchive = true; canAccessTasks = true; }
+      // While previewing a role, canPublishNews/canManageArchive/canAccessTasks
+      // above already came from the preview-aware user_has_permission RPC —
+      // don't let a real admin/owner's actual role override them back to true.
+      if (isAdmin && !isPreviewing) { canPublishNews = true; canManageArchive = true; canAccessTasks = true; }
     } catch(e) {}
 
     render(); // re-render with full data (name, admin link, etc.)

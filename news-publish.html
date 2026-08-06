@@ -322,7 +322,7 @@ Regular paragraph text.
 <div id="np-toast"></div>
 
 <script type="module">
-import { supabase } from './supabase.js';
+import { supabase, getMyRolePreview } from './supabase.js';
 
 // ── Markdown renderer (mirrors news.js) ──────────────────────
 function renderMarkdown(md) {
@@ -407,9 +407,14 @@ async function init() {
     _canApprove = !error && data === true;
   } catch { _canApprove = false; }
   if (!_canApprove) {
-    // Legacy fallback: admin/owner always auto-publish
-    const { data: legacyProfile } = await supabase.from('profiles').select('role').eq('id', _user.id).single();
-    _canApprove = legacyProfile?.role === 'owner' || legacyProfile?.role === 'admin';
+    const preview = await getMyRolePreview().catch(() => null);
+    if (!preview) {
+      // Legacy fallback: admin/owner always auto-publish — but not while
+      // previewing a lower role, since that should reflect the preview's
+      // actual approval permission (already checked above).
+      const { data: legacyProfile } = await supabase.from('profiles').select('role').eq('id', _user.id).single();
+      _canApprove = legacyProfile?.role === 'owner' || legacyProfile?.role === 'admin';
+    }
   }
   document.getElementById('pending-review-panel').style.display = _canApprove ? '' : 'none';
 

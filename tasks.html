@@ -301,7 +301,7 @@
 
 <script type="module" src="nav.js"></script>
 <script type="module">
-import { supabase } from './supabase.js';
+import { supabase, getMyRolePreview } from './supabase.js';
 
 // ── Tag / status / color system ─────────────────────────────────
 // A task's tag IS its status and its color — one field, no overrides.
@@ -401,8 +401,14 @@ async function resolveAccess(userId) {
     access.test = test === true;
   } catch {}
   if (!access.manage) {
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).single();
-    if (profile?.role === 'admin' || profile?.role === 'owner') access.manage = true;
+    const preview = await getMyRolePreview().catch(() => null);
+    if (!preview) {
+      // Only fall back to the raw profile role when no "view as" preview is
+      // active — otherwise a real admin/owner previewing a lower role would
+      // get management access back regardless of what they're previewing.
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).single();
+      if (profile?.role === 'admin' || profile?.role === 'owner') access.manage = true;
+    }
   }
   return access;
 }

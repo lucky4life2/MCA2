@@ -77,12 +77,14 @@ export async function hasPermission(perm) {
  * Checks for can_view_admin permission OR legacy admin/owner role.
  */
 export async function isAdmin(userId, accessToken) {
-  // Try new permission system first
+  // Try new permission system first — this respects an active "view as"
+  // role preview, so trust its result whenever the call succeeds instead of
+  // falling through to the raw (preview-unaware) legacy role check below.
   try {
-    const { data } = await supabase.rpc('user_has_permission', { perm: 'can_view_admin' });
-    if (data === true) return true;
+    const { data, error } = await supabase.rpc('user_has_permission', { perm: 'can_view_admin' });
+    if (!error) return data === true;
   } catch {}
-  // Fallback: legacy role check
+  // Fallback: legacy role check (only reached if the RPC itself errored)
   const profile = await getProfile(userId, accessToken);
   return profile?.role === 'admin' || profile?.role === 'owner';
 }
@@ -93,10 +95,10 @@ export async function isAdmin(userId, accessToken) {
  */
 export async function isOwner(userId, accessToken) {
   try {
-    const { data } = await supabase.rpc('user_has_permission', { perm: 'can_assign_admin' });
-    if (data === true) return true;
+    const { data, error } = await supabase.rpc('user_has_permission', { perm: 'can_assign_admin' });
+    if (!error) return data === true;
   } catch {}
-  // Fallback: legacy owner
+  // Fallback: legacy owner (only reached if the RPC itself errored)
   const profile = await getProfile(userId, accessToken);
   return profile?.role === 'owner';
 }

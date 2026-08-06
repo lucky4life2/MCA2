@@ -1232,7 +1232,7 @@
 
 <script type="module" src="nav.js"></script>
 <script type="module">
-import { supabase, isAdmin, isOwner, startRolePreview } from './supabase.js';
+import { supabase, isAdmin, isOwner, startRolePreview, getMyRolePreview } from './supabase.js';
 
 // ── State ─────────────────────────────────────────────────────
 let _allMembers   = [];
@@ -1363,6 +1363,9 @@ async function loadMyPermissions(user) {
   _myPermissions = {};
   _myLevel = 0;
 
+  const preview = await getMyRolePreview().catch(() => null);
+  const isPreviewing = !!preview;
+
   // Step 1: always read profiles.role (works before and after migration)
   let legacyRole = null;
   try {
@@ -1401,8 +1404,11 @@ async function loadMyPermissions(user) {
     }
   }
 
-  // Always ensure legacy admins with no new roles assigned can still get in
-  if (!_myPermissions.can_view_admin && (legacyRole === 'owner' || legacyRole === 'admin')) {
+  // Always ensure legacy admins with no new roles assigned can still get in —
+  // but never while a "view as" preview is active, since starting a preview
+  // requires being on the new role system already, and this safety net would
+  // otherwise hand full permissions right back regardless of what's previewed.
+  if (!isPreviewing && !_myPermissions.can_view_admin && (legacyRole === 'owner' || legacyRole === 'admin')) {
     ALL_PERMISSIONS.forEach(p => { _myPermissions[p.key] = true; });
     _myLevel = (legacyRole === 'owner') ? 100 : 80;
     if (legacyRole === 'admin') {
