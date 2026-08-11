@@ -42,6 +42,10 @@
   .tk-legend-chip.active { border-color: var(--blue); color: var(--blue); }
   .tk-swatch { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.15); flex-shrink: 0; }
   .tk-project-select { min-width: 180px; }
+  .draft-badge { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #8a6d1a; background: #fdf3df; border: 1px solid #f0dfa8; padding: 1px 7px; border-radius: 8px; white-space: nowrap; }
+  .draft-checkbox-row { display: flex; align-items: flex-start; gap: 8px; background: #fdf3df; border: 1px solid #f0dfa8; border-radius: 6px; padding: 8px 10px; margin-bottom: 1rem; }
+  .draft-checkbox-row input { margin-top: 2px; width: auto; }
+  .draft-checkbox-row label { font-size: 12.5px; font-weight: 600; color: #6b551a; line-height: 1.4; cursor: pointer; }
 
   /* List view */
   .tp-group { margin-bottom: 2rem; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
@@ -189,6 +193,7 @@
       <div class="tk-view-toggle">
         <button class="btn btn-outline active" id="btn-view-list">☰ List</button>
         <button class="btn btn-outline" id="btn-view-grid">▦ Grid</button>
+        <button class="btn btn-outline" id="btn-view-drafts" style="display:none;">📝 Drafts</button>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <select id="tk-project-filter" class="form-input tk-project-select"><option value="">All Projects</option></select>
@@ -208,6 +213,10 @@
     <div class="modal-head"><div class="modal-title" id="pj-title">New Project</div><button class="modal-close" id="pj-close">✕</button></div>
     <div class="modal-body">
       <input type="hidden" id="pj-id">
+      <div class="draft-checkbox-row">
+        <input type="checkbox" id="pj-draft">
+        <label for="pj-draft">Save as rough draft — hidden from the board (and everyone else) until you come back and publish it.</label>
+      </div>
       <div class="form-group"><label class="form-label">Project Name</label><input type="text" id="pj-name" class="form-input"></div>
       <div class="form-group">
         <label class="form-label">Visible to</label>
@@ -278,6 +287,11 @@
         <div style="font-size:12px;font-weight:600;margin-top:8px;display:none;" id="tk-checkoff-note"></div>
       </div>
 
+      <div class="draft-checkbox-row" id="tk-draft-row">
+        <input type="checkbox" id="tk-draft">
+        <label for="tk-draft">Save as rough draft — hidden from the board until you publish it.</label>
+      </div>
+
       <div id="tk-comments-wrap" style="display:none;margin-top:1rem;border-top:1px solid var(--border);padding-top:1rem;">
         <label class="form-label" id="tk-comments-label">Comments</label>
         <div id="tk-comments"></div>
@@ -324,6 +338,7 @@ let _projects = [], _tasks = [], _members = [], _allProfiles = [], _me = null, _
 let _access = { manage: false, checkoff: false, test: false };
 let _commentCounts = {};
 let _view = 'list';
+let _showDrafts = false;
 let _projectFilter = '';
 let _tags = [];
 let _tagFilter = new Set(); // tag ids; task matches if its tag is one of the selected
@@ -420,6 +435,7 @@ function applyAccessUI() {
   // NOT tester managers (can_check_off_tasks). Using testers can see and filter
   // by tags regardless of _access, since that part is read-only for them.
   document.getElementById('btn-manage-tags').style.display = _access.manage ? '' : 'none';
+  document.getElementById('btn-view-drafts').style.display = _access.manage ? '' : 'none';
 }
 
 async function init() {
@@ -501,6 +517,7 @@ function memberName(id) {
 
 function visibleTasks() {
   let list = _tasks;
+  list = _showDrafts ? list.filter(t => t.is_draft) : list.filter(t => !t.is_draft);
   if (_projectFilter) list = list.filter(t => t.project_id === _projectFilter);
   if (_tagFilter.size) list = list.filter(t => t.tag_id && _tagFilter.has(t.tag_id));
   return list;
@@ -528,6 +545,11 @@ function buildLegend() {
 document.getElementById('tk-project-filter').onchange = (e) => { _projectFilter = e.target.value; render(); };
 document.getElementById('btn-view-list').onclick = () => setView('list');
 document.getElementById('btn-view-grid').onclick = () => setView('grid');
+document.getElementById('btn-view-drafts').onclick = () => {
+  _showDrafts = !_showDrafts;
+  document.getElementById('btn-view-drafts').classList.toggle('active', _showDrafts);
+  render();
+};
 function setView(v) {
   _view = v;
   document.getElementById('btn-view-list').classList.toggle('active', v === 'list');
@@ -541,7 +563,11 @@ function render() {
 }
 
 function orderedProjects() {
-  return _projectFilter ? _projects.filter(p => p.id === _projectFilter) : _projects.slice();
+  let list = _projectFilter ? _projects.filter(p => p.id === _projectFilter) : _projects.slice();
+  list = _showDrafts
+    ? list.filter(p => p.is_draft || _tasks.some(t => t.project_id === p.id && t.is_draft))
+    : list.filter(p => !p.is_draft);
+  return list;
 }
 
 function renderCollapsedStrip() {
@@ -564,14 +590,14 @@ function renderList() {
   const board = document.getElementById('board');
   if (!_projects.length) { board.innerHTML = '<div class="t-empty">No projects yet — create one to start adding tasks.</div>'; return; }
   const projectsToShow = orderedProjects().filter(p => !isCollapsed(p.id));
-  if (!projectsToShow.length) { board.innerHTML = ''; return; }
+  if (!projectsToShow.length) { board.innerHTML = `<div class="t-empty">${_showDrafts ? 'No drafts right now.' : 'Nothing to show for this filter.'}</div>`; return; }
   board.innerHTML = projectsToShow.map(p => {
     const rows = sortTasks(visibleTasks().filter(t => t.project_id === p.id), sortKeyFor(p.id));
     return `
     <div class="tp-group">
       <div class="tp-head">
         <button class="tp-collapse-btn" onclick="toggleProjectCollapse('${p.id}')" title="Collapse">▾</button>
-        <div class="tp-head-name">${p.name}${_access.manage && _projectAccess.some(a => a.project_id === p.id) ? ' 🔒' : ''}</div>
+        <div class="tp-head-name">${p.name}${p.is_draft ? ' <span class="draft-badge">Draft</span>' : ''}${_access.manage && _projectAccess.some(a => a.project_id === p.id) ? ' 🔒' : ''}</div>
         <div class="tp-head-actions">
           ${sortSelectHtml(p.id)}
           ${_access.manage ? `<button onclick="editProject('${p.id}')">Edit</button>` : ''}
@@ -585,6 +611,7 @@ function renderList() {
         <div class="t-row" onclick="editTask('${t.id}')">
           <span class="t-color-dot" style="background:${color};"></span>
           <div class="t-title${isDoneTask(t) ? ' done' : ''}">${t.title}</div>
+          ${t.is_draft ? '<span class="draft-badge">Draft</span>' : ''}
           ${t.assignee_id ? `<div class="t-meta">${memberName(t.assignee_id)}</div>` : ''}
           ${t.due_date ? `<div class="t-meta">${t.due_date}</div>` : ''}
           ${_commentCounts[t.id] ? `<div class="t-meta">💬 ${_commentCounts[t.id]}</div>` : ''}
@@ -602,14 +629,14 @@ function renderGrid() {
   const board = document.getElementById('board');
   if (!_projects.length) { board.innerHTML = '<div class="t-empty">No projects yet — create one to start adding tasks.</div>'; return; }
   const projectsToShow = orderedProjects().filter(p => !isCollapsed(p.id));
-  if (!projectsToShow.length) { board.innerHTML = ''; return; }
+  if (!projectsToShow.length) { board.innerHTML = `<div class="t-empty">${_showDrafts ? 'No drafts right now.' : 'Nothing to show for this filter.'}</div>`; return; }
   board.innerHTML = projectsToShow.map(p => {
     const cards = sortTasks(visibleTasks().filter(t => t.project_id === p.id), sortKeyFor(p.id));
     return `
     <div class="tp-group">
       <div class="tp-head">
         <button class="tp-collapse-btn" onclick="toggleProjectCollapse('${p.id}')" title="Collapse">▾</button>
-        <div class="tp-head-name">${p.name}${_access.manage && _projectAccess.some(a => a.project_id === p.id) ? ' 🔒' : ''}</div>
+        <div class="tp-head-name">${p.name}${p.is_draft ? ' <span class="draft-badge">Draft</span>' : ''}${_access.manage && _projectAccess.some(a => a.project_id === p.id) ? ' 🔒' : ''}</div>
         <div class="tp-head-actions">
           ${sortSelectHtml(p.id)}
           ${_access.manage ? `<button onclick="editProject('${p.id}')">Edit</button>` : ''}
@@ -622,7 +649,7 @@ function renderGrid() {
           const tg = taskTag(t);
           return `
           <div class="tk-card" style="background:${color};color:${txt};" onclick="editTask('${t.id}')">
-            <div class="tk-card-title${isDoneTask(t) ? ' done' : ''}" style="color:${txt};">${t.title}</div>
+            <div class="tk-card-title${isDoneTask(t) ? ' done' : ''}" style="color:${txt};">${t.title}${t.is_draft ? ' <span class="draft-badge">Draft</span>' : ''}</div>
             <div class="tk-card-foot">
               <span class="tk-card-status" style="color:${txt};">${tg.name}</span>
               ${t.assignee_id ? `<span class="tk-card-meta" style="color:${txt};">👤 ${memberName(t.assignee_id) || 'Unassigned'}</span>` : ''}
@@ -643,6 +670,7 @@ let _pjUserPicks = [];
 function openProjectModal(p) {
   document.getElementById('pj-id').value = p?.id || '';
   document.getElementById('pj-name').value = p?.name || '';
+  document.getElementById('pj-draft').checked = p?.is_draft || false;
   document.getElementById('pj-title').textContent = p ? 'Edit Project' : 'New Project';
   document.getElementById('pj-delete').style.display = p ? '' : 'none';
   document.getElementById('pj-error').style.display = 'none';
@@ -682,11 +710,12 @@ document.getElementById('pj-save').onclick = async () => {
   const name = document.getElementById('pj-name').value.trim();
   const errEl = document.getElementById('pj-error');
   if (!name) { errEl.textContent = 'Name is required.'; errEl.style.display = 'block'; return; }
+  const isDraft = document.getElementById('pj-draft').checked;
   if (id) {
-    const { error } = await supabase.from('task_projects').update({ name }).eq('id', id);
+    const { error } = await supabase.from('task_projects').update({ name, is_draft: isDraft }).eq('id', id);
     if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
   } else {
-    const { data, error } = await supabase.from('task_projects').insert({ name }).select().single();
+    const { data, error } = await supabase.from('task_projects').insert({ name, is_draft: isDraft, created_by: _me.id }).select().single();
     if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
     id = data.id;
   }
@@ -810,12 +839,14 @@ async function openTaskModal(t) {
   document.getElementById('tk-assignee').value = t?.assignee_id || '';
   document.getElementById('tk-due').value = t?.due_date || '';
   document.getElementById('tk-priority').value = t?.priority || 'medium';
+  document.getElementById('tk-draft').checked = t?.is_draft || false;
   document.getElementById('tk-title').textContent = t ? 'Edit Task' : 'New Task';
 
   const canEdit = _access.manage;
-  ['tk-name', 'tk-desc', 'tk-project', 'tk-assignee', 'tk-due', 'tk-priority'].forEach(id => {
+  ['tk-name', 'tk-desc', 'tk-project', 'tk-assignee', 'tk-due', 'tk-priority', 'tk-draft'].forEach(id => {
     document.getElementById(id).disabled = !canEdit;
   });
+  document.getElementById('tk-draft-row').style.display = canEdit ? '' : 'none';
   document.getElementById('tk-delete').style.display = (t && canEdit) ? '' : 'none';
   document.getElementById('tk-save').style.display = canEdit ? '' : 'none';
   const doneBtn = document.getElementById('tk-mark-done');
@@ -906,6 +937,7 @@ document.getElementById('tk-save').onclick = async () => {
     due_date: document.getElementById('tk-due').value || null,
     priority: document.getElementById('tk-priority').value,
     tag_id: _editingTag || null,
+    is_draft: document.getElementById('tk-draft').checked,
     updated_at: new Date().toISOString(),
   };
   let error, taskId = id;
