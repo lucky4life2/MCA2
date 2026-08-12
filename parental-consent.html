@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Parental Consent — Minecraft Club of America</title>
+  <meta name="robots" content="noindex">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/x-icon" href="images/icon.ico">
+  <style>
+    .pc-wrap { max-width: 480px; margin: 0 auto; padding: 3rem 1.5rem 5rem; text-align: center; }
+    .pc-wrap h1 { font-family: 'Times New Roman', serif; font-size: 1.7rem; color: var(--blue); font-weight: normal; margin-bottom: 1rem; }
+    .pc-wrap p { font-size: 14px; color: var(--muted); line-height: 1.6; margin-bottom: 1.5rem; text-align: left; }
+    .pc-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 1rem; }
+    .pc-error { color: #c0392b; font-size: 13px; margin-top: 1rem; display: none; }
+    .pc-links { margin-top: 1.5rem; text-align: left; }
+    .pc-links a { color: var(--blue); }
+  </style>
+</head>
+<body>
+
+<div class="page-wrap">
+  <div class="pc-wrap">
+    <div id="pc-loading">
+      <h1>Loading…</h1>
+    </div>
+
+    <div id="pc-invalid" style="display:none;">
+      <h1>Link Not Valid</h1>
+      <p>This consent link is missing information, has already been used, or has expired. If you still need to respond, please contact us at minecraftclubofamerica@gmail.com and we'll send a new link.</p>
+    </div>
+
+    <div id="pc-ask" style="display:none;">
+      <h1>Parental Consent Requested</h1>
+      <p>Your child has asked to create an account with <strong>Minecraft Club of America</strong>, a leadership and learning club that uses Minecraft to teach government, economics, and civics. MCA serves students from elementary school through high school.</p>
+      <p>Because your child indicated they're under 13, we need your consent before their account is activated and before we collect any personal information from them. Please review our <a href="privacy.html" target="_blank">Privacy Policy</a> and <a href="terms.html" target="_blank">Terms of Service</a> before deciding.</p>
+      <div class="pc-actions">
+        <button class="btn btn-primary" id="pc-approve">Approve</button>
+        <button class="btn btn-outline" id="pc-decline">Decline</button>
+      </div>
+      <div class="pc-error" id="pc-error"></div>
+    </div>
+
+    <div id="pc-approved" style="display:none;">
+      <h1>Account Approved</h1>
+      <p>Thanks — your child's account is now active and they can sign in. You can review or delete the information we've collected, or revoke this consent at any time, by contacting us at minecraftclubofamerica@gmail.com.</p>
+    </div>
+
+    <div id="pc-declined" style="display:none;">
+      <h1>Request Declined</h1>
+      <p>You've declined this account. It will remain inactive and no personal information beyond your email address will be collected.</p>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="nav.js"></script>
+<script type="module">
+  const SUPABASE_URL = 'https://hjaywokvgdzhvsoygctc.supabase.co';
+  const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNzA2NTQsImV4cCI6MjA5NTg0NjY1NH0.nFqlc20iUDwE1sXLRi2Pev181v2RJKx_S6UcTkGgPWU';
+
+  const params = new URLSearchParams(window.location.search);
+  const userId = params.get('uid');
+  const token  = params.get('token');
+
+  const show = (id) => {
+    ['pc-loading','pc-invalid','pc-ask','pc-approved','pc-declined'].forEach(x => {
+      document.getElementById(x).style.display = x === id ? 'block' : 'none';
+    });
+  };
+
+  if (!userId || !token) {
+    show('pc-invalid');
+  } else {
+    show('pc-ask');
+  }
+
+  async function respond(decision) {
+    const errEl = document.getElementById('pc-error');
+    errEl.style.display = 'none';
+    document.getElementById('pc-approve').disabled = true;
+    document.getElementById('pc-decline').disabled = true;
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/confirm-parental-consent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: ANON_KEY },
+        body: JSON.stringify({ userId, token, decision }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        errEl.textContent = json.error || 'Something went wrong. Please try again.';
+        errEl.style.display = 'block';
+        document.getElementById('pc-approve').disabled = false;
+        document.getElementById('pc-decline').disabled = false;
+        return;
+      }
+      show(decision === 'approve' ? 'pc-approved' : 'pc-declined');
+    } catch (e) {
+      errEl.textContent = 'Network error. Please try again.';
+      errEl.style.display = 'block';
+      document.getElementById('pc-approve').disabled = false;
+      document.getElementById('pc-decline').disabled = false;
+    }
+  }
+
+  document.getElementById('pc-approve').addEventListener('click', () => respond('approve'));
+  document.getElementById('pc-decline').addEventListener('click', () => {
+    if (confirm('Are you sure you want to decline? The account will remain inactive.')) respond('decline');
+  });
+</script>
+</body>
+</html>

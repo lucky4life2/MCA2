@@ -217,15 +217,6 @@
           <button class="login-tab" data-tab="signup">Create Account</button>
         </div>
 
-        <!-- Shared consent — required before any account is created, whether
-             via the Sign In tab's OAuth buttons (which can silently create a
-             new account on first use) or the Create Account tab. -->
-        <div class="login-consent">
-          <input type="checkbox" id="signup-consent">
-          <label for="signup-consent">I agree to the <a href="terms.html" target="_blank">Terms of Service</a> and <a href="privacy.html" target="_blank">Privacy Policy</a>.</label>
-        </div>
-        <div class="login-error" id="signup-consent-error">Please accept the Terms of Service and Privacy Policy to continue.</div>
-
         <!-- Sign In panel -->
         <div class="login-panel active" id="panel-signin">
           <button class="btn-login-discord" id="btn-discord-signin">
@@ -271,6 +262,13 @@
             <div class="password-hint">Must be 8+ characters with at least one uppercase and one lowercase letter.</div>
           </div>
           <div class="login-error" id="signup-error"></div>
+
+          <div class="login-consent">
+            <input type="checkbox" id="signup-consent">
+            <label for="signup-consent">I agree to the <a href="terms.html" target="_blank">Terms of Service</a> and <a href="privacy.html" target="_blank">Privacy Policy</a>.</label>
+          </div>
+          <div class="login-error" id="signup-consent-error">Please accept the Terms of Service and Privacy Policy to continue.</div>
+
           <button class="btn-login-submit" id="btn-email-signup">Create Account</button>
         </div>
 
@@ -433,11 +431,11 @@
   // Handle ?tab=signup in URL (e.g. from "Create account" link elsewhere)
   if (params.get('tab') === 'signup') switchTab('signup');
 
-  // ── Terms/Privacy consent (required for account creation) ──────
+  // ── Terms/Privacy consent (Create Account tab only) ─────────────
   const signupConsent      = document.getElementById('signup-consent');
   const signupConsentError = document.getElementById('signup-consent-error');
 
-  // Consent must be accepted before any signup path (OAuth or email) proceeds.
+  // Consent must be accepted before Create-Account-tab signup (email or OAuth) proceeds.
   // Returns true and clears the error if accepted; otherwise shows the error and returns false.
   function requireSignupConsent() {
     if (signupConsent.checked) {
@@ -460,9 +458,9 @@
       options: { redirectTo: discordRedirect }
     });
   }
-  document.getElementById('btn-discord-signin').addEventListener('click', () => {
-    if (requireSignupConsent()) discordLogin();
-  });
+  // Sign In tab's Discord button doesn't show the consent checkbox (that's
+  // signup-only now), so it doesn't gate on it — see requireSignupConsent().
+  document.getElementById('btn-discord-signin').addEventListener('click', discordLogin);
   document.getElementById('btn-discord-signup').addEventListener('click', () => {
     if (requireSignupConsent()) discordLogin();
   });
@@ -476,9 +474,7 @@
       options: { redirectTo: googleRedirect }
     });
   }
-  document.getElementById('btn-google-signin').addEventListener('click', () => {
-    if (requireSignupConsent()) googleLogin();
-  });
+  document.getElementById('btn-google-signin').addEventListener('click', googleLogin);
   document.getElementById('btn-google-signup').addEventListener('click', () => {
     if (requireSignupConsent()) googleLogin();
   });

@@ -195,6 +195,45 @@
     </div>
   </div>
 
+  <!-- Under-13 age-check / parental consent gate. Shown instead of
+       account-main whenever the signed-in user's minor_consent row is
+       missing, pending, or declined. -->
+  <div id="account-age-gate" class="account-wrap account-not-signed-in" style="display:none;">
+    <div id="agegate-ask">
+      <h2>Quick question</h2>
+      <p>Before we set up your account: are you 13 years old or older?</p>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="btn-agegate-yes">Yes, I'm 13 or older</button>
+        <button class="btn btn-outline" id="btn-agegate-no">No, I'm under 13</button>
+      </div>
+      <div class="form-error" id="agegate-ask-error" style="display:none;margin-top:1rem;"></div>
+    </div>
+
+    <div id="agegate-parent" style="display:none;max-width:380px;margin:0 auto;text-align:left;">
+      <h2 style="text-align:center;">Parent/guardian consent needed</h2>
+      <p style="text-align:center;">Because you're under 13, a parent or guardian needs to approve your account before you can use it. Enter their email and we'll send them a link to review and respond.</p>
+      <div class="form-group">
+        <label class="form-label" for="agegate-parent-email">Parent/Guardian Email</label>
+        <input type="email" id="agegate-parent-email" class="form-input" placeholder="parent@example.com">
+      </div>
+      <div class="form-error" id="agegate-parent-error"></div>
+      <button class="btn btn-primary" id="btn-agegate-send" style="width:100%;">Send Consent Request</button>
+    </div>
+
+    <div id="agegate-pending" style="display:none;">
+      <h2>Waiting for parent approval</h2>
+      <p>We've emailed <strong id="agegate-pending-email"></strong> asking them to review and approve your account. Once they do, you'll be able to use the site. Check back later, or ask your parent/guardian to check their email (including spam).</p>
+      <button class="btn btn-outline" id="btn-agegate-signout">Sign Out</button>
+    </div>
+
+    <div id="agegate-declined" style="display:none;">
+      <h2>Account not approved</h2>
+      <p>A parent or guardian declined to approve this account, so it can't be used. If you think this is a mistake, please contact us at minecraftclubofamerica@gmail.com.</p>
+      <button class="btn btn-outline" id="btn-agegate-signout2">Sign Out</button>
+    </div>
+  </div>
+
+
   <div id="account-main" class="account-wrap" style="display:none;">
 
     <div class="account-hero">
@@ -487,6 +526,17 @@ async function init() {
 
   await loadProfile();
 
+  // Under-13 age-check / parental consent gate. A missing row means this
+  // account has never answered the age question; pending/declined means a
+  // parent hasn't approved (or refused to). The account can sign in in all
+  // three cases — it just can't get past this screen until resolved.
+  const consent = await getMinorConsent();
+  if (!consent || consent.status === 'pending' || consent.status === 'declined') {
+    elLoading.style.display = 'none';
+    showAgeGate(consent);
+    return;
+  }
+
   // Block frozen/terminated accounts, but let them file an appeal before
   // we sign them out — otherwise they have no way to reach an admin.
   if (_profile.account_status === 'frozen') {
@@ -562,6 +612,90 @@ function initAppealForm(subjectPrefix) {
     sendBtn.style.display = 'none';
     await signOut();
   });
+}
+
+// ── Under-13 age-check / parental consent gate ──────────────────
+async function getMinorConsent() {
+  const { data } = await supabase
+    .from('minor_consent')
+    .select('status, parent_email')
+    .eq('user_id', _user.id)
+    .maybeSingle();
+  return data || null;
+}
+
+async function submitAgeCheck(payload) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch(`${supabase.supabaseUrl}/functions/v1/submit-age-check`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: supabase.supabaseKey, Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json().catch(() => ({}));
+  return { ok: res.ok, json };
+}
+
+let _agegateWired = false;
+function showAgeGate(consent) {
+  const wrap = document.getElementById('account-age-gate');
+  wrap.style.display = 'block';
+  ['agegate-ask', 'agegate-parent', 'agegate-pending', 'agegate-declined'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+
+  if (!consent) {
+    document.getElementById('agegate-ask').style.display = 'block';
+  } else if (consent.status === 'pending') {
+    document.getElementById('agegate-pending-email').textContent = consent.parent_email || 'your parent/guardian';
+    document.getElementById('agegate-pending').style.display = 'block';
+  } else if (consent.status === 'declined') {
+    document.getElementById('agegate-declined').style.display = 'block';
+  }
+
+  if (_agegateWired) return;
+  _agegateWired = true;
+
+  document.getElementById('btn-agegate-yes').addEventListener('click', async (e) => {
+    const btn = e.target; btn.disabled = true;
+    const { ok, json } = await submitAgeCheck({ isAdult: true });
+    if (!ok) {
+      const errEl = document.getElementById('agegate-ask-error');
+      errEl.textContent = json.error || 'Something went wrong. Please try again.';
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      return;
+    }
+    window.location.reload();
+  });
+
+  document.getElementById('btn-agegate-no').addEventListener('click', () => {
+    document.getElementById('agegate-ask').style.display = 'none';
+    document.getElementById('agegate-parent').style.display = 'block';
+  });
+
+  document.getElementById('btn-agegate-send').addEventListener('click', async (e) => {
+    const email = document.getElementById('agegate-parent-email').value.trim();
+    const errEl = document.getElementById('agegate-parent-error');
+    errEl.style.display = 'none';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errEl.textContent = 'Please enter a valid email address.';
+      errEl.style.display = 'block';
+      return;
+    }
+    const btn = e.target; btn.disabled = true; btn.textContent = 'Sending…';
+    const { ok, json } = await submitAgeCheck({ parentEmail: email });
+    btn.disabled = false; btn.textContent = 'Send Consent Request';
+    if (!ok) {
+      errEl.textContent = json.error || 'Something went wrong. Please try again.';
+      errEl.style.display = 'block';
+      return;
+    }
+    showAgeGate({ status: 'pending', parent_email: email });
+  });
+
+  const doSignOut = async () => { await signOut(); window.location.replace('login.html?return=account.html'); };
+  document.getElementById('btn-agegate-signout').addEventListener('click', doSignOut);
+  document.getElementById('btn-agegate-signout2').addEventListener('click', doSignOut);
 }
 
 function showRecoveryBanner() {

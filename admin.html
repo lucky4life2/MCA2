@@ -433,6 +433,7 @@
           <button class="admin-tab-group-item" data-tab="minecraft">Minecraft</button>
           <button class="admin-tab-group-item" data-tab="shop">Shop</button>
           <button class="admin-tab-group-item" data-tab="config">Config</button>
+          <button class="admin-tab-group-item" data-tab="legal-notice">Legal Notices</button>
           <button class="admin-tab-group-item" data-tab="audit-log" id="tab-btn-audit-log">Audit Log</button>
           <a class="admin-tab-group-item admin-tab-link" href="tasks.html">Tasks</a>
         </div>
@@ -824,6 +825,26 @@
         <div style="padding:1rem 1.5rem;display:flex;gap:10px;align-items:center;border-top:1px solid var(--border);">
           <button class="btn btn-primary" id="btn-save-config" style="font-size:12px;padding:7px 16px;">Save Config</button>
           <span id="cfg-status" style="font-size:12px;color:var(--muted);"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="admin-panel" id="tab-legal-notice">
+      <div class="admin-section">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Notify Members of Policy Update</div>
+        </div>
+        <div style="padding:1.25rem 1.5rem;">
+          <p style="font-size:13px;color:var(--muted);margin:0 0 1rem;line-height:1.6;">Sends an email to every member with a usable email address (not just news subscribers), plus the parent/guardian email on file for any approved under-13 account. Use this any time you make a material change to the Terms or Privacy Policy.</p>
+          <label class="stat-cfg-label">Which document changed?</label>
+          <select id="legal-notice-doc" class="search-input" style="width:100%;box-sizing:border-box;margin-bottom:1rem;">
+            <option value="privacy">Privacy Policy</option>
+            <option value="terms">Terms of Service</option>
+          </select>
+          <label class="stat-cfg-label">What changed? (included in the email)</label>
+          <textarea id="legal-notice-summary" class="search-input" rows="3" style="width:100%;box-sizing:border-box;resize:vertical;margin-bottom:1rem;" placeholder="e.g. Clarified how we handle parental consent for members under 13."></textarea>
+          <button class="btn btn-primary" id="btn-send-legal-notice" style="font-size:12px;padding:7px 16px;">Send Notice</button>
+          <span id="legal-notice-status" style="font-size:12px;color:var(--muted);margin-left:10px;"></span>
         </div>
       </div>
     </div>
@@ -2783,6 +2804,30 @@ document.getElementById('btn-save-config').addEventListener('click', async () =>
   const { error } = await supabase.from('settings').upsert({ key:'site_config', value: JSON.stringify(cfg) }, { onConflict:'key' });
   statusEl.textContent = error ? 'Error: '+error.message : '✓ Saved';
   if (!error) setTimeout(() => { statusEl.textContent = ''; }, 3000);
+});
+
+document.getElementById('btn-send-legal-notice').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-send-legal-notice');
+  const statusEl = document.getElementById('legal-notice-status');
+  const doc = document.getElementById('legal-notice-doc').value;
+  const summary = document.getElementById('legal-notice-summary').value.trim();
+  if (!confirm(`Send a policy-update email to every member (and relevant parents) about the ${doc === 'terms' ? 'Terms of Service' : 'Privacy Policy'}?`)) return;
+  btn.disabled = true;
+  statusEl.textContent = 'Sending…';
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(`${supabase.supabaseUrl}/functions/v1/notify-policy-update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: supabase.supabaseKey, Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ document: doc, summary }),
+    });
+    const json = await res.json();
+    if (!res.ok || json.error) { statusEl.textContent = 'Error: ' + (json.error || 'Failed to send.'); }
+    else { statusEl.textContent = `✓ Sent to ${json.sent} of ${json.total} recipients.`; document.getElementById('legal-notice-summary').value = ''; }
+  } catch (e) {
+    statusEl.textContent = 'Error: ' + e.message;
+  }
+  btn.disabled = false;
 });
 
 let _nationsAdmin = [], _leadersAdmin = [], _nationOwnersById = {}, _nmOwnerIds = [];
