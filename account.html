@@ -626,13 +626,17 @@ async function getMinorConsent() {
 
 async function submitAgeCheck(payload) {
   const { data: { session } } = await supabase.auth.getSession();
-  const res = await fetch(`${supabase.supabaseUrl}/functions/v1/submit-age-check`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', apikey: supabase.supabaseKey, Authorization: `Bearer ${session.access_token}` },
-    body: JSON.stringify(payload),
-  });
-  const json = await res.json().catch(() => ({}));
-  return { ok: res.ok, json };
+  try {
+    const res = await fetch(`${supabase.supabaseUrl}/functions/v1/submit-age-check`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json().catch(() => ({}));
+    return { ok: res.ok, json };
+  } catch (e) {
+    return { ok: false, json: { error: 'Network error. Please try again.' } };
+  }
 }
 
 let _agegateWired = false;
