@@ -153,6 +153,26 @@
       margin-top: 4px; line-height: 1.5;
     }
 
+    .login-consent {
+      display: flex; align-items: flex-start; gap: 8px;
+      margin: 2px 0 14px;
+    }
+    .login-consent input[type="checkbox"] {
+      margin-top: 2px; flex-shrink: 0; width: 15px; height: 15px;
+      accent-color: var(--blue); cursor: pointer;
+    }
+    .login-consent label {
+      font-size: 12px; color: var(--muted); line-height: 1.5; cursor: pointer;
+    }
+    .login-consent a { color: var(--blue); text-decoration: none; }
+    .login-consent a:hover { text-decoration: underline; }
+    .login-oauth-consent-note {
+      font-size: 11px; color: var(--muted); line-height: 1.5;
+      text-align: center; margin: 10px 0 2px;
+    }
+    .login-oauth-consent-note a { color: var(--blue); text-decoration: none; }
+    .login-oauth-consent-note a:hover { text-decoration: underline; }
+
     .login-card-footer {
       padding: 1rem 2rem;
       border-top: 1px solid var(--border);
@@ -196,6 +216,15 @@
           <button class="login-tab active" data-tab="signin">Sign In</button>
           <button class="login-tab" data-tab="signup">Create Account</button>
         </div>
+
+        <!-- Shared consent — required before any account is created, whether
+             via the Sign In tab's OAuth buttons (which can silently create a
+             new account on first use) or the Create Account tab. -->
+        <div class="login-consent">
+          <input type="checkbox" id="signup-consent">
+          <label for="signup-consent">I agree to the <a href="terms.html" target="_blank">Terms of Service</a> and <a href="privacy.html" target="_blank">Privacy Policy</a>.</label>
+        </div>
+        <div class="login-error" id="signup-consent-error">Please accept the Terms of Service and Privacy Policy to continue.</div>
 
         <!-- Sign In panel -->
         <div class="login-panel active" id="panel-signin">
@@ -404,6 +433,24 @@
   // Handle ?tab=signup in URL (e.g. from "Create account" link elsewhere)
   if (params.get('tab') === 'signup') switchTab('signup');
 
+  // ── Terms/Privacy consent (required for account creation) ──────
+  const signupConsent      = document.getElementById('signup-consent');
+  const signupConsentError = document.getElementById('signup-consent-error');
+
+  // Consent must be accepted before any signup path (OAuth or email) proceeds.
+  // Returns true and clears the error if accepted; otherwise shows the error and returns false.
+  function requireSignupConsent() {
+    if (signupConsent.checked) {
+      signupConsentError.style.display = 'none';
+      return true;
+    }
+    signupConsentError.style.display = 'block';
+    return false;
+  }
+  signupConsent.addEventListener('change', () => {
+    if (signupConsent.checked) signupConsentError.style.display = 'none';
+  });
+
   // ── Discord ───────────────────────────────────────────────────
   const discordRedirect = window.location.origin + '/' + returnTo;
 
@@ -413,8 +460,12 @@
       options: { redirectTo: discordRedirect }
     });
   }
-  document.getElementById('btn-discord-signin').addEventListener('click', discordLogin);
-  document.getElementById('btn-discord-signup').addEventListener('click', discordLogin);
+  document.getElementById('btn-discord-signin').addEventListener('click', () => {
+    if (requireSignupConsent()) discordLogin();
+  });
+  document.getElementById('btn-discord-signup').addEventListener('click', () => {
+    if (requireSignupConsent()) discordLogin();
+  });
 
   // ── Google ────────────────────────────────────────────────────
   const googleRedirect = window.location.origin + '/' + returnTo;
@@ -425,8 +476,12 @@
       options: { redirectTo: googleRedirect }
     });
   }
-  document.getElementById('btn-google-signin').addEventListener('click', googleLogin);
-  document.getElementById('btn-google-signup').addEventListener('click', googleLogin);
+  document.getElementById('btn-google-signin').addEventListener('click', () => {
+    if (requireSignupConsent()) googleLogin();
+  });
+  document.getElementById('btn-google-signup').addEventListener('click', () => {
+    if (requireSignupConsent()) googleLogin();
+  });
 
   // ── MFA challenge on page load (redirected from a protected page) ─────────
   // When the user arrives with ?mfa=1 they already have a valid aal1 session;
@@ -700,6 +755,7 @@
     const password = document.getElementById('signup-password').value;
     const errEl    = document.getElementById('signup-error');
     errEl.style.display = 'none';
+    if (!requireSignupConsent()) return;
     if (!email) {
       errEl.textContent   = 'Please enter a valid email address.';
       errEl.style.display = 'block'; return;
