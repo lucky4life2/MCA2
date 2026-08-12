@@ -779,22 +779,26 @@ async function initNavAuth(_authReadyResolve) {
     // each page having to make its own duplicate (slow) profiles query.
     try {
       const mod0 = await import('./supabase.js');
-      const [{ data: roleData }, preview] = await Promise.all([
-        mod0.supabase.from('profiles').select('display_name, username, role').eq('id', user.id).single(),
-        mod0.getMyRolePreview().catch(() => null)
+      const [{ data: roleData }, preview, canViewAdmin] = await Promise.all([
+        mod0.supabase.from('profiles').select('display_name, username').eq('id', user.id).single(),
+        mod0.getMyRolePreview().catch(() => null),
+        mod0.hasPermission('can_view_admin').catch(() => false)
       ]);
       if (roleData) {
         label = roleData.display_name || roleData.username || label;
-        isAdmin = roleData.role === 'admin' || roleData.role === 'owner';
       }
+      // isAdmin comes exclusively from the server-side role/permission
+      // system (user_roles + roles.permissions) via the can_view_admin
+      // permission — never from the legacy profiles.role column.
+      // assign_role_to_user only ever inserts into user_roles, so
+      // profiles.role goes stale the moment a role is granted from the
+      // admin panel and never reflects who's actually an admin/owner,
+      // which was hiding the Admin/Tasks links after a fresh grant.
+      // hasPermission('can_view_admin') is preview-aware (it checks
+      // role_previews before the user's real roles), so this is also
+      // correct while a "view as" preview is active.
+      isAdmin = !!canViewAdmin;
       isPreviewing = !!preview;
-      if (isPreviewing) {
-        // A "view as" preview is active — don't trust the real profiles.role
-        // for isAdmin (that would show the Admin link / bypass restrictions
-        // while previewing a lower role). Ask the preview-aware RPC instead,
-        // which checks role_previews before falling back to the real role.
-        try { isAdmin = !!(await mod0.hasPermission('can_view_admin')); } catch(e) { isAdmin = false; }
-      }
     } catch(e) {}
 
     // trackPresence({ name: label }); // disabled — see commented block above
