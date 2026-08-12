@@ -142,6 +142,12 @@ const FOOTER_HTML = () => {
           Email Us
         </a>
       </div>
+
+      <div class="footer-col">
+        <div class="footer-col-title">Legal</div>
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="terms.html">Terms of Service</a>
+      </div>
     </div>
 
   </div>

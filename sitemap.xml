@@ -49,4 +49,16 @@
     <priority>0.4</priority>
   </url>
 
+  <url>
+    <loc>https://minecraftclubofamerica.me/privacy.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+
+  <url>
+    <loc>https://minecraftclubofamerica.me/terms.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+
 </urlset>
