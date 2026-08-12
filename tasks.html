@@ -882,8 +882,14 @@ async function openTaskModal(t) {
   document.getElementById('tk-modal').style.display = 'flex';
 }
 window.editTask = (id) => openTaskModal(_tasks.find(t => t.id === id));
+// When several tags are marked "done", the quick-action buttons below default
+// to the lowest sort_order one — pick a specific done status for a task via
+// the status/tag picker in the task modal instead if you want a different one.
+function firstDoneTag() {
+  return _tags.filter(tg => tg.is_done).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))[0] || null;
+}
 window.markDone = async (id) => {
-  const doneTag = _tags.find(tg => tg.is_done);
+  const doneTag = firstDoneTag();
   if (!doneTag) { alert('No tag is marked as the done status — set one in Manage Tags first.'); return; }
   await supabase.from('tasks').update({ tag_id: doneTag.id, updated_at: new Date().toISOString() }).eq('id', id);
   loadAll();
@@ -915,7 +921,7 @@ document.getElementById('tk-checkoff-toggle').onclick = async () => {
 document.getElementById('tk-mark-done').onclick = async () => {
   const id = document.getElementById('tk-id').value;
   const t = _tasks.find(x => x.id === id);
-  const doneTag = _tags.find(tg => tg.is_done);
+  const doneTag = firstDoneTag();
   if (isDoneTask(t)) {
     await supabase.from('tasks').update({ tag_id: null, updated_at: new Date().toISOString() }).eq('id', id);
   } else {
@@ -1000,9 +1006,8 @@ function renderTagMgrList() {
       const errEl = document.getElementById('tagmgr-error');
       errEl.style.display = 'none';
       if (!name) { errEl.textContent = 'Tag name can\'t be empty.'; errEl.style.display = 'block'; return; }
-      // Only one tag can hold each flag — clear it from any other tag first.
-      if (isCheckoff) await supabase.from('task_tags').update({ is_checkoff: false }).neq('id', id).eq('is_checkoff', true);
-      if (isDone) await supabase.from('task_tags').update({ is_done: false }).neq('id', id).eq('is_done', true);
+      // Multiple tags can each be marked check-off and/or done — no longer
+      // exclusive, so we no longer clear the flag off any other tag here.
       const { error } = await supabase.from('task_tags').update({ name, color, sort_order: sortOrder, is_checkoff: isCheckoff, is_done: isDone }).eq('id', id);
       if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
       await loadAll();

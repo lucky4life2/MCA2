@@ -102,7 +102,7 @@ function renderFeaturedBanner(article) {
 function renderCard(a) {
   const rawExcerpt = a.summary || (a.body || '').replace(/^#+\s+.+$/gm,'').replace(/[*_`#>\[\]]/g,'').replace(/\s+/g,' ').trim();
   const excerpt = truncate(rawExcerpt, 160);
-  const cat = (a.category && a.category.toLowerCase() !== 'featured') ? a.category : 'General';
+  const cat = a.category || 'General';
   const href = a.slug ? `article.html?slug=${encodeURIComponent(a.slug)}` : '#';
   return `
     <a href="${href}" class="news-card" data-id="${a.id}" style="cursor:pointer;display:block;text-decoration:none;color:inherit;">
@@ -151,7 +151,7 @@ function openArticleModal(article) {
     document.body.appendChild(overlay);
   }
 
-  const cat = (article.category && article.category.toLowerCase() !== 'featured') ? article.category : 'General';
+  const cat = article.category || 'General';
   overlay.innerHTML = `
     <div style="background:var(--white);border-radius:8px;border:1px solid var(--border);
       width:100%;max-width:720px;overflow:hidden;box-shadow:0 20px 60px rgba(10,15,30,.25);
@@ -263,6 +263,8 @@ try {
     const currentPage = location.pathname.split('/').pop() || 'index.html';
     const bannerAllowed = !BANNER_EXCLUDED_PAGES.includes(currentPage);
 
+    // Featured is a category value like any other — the fix is just that
+    // the badge below now shows it as-is instead of masking it as "General".
     const featuredArticle = articles.find(a => a.category?.toLowerCase() === 'featured');
     if (featuredArticle && bannerAllowed) renderFeaturedBanner(featuredArticle);
 
