@@ -378,44 +378,24 @@ async function init() {
   if (!session?.user) { showState('denied'); return; }
   _user = session.user;
 
-  // Check access — try new permission system first, fall back to legacy role
+  // Check access via the server-side permission RPC only. A failed or
+  // errored check denies access — it must never fall back to profiles.role.
   let hasAccess = false;
   try {
     const { data, error } = await supabase.rpc('user_has_permission', { perm: 'can_manage_news' });
-    if (!error && data === true) {
-      hasAccess = true;
-    } else if (!error) {
-      // RPC worked but returned false — user genuinely lacks the permission
-      hasAccess = false;
-    } else {
-      // RPC error means migration hasn't run — fall back to legacy role check
-      throw new Error('rpc_missing');
-    }
+    hasAccess = !error && data === true;
   } catch(e) {
-    // Legacy fallback: admin and owner always get news access
-    const { data: profile } = await supabase
-      .from('profiles').select('role').eq('id', _user.id).single();
-    const role = profile?.role;
-    hasAccess = role === 'owner' || role === 'admin';
+    hasAccess = false;
   }
 
   if (!hasAccess) { showState('denied'); return; }
 
-  // Check auto-publish / approval rights — admins & owners skip review, everyone else needs sign-off
+  // Check auto-publish / approval rights — admins & owners skip review, everyone else needs sign-off.
+  // A failed check means no auto-publish (safer default: send for review).
   try {
     const { data, error } = await supabase.rpc('user_has_permission', { perm: 'can_approve_news' });
     _canApprove = !error && data === true;
   } catch { _canApprove = false; }
-  if (!_canApprove) {
-    const preview = await getMyRolePreview().catch(() => null);
-    if (!preview) {
-      // Legacy fallback: admin/owner always auto-publish — but not while
-      // previewing a lower role, since that should reflect the preview's
-      // actual approval permission (already checked above).
-      const { data: legacyProfile } = await supabase.from('profiles').select('role').eq('id', _user.id).single();
-      _canApprove = legacyProfile?.role === 'owner' || legacyProfile?.role === 'admin';
-    }
-  }
   document.getElementById('pending-review-panel').style.display = _canApprove ? '' : 'none';
 
   // Get profile for display name

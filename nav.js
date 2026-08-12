@@ -5,6 +5,10 @@
   }
 })();
 
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 
 
 // Discord URL and site config — loaded from Supabase settings, falls back to hardcoded value
@@ -802,7 +806,7 @@ async function initNavAuth(_authReadyResolve) {
       <div class="nav-account-wrap" id="nav-account-wrap">
         <button class="nav-account-btn nav-account-user" id="nav-account-user-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          ${label}
+          ${escapeHtml(label)}
         </button>
         <div class="nav-account-dropdown" id="nav-account-dropdown">
           <a class="nav-account-dropdown-item" href="shop.html">Shop</a>

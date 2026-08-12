@@ -330,14 +330,14 @@ async function init() {
   if (!session?.user) { showState('denied'); return; }
   _user = session.user;
 
+  // Server-side permission RPC only. A failed or errored check denies
+  // access — it must never fall back to profiles.role.
   let hasAccess = false;
   try {
     const { data, error } = await supabase.rpc('user_has_permission', { perm: 'can_manage_archive' });
-    if (!error && data === true) hasAccess = true;
-    else if (error) throw new Error('rpc_missing');
+    hasAccess = !error && data === true;
   } catch (e) {
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', _user.id).single();
-    hasAccess = profile?.role === 'owner' || profile?.role === 'admin';
+    hasAccess = false;
   }
 
   if (!hasAccess) { showState('denied'); return; }

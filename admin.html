@@ -1363,59 +1363,25 @@ async function loadMyPermissions(user) {
   _myPermissions = {};
   _myLevel = 0;
 
-  const preview = await getMyRolePreview().catch(() => null);
-  const isPreviewing = !!preview;
-
-  // Step 1: always read profiles.role (works before and after migration)
-  let legacyRole = null;
-  try {
-    const { data: profile } = await supabase
-      .from('profiles').select('role').eq('id', user.id).single();
-    legacyRole = profile?.role || null;
-  } catch(e) { /* profiles table missing — very unusual */ }
-
-  // Step 2: try new user_roles system
-  let newRolesWorked = false;
+  // Server-side permission system is the sole source of truth. A failed or
+  // errored RPC call means zero permissions — it must never fall back to a
+  // broader grant (e.g. treating profiles.role as admin/owner). Every real
+  // admin/owner account is provisioned in the new role system, so there is
+  // no legitimate case where this needs to fail open.
   try {
     const { data: roles, error } = await supabase
       .rpc('get_user_roles', { p_user_id: user.id });
-    if (!error && Array.isArray(roles) && roles.length > 0) {
-      newRolesWorked = true;
-      roles.forEach(r => {
-        if (r.level > _myLevel) _myLevel = r.level;
-        Object.entries(r.permissions || {}).forEach(([k, v]) => {
-          if (v === true) _myPermissions[k] = true;
-        });
+    if (error) throw error;
+    (roles || []).forEach(r => {
+      if (r.level > _myLevel) _myLevel = r.level;
+      Object.entries(r.permissions || {}).forEach(([k, v]) => {
+        if (v === true) _myPermissions[k] = true;
       });
-    }
-  } catch(e) { /* migration not run yet — fine */ }
-
-  // Step 3: if new system returned nothing, fall back to legacy role
-  if (!newRolesWorked) {
-    const role = legacyRole;
-    if (role === 'owner' || role === 'admin') {
-      _myLevel = (role === 'owner') ? 100 : 80;
-      ALL_PERMISSIONS.forEach(p => { _myPermissions[p.key] = true; });
-      if (role === 'admin') {
-        _myPermissions.can_assign_admin = false;
-        _myPermissions.can_manage_roles = false;
-        _myPermissions.can_create_roles = false;
-      }
-    }
-  }
-
-  // Always ensure legacy admins with no new roles assigned can still get in —
-  // but never while a "view as" preview is active, since starting a preview
-  // requires being on the new role system already, and this safety net would
-  // otherwise hand full permissions right back regardless of what's previewed.
-  if (!isPreviewing && !_myPermissions.can_view_admin && (legacyRole === 'owner' || legacyRole === 'admin')) {
-    ALL_PERMISSIONS.forEach(p => { _myPermissions[p.key] = true; });
-    _myLevel = (legacyRole === 'owner') ? 100 : 80;
-    if (legacyRole === 'admin') {
-      _myPermissions.can_assign_admin = false;
-      _myPermissions.can_manage_roles = false;
-      _myPermissions.can_create_roles = false;
-    }
+    });
+  } catch(e) {
+    console.error('loadMyPermissions error — denying access:', e);
+    _myPermissions = {};
+    _myLevel = 0;
   }
 }
 
@@ -3231,10 +3197,14 @@ async function getMyDisplayName() {
   return _myDisplayName;
 }
 
+function isSafeAttachmentUrl(url) {
+  return typeof url === 'string' && /^https:\/\//i.test(url);
+}
+
 function renderMsgAttachments(attachments) {
   if (!attachments || !attachments.length) return '';
   return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">
-    ${attachments.map(a => `<a href="${a.url}" target="_blank" rel="noopener"><img src="${a.url}" alt="${a.name||'attachment'}" style="width:56px;height:56px;object-fit:cover;border-radius:5px;border:1px solid var(--border);"></a>`).join('')}
+    ${attachments.filter(a => isSafeAttachmentUrl(a.url)).map(a => `<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener"><img src="${escapeHtml(a.url)}" alt="${escapeHtml(a.name||'attachment')}" style="width:56px;height:56px;object-fit:cover;border-radius:5px;border:1px solid var(--border);"></a>`).join('')}
   </div>`;
 }
 
@@ -3312,31 +3282,34 @@ function renderMessages() {
   }
   inbox.innerHTML = _messages.map(m => {
     const p = m.profiles || {};
-    const sender = p.display_name || p.username || p.email || m.user_id;
+    const sender = escapeHtml(p.display_name || p.username || p.email || m.user_id);
+    const subject = escapeHtml(m.subject || '(no subject)');
     const unread = threadUnread(m.id);
     const items = _items[m.id] || [];
     const expanded = _expandedThreads.has(m.id);
     const lastItem = items[items.length - 1];
-    const lastPreview = lastItem ? lastItem.body.slice(0, 80) + (lastItem.body.length > 80 ? '…' : '') : '';
+    const lastPreviewRaw = lastItem ? lastItem.body.slice(0, 80) + (lastItem.body.length > 80 ? '…' : '') : '';
+    const lastPreview = escapeHtml(lastPreviewRaw);
     const lastTime = lastItem ? new Date(lastItem.created_at).toLocaleDateString(undefined, { month:'short', day:'numeric' }) : '';
     const claimBadge = m.claimed_by
-      ? `<span class="badge" style="background:#eef3ff;color:#18489e;">Claimed by ${m.claimed_by_name || 'an admin'}</span>` : '';
+      ? `<span class="badge" style="background:#eef3ff;color:#18489e;">Claimed by ${escapeHtml(m.claimed_by_name || 'an admin')}</span>` : '';
     const claimBtn = m.claimed_by
       ? `<button class="btn btn-outline btn-sm" onclick="unclaimThread('${m.id}')">Unclaim</button>`
       : `<button class="btn btn-outline btn-sm" onclick="claimThread('${m.id}')">Claim</button>`;
 
     const itemsHtml = items.map(it => {
       const t = new Date(it.created_at).toLocaleString(undefined, { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
-      const adminLabel = it.sender_display_name ? `Your Reply · ${it.sender_display_name}` : 'Your Reply';
+      const adminLabel = it.sender_display_name ? `Your Reply · ${escapeHtml(it.sender_display_name)}` : 'Your Reply';
+      const body = escapeHtml(it.body);
       return it.sender_type === 'admin'
         ? `<div style="margin-top:8px;padding:10px 12px;background:var(--bg);border-left:3px solid var(--blue);border-radius:4px;">
              <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--blue);margin-bottom:4px;">${adminLabel} · ${t}</div>
-             <div style="font-size:13px;white-space:pre-wrap;">${it.body}</div>
+             <div style="font-size:13px;white-space:pre-wrap;">${body}</div>
              ${renderMsgAttachments(it.attachments)}
            </div>`
         : `<div style="margin-top:8px;padding:10px 12px;background:var(--card,var(--bg));border-left:3px solid var(--border);border-radius:4px;">
              <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;">${sender} · ${t}</div>
-             <div style="font-size:13px;white-space:pre-wrap;">${it.body}</div>
+             <div style="font-size:13px;white-space:pre-wrap;">${body}</div>
              ${renderMsgAttachments(it.attachments)}
            </div>`;
     }).join('');
@@ -3349,7 +3322,7 @@ function renderMessages() {
           ${claimBadge}
           <span style="margin-left:auto;font-size:11px;color:var(--muted);">${expanded ? '▲' : '▼'}</span>
         </div>
-        <div class="msg-subject" style="cursor:pointer;" onclick="toggleThreadExpand('${m.id}')">${m.subject}</div>
+        <div class="msg-subject" style="cursor:pointer;" onclick="toggleThreadExpand('${m.id}')">${subject}</div>
         ${expanded ? '' : `<div style="font-size:12px;color:var(--muted);margin-top:2px;cursor:pointer;" onclick="toggleThreadExpand('${m.id}')">${lastPreview} ${lastPreview ? '· ' + lastTime : ''}</div>`}
         ${expanded ? `
         ${itemsHtml}
