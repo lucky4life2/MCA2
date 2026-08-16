@@ -65,17 +65,21 @@ const NAV_HTML = () => {
   <ul class="nav-links" id="nav-links">
     <li><a href="index.html"      data-page="index">Home</a></li>
     <li><a href="server.html"     data-page="server">Server</a></li>
+    <li class="nav-has-dropdown" id="nav-community-item">
+      <a href="#" class="nav-dropdown-trigger" data-page="community" onclick="return false;">Community <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></a>
+      <ul class="nav-dropdown" id="nav-community-dropdown">
+        <li><a href="news.html"    data-page="news">News</a></li>
+        <li><a href="nations.html" data-page="nations">Nations</a></li>
+      </ul>
+    </li>
     <li class="nav-has-dropdown" id="nav-about-item">
       <a href="#" class="nav-dropdown-trigger" data-page="about" onclick="return false;">About <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></a>
       <ul class="nav-dropdown" id="nav-about-dropdown">
         <li><a href="leadership.html" data-page="leadership">Leadership</a></li>
-        <li><a href="history.html"    data-page="history">History</a></li>
         <li><a href="archive.html"    data-page="archive">Archive</a></li>
+        <li><a href="history.html"    data-page="history">History</a></li>
       </ul>
     </li>
-    <li><a href="nations.html"    data-page="nations">Nations</a></li>
-    <li><a href="news.html"       data-page="news">News</a></li>
-    <li><a href="help.html"       data-page="help">Help</a></li>
     <li><a href="${DISCORD_URL}" data-discord target="_blank" class="nav-discord">Discord</a></li>
     <li class="nav-theme-item nav-theme-item-mobile">
       <div class="nav-account nav-account-mobile" id="nav-account-mobile"></div>
@@ -623,19 +627,23 @@ async function injectNav() {
     if (parentDropdown) parentDropdown.querySelector('.nav-dropdown-trigger').classList.add('active');
   }
 
-  // About dropdown toggle
-  const aboutItem     = document.getElementById('nav-about-item');
-  const aboutDropdown = document.getElementById('nav-about-dropdown');
-  if (aboutItem && aboutDropdown) {
-    aboutItem.querySelector('.nav-dropdown-trigger').addEventListener('click', e => {
+  // Nav dropdown toggles (Community, About) — only one open at a time
+  document.querySelectorAll('.nav-has-dropdown').forEach(item => {
+    const trigger = item.querySelector('.nav-dropdown-trigger');
+    if (!trigger) return;
+    trigger.addEventListener('click', e => {
       e.stopPropagation();
       e.preventDefault();
-      aboutItem.classList.toggle('open');
+      const wasOpen = item.classList.contains('open');
+      document.querySelectorAll('.nav-has-dropdown').forEach(other => other.classList.remove('open'));
+      if (!wasOpen) item.classList.add('open');
     });
-    document.addEventListener('click', e => {
-      if (!aboutItem.contains(e.target)) aboutItem.classList.remove('open');
+  });
+  document.addEventListener('click', e => {
+    document.querySelectorAll('.nav-has-dropdown').forEach(item => {
+      if (!item.contains(e.target)) item.classList.remove('open');
     });
-  }
+  });
 
   // Hamburger menu toggle
   const hamburger = document.getElementById('nav-hamburger');
@@ -751,6 +759,8 @@ async function initNavAuth(_authReadyResolve) {
         </button>
         <div class="nav-account-dropdown" id="nav-account-dropdown">
           <a class="nav-account-dropdown-item" href="shop.html">Shop</a>
+          <a class="nav-account-dropdown-item" href="help.html">Help</a>
+          <div class="nav-account-dropdown-divider"></div>
           <a class="nav-account-dropdown-item" href="login.html?return=${returnPage}">Sign In</a>
           <a class="nav-account-dropdown-item" href="login.html?tab=signup">Create Account</a>
         </div>
@@ -769,6 +779,7 @@ async function initNavAuth(_authReadyResolve) {
     });
     document.addEventListener('click', () => {
       document.querySelectorAll('.nav-account-dropdown').forEach(d => d.classList.remove('open'));
+      document.querySelectorAll('.nav-account-submenu').forEach(s => s.classList.remove('open'));
     });
   }
 
@@ -812,6 +823,7 @@ async function initNavAuth(_authReadyResolve) {
     // Render immediately with what we have so the nav never disappears during async fetches
     function render() {
       const { el: accountEl, elMobile: accountElMobile } = getAccountEls();
+      const hasStaffAccess = isAdmin || canAccessTasks || canPublishNews || canManageArchive;
       const html = `
       <div class="nav-account-wrap" id="nav-account-wrap">
         <button class="nav-account-btn nav-account-user" id="nav-account-user-btn">
@@ -819,12 +831,25 @@ async function initNavAuth(_authReadyResolve) {
           ${escapeHtml(label)}
         </button>
         <div class="nav-account-dropdown" id="nav-account-dropdown">
+          ${hasStaffAccess ? `
+          <div class="nav-account-submenu" id="nav-staff-submenu">
+            <button class="nav-account-dropdown-item nav-account-submenu-trigger" id="nav-staff-trigger">
+              Staff
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+            </button>
+            <div class="nav-account-submenu-panel" id="nav-staff-panel">
+              ${isAdmin ? `<a class="nav-account-dropdown-item" href="admin.html">Admin</a>` : ''}
+              ${canAccessTasks ? `<a class="nav-account-dropdown-item" href="tasks.html">Tasks</a>` : ''}
+              ${canPublishNews ? `<a class="nav-account-dropdown-item" href="news-publish.html">Publish News</a>` : ''}
+              ${canManageArchive ? `<a class="nav-account-dropdown-item" href="archive-publish.html">Manage Archive</a>` : ''}
+            </div>
+          </div>
+          <div class="nav-account-dropdown-divider"></div>
+          ` : ''}
+          <a class="nav-account-dropdown-item" href="account.html">Account</a>
+          <a class="nav-account-dropdown-item" href="help.html">Help</a>
           <a class="nav-account-dropdown-item" href="shop.html">Shop</a>
-          <a class="nav-account-dropdown-item" href="account.html">My Account</a>
-          ${isAdmin ? `<a class="nav-account-dropdown-item" href="admin.html">Admin</a>` : ''}
-          ${canAccessTasks ? `<a class="nav-account-dropdown-item" href="tasks.html">Tasks</a>` : ''}
-          ${canPublishNews ? `<a class="nav-account-dropdown-item" href="news-publish.html">Publish News</a>` : ''}
-          ${canManageArchive ? `<a class="nav-account-dropdown-item" href="archive-publish.html">Manage Archive</a>` : ''}
+          <div class="nav-account-dropdown-divider"></div>
           <button class="nav-account-dropdown-item" id="nav-signout-btn">Sign Out</button>
         </div>
       </div>`;
@@ -838,8 +863,15 @@ async function initNavAuth(_authReadyResolve) {
           btn.nextElementSibling?.classList.toggle('open');
         });
       });
+      document.querySelectorAll('#nav-staff-trigger').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          btn.closest('.nav-account-submenu')?.classList.toggle('open');
+        });
+      });
       document.addEventListener('click', () => {
         document.querySelectorAll('.nav-account-dropdown').forEach(d => d.classList.remove('open'));
+        document.querySelectorAll('.nav-account-submenu').forEach(s => s.classList.remove('open'));
       });
       document.querySelectorAll('#nav-signout-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
