@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Congress — Minecraft Club of America</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" type="image/x-icon" href="images/icon.ico">
+<style>
+  .btn { font-size: 11px; font-weight: 600; letter-spacing: .5px; padding: 6px 14px; border-radius: 3px; cursor: pointer; transition: background .15s, color .15s, border-color .15s; border: none; white-space: nowrap; }
+  .btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .btn-primary { background: var(--blue); color: #fff; }
+  .btn-primary:hover { background: var(--blue-dark); }
+  .btn-primary:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+  .btn-outline { background: transparent; color: var(--blue); border: 1px solid var(--border); }
+  .btn-outline:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .btn-outline.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .btn-danger { background: transparent; color: #c0392b; border: 1px solid var(--border); }
+  .btn-danger:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
+  .form-input, .form-select, .form-textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-family: 'Open Sans', sans-serif; font-size: 13px; background: var(--white); color: var(--black); box-sizing: border-box; }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { outline: none; border-color: var(--blue); }
+  .form-group { margin-bottom: 1rem; }
+  .form-label { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .5px; }
+  .form-error { font-size: 12px; color: #c0392b; margin-top: 6px; }
+
+  .admin-wrap { max-width: 1140px; margin: 0 auto; padding: 4rem 2.5rem 6rem; }
+  .admin-hero { border-bottom: 1px solid var(--border); padding-bottom: 2.5rem; margin-bottom: 1.75rem; display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .admin-hero-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 2.5px; text-transform: uppercase; color: var(--green); margin-bottom: 1rem; }
+  .admin-hero h1 { font-family: 'Times New Roman', serif; font-size: clamp(28px, 4vw, 42px); font-weight: 700; color: var(--blue); line-height: 1.15; }
+  .admin-loading { display: flex; align-items: center; justify-content: center; min-height: 60vh; flex-direction: column; gap: 12px; color: var(--muted); font-size: 14px; }
+  .admin-loading-spinner { width: 28px; height: 28px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .admin-denied { text-align: center; padding: 6rem 2rem; }
+  .admin-denied h2 { font-family: 'Times New Roman', serif; font-size: 1.6rem; color: var(--blue); font-weight: normal; margin-bottom: .75rem; }
+  .admin-denied p { font-size: 14px; color: var(--muted); }
+
+  .cg-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+  .cg-tab { background: none; border: none; padding: 10px 6px; margin-right: 18px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
+  .cg-tab:hover { color: var(--black); }
+  .cg-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+  .cg-tab[aria-selected="true"] { color: var(--blue); border-bottom-color: var(--blue); }
+
+  .cg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-bottom: 2rem; }
+  .cg-card { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; background: var(--white); }
+  .cg-card h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 8px; }
+  .cg-card .cg-empty { font-size: 12px; color: var(--muted); }
+  .cg-card ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .cg-card li a { font-size: 13px; font-weight: 600; color: var(--blue); text-decoration: none; }
+  .cg-card li a:hover { text-decoration: underline; }
+  .cg-card li .cg-sub { display: block; font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 2px; }
+
+  .cg-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 1.25rem; }
+  .cg-filters { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .cg-list { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .cg-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--border); cursor: pointer; }
+  .cg-list .cg-row:first-child { border-top: none; }
+  .cg-row:hover { background: var(--bg); }
+  .cg-row:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+  .cg-row-number { font-size: 11px; font-weight: 700; color: var(--muted); width: 76px; flex-shrink: 0; }
+  .cg-row-title { flex: 1; font-size: 13px; font-weight: 600; color: var(--black); }
+  .cg-row-meta { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .cg-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; padding: 2px 9px; border-radius: 10px; white-space: nowrap; }
+  .cg-badge.draft { background: var(--bg); color: var(--muted); }
+  .cg-badge.introduced, .cg-badge.committee { background: #eef1f8; color: var(--blue); }
+  .cg-badge.debate { background: #fdf3df; color: #8a6d1a; }
+  .cg-badge.voting { background: #fde8e0; color: #b5691c; }
+  .cg-badge.passed, .cg-badge.enacted { background: #e8f8e8; color: #2d7d2f; }
+  .cg-badge.failed, .cg-badge.vetoed, .cg-badge.withdrawn { background: #fdecea; color: #c0392b; }
+  .cg-empty-state { padding: 2.5rem 1rem; text-align: center; color: var(--muted); font-size: 13px; }
+
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(10,15,30,.5); z-index: 400; align-items: center; justify-content: center; padding: 1rem; }
+  .modal-overlay.open { display: flex; }
+  .modal-box { background: var(--white); border-radius: 8px; border: 1px solid var(--border); width: 100%; max-width: 720px; max-height: 90vh; overflow-y: auto; box-shadow: 0 16px 48px rgba(10,15,30,.2); }
+  .modal-head { padding: 1.5rem 1.5rem 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .modal-title { font-family: 'Times New Roman', serif; font-size: 1.3rem; color: var(--blue); font-weight: normal; }
+  .modal-close { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 20px; line-height: 1; padding: 4px; }
+  .modal-body { padding: 1.5rem; }
+  .modal-foot { padding: 0 1.5rem 1.5rem; display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+
+  .cg-section-label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 700; margin: 1.25rem 0 .5rem; }
+  .cg-fulltext { white-space: pre-wrap; font-size: 13px; line-height: 1.6; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; }
+
+  .cg-vote-options { display: flex; gap: 8px; flex-wrap: wrap; margin: .75rem 0; }
+  .cg-vote-status { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .cg-tally { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-top: 10px; }
+  .cg-tally-cell { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; text-align: center; }
+  .cg-tally-cell .n { font-size: 18px; font-weight: 700; color: var(--blue); }
+  .cg-tally-cell .l { font-size: 10px; text-transform: uppercase; color: var(--muted); }
+
+  .cg-debate-post { border-top: 1px solid var(--border); padding: 10px 0; font-size: 13px; }
+  .cg-debate-post:first-child { border-top: none; }
+  .cg-debate-meta { font-size: 11px; color: var(--muted); margin-bottom: 4px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .cg-pos-tag { font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 1px 7px; border-radius: 8px; background: var(--bg); color: var(--mid); }
+  .cg-debate-archived { font-style: italic; color: var(--muted); }
+</style>
+</head>
+<body>
+<script type="module" src="nav.js"></script>
+
+<div id="loading" class="admin-loading"><div class="admin-loading-spinner"></div><span>Loading Congress…</span></div>
+
+<div id="denied" class="admin-wrap admin-denied" style="display:none;">
+  <h2>Congress</h2>
+  <p>You need to be signed in with an authorized membership record to view this page.</p>
+</div>
+
+<div id="main" class="admin-wrap" style="display:none;">
+  <div class="admin-hero">
+    <div>
+      <div class="admin-hero-eyebrow">MCA Congress</div>
+      <h1 id="cg-heading">Congressional Portal</h1>
+    </div>
+    <button class="btn btn-primary" id="btn-new-measure" style="display:none;">+ Introduce Measure</button>
+  </div>
+
+  <div class="cg-tabs" role="tablist">
+    <button class="cg-tab active" data-tab="dashboard" role="tab" aria-selected="true">Dashboard</button>
+    <button class="cg-tab" data-tab="legislation" role="tab" aria-selected="false">Legislation</button>
+    <button class="cg-tab" data-tab="archive" role="tab" aria-selected="false">Archive</button>
+  </div>
+
+  <div id="tab-dashboard">
+    <div class="cg-grid" id="cg-dashboard-grid"></div>
+  </div>
+
+  <div id="tab-legislation" style="display:none;">
+    <div class="cg-toolbar">
+      <div class="cg-filters">
+        <select class="form-input" id="cg-filter-chamber" style="width:auto;"><option value="">All chambers</option></select>
+        <select class="form-input" id="cg-filter-status" style="width:auto;"><option value="">All statuses</option></select>
+      </div>
+    </div>
+    <div class="cg-list" id="cg-measure-list"></div>
+  </div>
+
+  <div id="tab-archive" style="display:none;">
+    <p style="font-size:13px;color:var(--muted);">Certified, enacted, and archived measures — searchable public record. <em>(Full search/export tooling is planned for a later phase; showing certified/enacted/failed measures below.)</em></p>
+    <div class="cg-list" id="cg-archive-list" style="margin-top:1rem;"></div>
+  </div>
+</div>
+
+<!-- Measure detail modal -->
+<div class="modal-overlay" id="cg-measure-modal">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="cg-modal-title">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="cg-modal-title">Measure</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;" id="cg-modal-sub"></div>
+      </div>
+      <button class="modal-close" id="cg-modal-close" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body" id="cg-modal-body"></div>
+    <div id="cg-modal-error" class="form-error" style="display:none;padding:0 1.5rem;"></div>
+    <div class="modal-foot" id="cg-modal-foot"></div>
+  </div>
+</div>
+
+<!-- New measure modal -->
+<div class="modal-overlay" id="cg-new-measure-modal">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="cg-new-title" style="max-width:560px;">
+    <div class="modal-head">
+      <div class="modal-title" id="cg-new-title">Introduce a Measure</div>
+      <button class="modal-close" id="cg-new-close" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="nm-type">Type</label>
+        <select class="form-select" id="nm-type"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="nm-chamber">Chamber</label>
+        <select class="form-select" id="nm-chamber"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="nm-title">Title</label>
+        <input class="form-input" id="nm-title" maxlength="200">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="nm-summary">Summary</label>
+        <textarea class="form-textarea" id="nm-summary" rows="2"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="nm-text">Full Text</label>
+        <textarea class="form-textarea" id="nm-text" rows="8"></textarea>
+      </div>
+      <div id="nm-error" class="form-error" style="display:none;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" id="nm-cancel">Cancel</button>
+      <button class="btn btn-primary" id="nm-submit">Save as Draft</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { supabase } from './supabase.js';
+
+let _me = null;
+let _access = { manage: false, sponsor: false, certify: false, chambers: new Set() };
+let _chambers = [], _types = [], _statuses = [];
+let _measures = [];
+let _currentMeasure = null;
+
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function show(which) {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('denied').style.display = which === 'denied' ? 'block' : 'none';
+  document.getElementById('main').style.display = which === 'main' ? 'block' : 'none';
+}
+
+async function resolveAccess() {
+  const [{ data: manage }, { data: sponsor }, { data: certify }, { data: memberships }] = await Promise.all([
+    supabase.rpc('user_has_permission', { perm: 'can_manage_congress' }),
+    supabase.rpc('user_has_permission', { perm: 'can_sponsor_congress_legislation' }),
+    supabase.rpc('user_has_permission', { perm: 'can_certify_congress_votes' }),
+    supabase.from('congress_members').select('chamber_id').eq('user_id', _me.id).eq('status', 'active'),
+  ]);
+  return {
+    manage: manage === true,
+    sponsor: sponsor === true,
+    certify: certify === true,
+    chambers: new Set((memberships || []).map(m => m.chamber_id)),
+  };
+}
+
+async function init() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) return show('denied');
+  _me = session.user;
+  _access = await resolveAccess();
+  // View access: any authenticated member can view public/members-visible content;
+  // page itself doesn't gate on chamber membership so the public can browse what's public.
+  document.getElementById('btn-new-measure').style.display = (_access.manage || _access.sponsor) ? '' : 'none';
+
+  const [{ data: chambers }, { data: types }, { data: statuses }] = await Promise.all([
+    supabase.from('congress_chambers').select('*').eq('is_active', true).order('sort_order'),
+    supabase.from('congress_measure_types').select('*').eq('is_active', true).order('sort_order'),
+    supabase.from('congress_measure_statuses').select('*').order('sort_order'),
+  ]);
+  _chambers = chambers || []; _types = types || []; _statuses = statuses || [];
+  populateFilters();
+  populateNewMeasureForm();
+
+  show('main');
+  bindTabs();
+  bindModals();
+  await loadMeasures();
+  renderDashboard();
+  renderMeasureList();
+  renderArchive();
+}
+
+function populateFilters() {
+  const chSel = document.getElementById('cg-filter-chamber');
+  _chambers.forEach(c => chSel.insertAdjacentHTML('beforeend', `<option value="${c.id}">${esc(c.label)}</option>`));
+  const stSel = document.getElementById('cg-filter-status');
+  _statuses.forEach(s => stSel.insertAdjacentHTML('beforeend', `<option value="${s.key}">${esc(s.label)}</option>`));
+  chSel.onchange = renderMeasureList;
+  stSel.onchange = renderMeasureList;
+}
+
+function populateNewMeasureForm() {
+  document.getElementById('nm-type').innerHTML = _types.map(t => `<option value="${t.key}">${esc(t.label)}</option>`).join('');
+  document.getElementById('nm-chamber').innerHTML = _chambers.map(c => `<option value="${c.id}">${esc(c.label)}</option>`).join('');
+}
+
+function bindTabs() {
+  document.querySelectorAll('.cg-tab').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.cg-tab').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
+      btn.classList.add('active'); btn.setAttribute('aria-selected', 'true');
+      ['dashboard', 'legislation', 'archive'].forEach(t => {
+        document.getElementById('tab-' + t).style.display = (t === btn.dataset.tab) ? '' : 'none';
+      });
+    };
+  });
+}
+
+async function loadMeasures() {
+  const { data, error } = await supabase
+    .from('congress_measures')
+    .select('*, congress_measure_sponsors(user_id, sponsor_type), profiles!congress_measures_created_by_fkey(display_name, username)')
+    .order('created_at', { ascending: false });
+  if (error) { console.error(error); _measures = []; return; }
+  _measures = data || [];
+}
+
+function chamberLabel(id) { return _chambers.find(c => c.id === id)?.label || '—'; }
+function statusLabel(key) { return _statuses.find(s => s.key === key)?.label || key; }
+function typeLabel(key) { return _types.find(t => t.key === key)?.label || key; }
+
+function renderDashboard() {
+  const grid = document.getElementById('cg-dashboard-grid');
+  const votingNow = _measures.filter(m => m.status_key === 'voting');
+  const underDebate = _measures.filter(m => m.status_key === 'debate');
+  const mySponsored = _measures.filter(m => m.created_by === _me.id || (m.congress_measure_sponsors || []).some(s => s.user_id === _me.id));
+  const recent = _measures.slice(0, 6);
+
+  const cards = [
+    ['Open Votes', votingNow],
+    ['Measures Under Debate', underDebate],
+    ['Your Sponsored Measures', mySponsored],
+    ['Recent Activity', recent],
+  ];
+  grid.innerHTML = cards.map(([title, list]) => `
+    <div class="cg-card">
+      <h3>${esc(title)}</h3>
+      ${list.length ? `<ul>${list.slice(0, 6).map(m => `
+        <li><a href="#" data-measure="${m.id}">${esc(m.number || 'Draft')} — ${esc(m.title)}
+          <span class="cg-sub">${esc(chamberLabel(m.chamber_id))} · ${esc(statusLabel(m.status_key))}</span></a></li>
+      `).join('')}</ul>` : `<div class="cg-empty">Nothing here right now.</div>`}
+    </div>
+  `).join('') + `
+    <div class="cg-card">
+      <h3>Your Standing</h3>
+      <div style="font-size:13px;line-height:1.7;">
+        Chamber seats: ${_access.chambers.size ? [..._access.chambers].map(chamberLabel).join(', ') : '<span class="cg-empty">None on record</span>'}<br>
+        ${_access.sponsor || _access.manage ? '✓ Can sponsor legislation' : ''}<br>
+        ${_access.manage ? '✓ Congress management access' : ''}
+      </div>
+    </div>`;
+  grid.querySelectorAll('a[data-measure]').forEach(a => a.onclick = (e) => { e.preventDefault(); openMeasure(a.dataset.measure); });
+}
+
+function measureRowHtml(m) {
+  return `<div class="cg-row" tabindex="0" data-measure="${m.id}">
+    <span class="cg-row-number">${esc(m.number || 'DRAFT')}</span>
+    <span class="cg-row-title">${esc(m.title)}</span>
+    <span class="cg-row-meta">${esc(chamberLabel(m.chamber_id))}</span>
+    <span class="cg-badge ${esc(m.status_key)}">${esc(statusLabel(m.status_key))}</span>
+  </div>`;
+}
+
+function renderMeasureList() {
+  const chamberFilter = document.getElementById('cg-filter-chamber').value;
+  const statusFilter = document.getElementById('cg-filter-status').value;
+  let list = _measures.filter(m => (!chamberFilter || m.chamber_id === chamberFilter) && (!statusFilter || m.status_key === statusFilter));
+  const el = document.getElementById('cg-measure-list');
+  el.innerHTML = list.length ? list.map(measureRowHtml).join('') : `<div class="cg-empty-state">No legislation matches these filters.</div>`;
+  bindRowClicks(el);
+}
+
+function renderArchive() {
+  const list = _measures.filter(m => ['passed', 'failed', 'enacted', 'vetoed'].includes(m.status_key));
+  const el = document.getElementById('cg-archive-list');
+  el.innerHTML = list.length ? list.map(measureRowHtml).join('') : `<div class="cg-empty-state">No completed measures yet.</div>`;
+  bindRowClicks(el);
+}
+
+function bindRowClicks(container) {
+  container.querySelectorAll('.cg-row').forEach(row => {
+    row.onclick = () => openMeasure(row.dataset.measure);
+    row.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openMeasure(row.dataset.measure); } };
+  });
+}
+
+// ── Measure detail / voting / debate ──────────────────────────────
+async function openMeasure(id) {
+  const [{ data: measure }, { data: version }, { data: rollCalls }, { data: posts }] = await Promise.all([
+    supabase.from('congress_measures').select('*').eq('id', id).single(),
+    supabase.from('congress_measure_versions').select('*').eq('measure_id', id).order('version_number', { ascending: false }).limit(1),
+    supabase.from('congress_roll_calls').select('*').eq('measure_id', id).order('created_at', { ascending: false }),
+    supabase.from('congress_debate_posts').select('*, profiles(display_name, username)').eq('measure_id', id).eq('is_archived', false).order('created_at'),
+  ]);
+  if (!measure) return;
+  _currentMeasure = measure;
+  const latestVersion = (version && version[0]) || null;
+  const openRollCall = (rollCalls || []).find(rc => rc.status === 'open');
+  const latestRollCall = openRollCall || (rollCalls || [])[0] || null;
+
+  document.getElementById('cg-modal-title').textContent = `${measure.number || 'Draft'} — ${measure.title}`;
+  document.getElementById('cg-modal-sub').textContent = `${typeLabel(measure.type_key)} · ${chamberLabel(measure.chamber_id)} · ${statusLabel(measure.status_key)}`;
+
+  let voteBlockHtml = '';
+  if (latestRollCall) {
+    voteBlockHtml = await renderVoteBlock(latestRollCall, measure);
+  }
+
+  document.getElementById('cg-modal-body').innerHTML = `
+    <p style="font-size:13px;color:var(--mid);">${esc(measure.summary || '')}</p>
+    <div class="cg-section-label">Full Text</div>
+    <div class="cg-fulltext">${esc(latestVersion?.full_text || '(No version text yet.)')}</div>
+    ${voteBlockHtml}
+    <div class="cg-section-label">Debate</div>
+    <div id="cg-debate-thread">
+      ${(posts || []).length ? posts.map(p => `
+        <div class="cg-debate-post">
+          <div class="cg-debate-meta">
+            <strong>${esc(p.profiles?.display_name || p.profiles?.username || 'Member')}</strong>
+            ${p.position ? `<span class="cg-pos-tag">${esc(p.position.replace('_',' '))}</span>` : ''}
+            ${p.section_ref ? `<span>${esc(p.section_ref)}</span>` : ''}
+            ${p.is_edited ? '<span>(edited)</span>' : ''}
+          </div>
+          <div>${esc(p.body)}</div>
+        </div>
+      `).join('') : '<div class="cg-empty-state">No debate yet.</div>'}
+    </div>
+    ${(_access.manage || _access.chambers.has(measure.chamber_id)) ? `
+      <div class="form-group" style="margin-top:1rem;">
+        <textarea class="form-textarea" id="cg-new-post" rows="2" placeholder="Add to the debate…" aria-label="Add debate comment"></textarea>
+        <button class="btn btn-outline" id="cg-post-submit" style="margin-top:6px;">Post</button>
+      </div>` : ''}
+  `;
+
+  const foot = document.getElementById('cg-modal-foot');
+  const footBtns = [];
+  const noActiveRollCall = !latestRollCall || ['certified', 'voided'].includes(latestRollCall.status);
+  if (_access.manage) {
+    if (measure.status_key !== 'passed' && measure.status_key !== 'failed' && measure.status_key !== 'enacted' && noActiveRollCall) {
+      footBtns.push(`<button class="btn btn-outline" id="cg-schedule-vote">Schedule &amp; Open Vote</button>`);
+    }
+    if (measure.status_key === 'voting' && latestRollCall && latestRollCall.status === 'open') {
+      footBtns.push(`<button class="btn btn-outline" id="cg-close-vote">Close Voting</button>`);
+    }
+    if (latestRollCall && latestRollCall.status === 'closed' && _access.certify) {
+      footBtns.push(`<button class="btn btn-primary" id="cg-certify-vote">Certify Result</button>`);
+    }
+  }
+  foot.innerHTML = footBtns.join('');
+
+  document.getElementById('cg-schedule-vote') && (document.getElementById('cg-schedule-vote').onclick = async () => {
+    if (!latestVersion) { showModalError('This measure has no version text yet — add a version before opening a vote.'); return; }
+    const { data: rc, error } = await supabase.from('congress_roll_calls').insert({
+      measure_id: measure.id, chamber_id: measure.chamber_id, measure_version_id: latestVersion.id,
+      question: `On passage of ${measure.number || measure.title}`,
+      threshold_numerator: measure.threshold_numerator, threshold_denominator: measure.threshold_denominator,
+      quorum_numerator: measure.quorum_numerator, quorum_denominator: measure.quorum_denominator,
+      created_by: _me.id,
+    }).select().single();
+    if (error) { showModalError(error.message); return; }
+    await supabase.from('congress_measure_versions').update({ is_locked: true }).eq('id', latestVersion.id);
+    const { error: openErr } = await supabase.rpc('congress_open_roll_call', { p_roll_call_id: rc.id });
+    if (openErr) { showModalError(openErr.message); return; }
+    await loadMeasures(); renderDashboard(); renderMeasureList();
+    openMeasure(measure.id);
+  });
+
+  document.getElementById('cg-post-submit') && (document.getElementById('cg-post-submit').onclick = async () => {
+    const body = document.getElementById('cg-new-post').value.trim();
+    if (!body) return;
+    const { error } = await supabase.from('congress_debate_posts').insert({
+      measure_id: measure.id, author_id: _me.id, body,
+    });
+    if (!error) openMeasure(measure.id); else showModalError(error.message);
+  });
+  document.getElementById('cg-close-vote') && (document.getElementById('cg-close-vote').onclick = async () => {
+    const { error } = await supabase.rpc('congress_close_roll_call', { p_roll_call_id: latestRollCall.id });
+    if (!error) openMeasure(measure.id); else showModalError(error.message);
+  });
+  document.getElementById('cg-certify-vote') && (document.getElementById('cg-certify-vote').onclick = async () => {
+    const { error } = await supabase.rpc('congress_certify_roll_call', { p_roll_call_id: latestRollCall.id, p_note: 'Certified via portal' });
+    if (!error) { openMeasure(measure.id); await loadMeasures(); renderMeasureList(); renderDashboard(); renderArchive(); } else showModalError(error.message);
+  });
+
+  document.getElementById('cg-measure-modal').classList.add('open');
+}
+
+async function renderVoteBlock(rollCall, measure) {
+  let myVote = null;
+  if (rollCall.status !== 'scheduled') {
+    const { data } = await supabase.from('congress_votes').select('choice').eq('roll_call_id', rollCall.id).eq('user_id', _me.id).maybeSingle();
+    myVote = data?.choice || null;
+  }
+  const options = Array.isArray(rollCall.vote_options) ? rollCall.vote_options : JSON.parse(rollCall.vote_options || '[]');
+
+  let tallyHtml = '';
+  if (rollCall.visibility === 'live' && ['open','closed','certified'].includes(rollCall.status)) {
+    const { data: tally } = await supabase.rpc('congress_roll_call_tally', { p_roll_call_id: rollCall.id });
+    if (tally && tally.length) {
+      tallyHtml = `<div class="cg-tally">${tally.map(t => `
+        <div class="cg-tally-cell"><div class="n">${t.vote_count}</div><div class="l">${esc(t.choice)}</div></div>
+      `).join('')}</div>
+      <div class="cg-vote-status">Cast: ${tally[0].total_cast} / Eligible: ${tally[0].total_eligible} · Quorum ${tally[0].quorum_met ? 'met' : 'not met'}</div>`;
+    }
+  }
+
+  const canVote = rollCall.status === 'open' && _access.chambers.has(measure.chamber_id);
+  return `
+    <div class="cg-section-label">Roll Call — ${esc(rollCall.question)}</div>
+    <div style="font-size:12px;color:var(--muted);">Status: ${esc(rollCall.status)} · Visibility: ${esc(rollCall.visibility)}</div>
+    ${canVote ? `
+      <div class="cg-vote-options">
+        ${options.map(o => `<button class="btn ${myVote === o ? 'btn-primary' : 'btn-outline'}" data-vote="${esc(o)}">${esc(o)}</button>`).join('')}
+      </div>
+      <div class="cg-vote-status">${myVote ? `Your recorded vote: <strong>${esc(myVote)}</strong>${rollCall.allow_vote_changes ? ' (you may change it while voting is open)' : ''}` : 'You have not voted yet.'}</div>
+    ` : rollCall.status === 'open' ? `<div class="cg-vote-status">You are not an eligible voter for this chamber.</div>` : ''}
+    ${tallyHtml}
+    <div id="cg-vote-rc-id" data-id="${rollCall.id}"></div>
+  `;
+}
+
+function showModalError(msg) {
+  const el = document.getElementById('cg-modal-error');
+  el.textContent = msg; el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 5000);
+}
+
+document.getElementById('cg-modal-body').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-vote]');
+  if (!btn) return;
+  const rcId = document.getElementById('cg-vote-rc-id')?.dataset.id;
+  if (!rcId) return;
+  const { error } = await supabase.rpc('congress_cast_vote', { p_roll_call_id: rcId, p_choice: btn.dataset.vote });
+  if (error) showModalError(error.message);
+  else openMeasure(_currentMeasure.id);
+});
+
+function bindModals() {
+  document.getElementById('cg-modal-close').onclick = () => document.getElementById('cg-measure-modal').classList.remove('open');
+  document.getElementById('cg-measure-modal').addEventListener('click', (e) => { if (e.target.id === 'cg-measure-modal') e.currentTarget.classList.remove('open'); });
+
+  document.getElementById('btn-new-measure').onclick = () => document.getElementById('cg-new-measure-modal').classList.add('open');
+  document.getElementById('cg-new-close').onclick = () => document.getElementById('cg-new-measure-modal').classList.remove('open');
+  document.getElementById('nm-cancel').onclick = () => document.getElementById('cg-new-measure-modal').classList.remove('open');
+  document.getElementById('cg-new-measure-modal').addEventListener('click', (e) => { if (e.target.id === 'cg-new-measure-modal') e.currentTarget.classList.remove('open'); });
+
+  document.getElementById('nm-submit').onclick = async () => {
+    const title = document.getElementById('nm-title').value.trim();
+    const errEl = document.getElementById('nm-error');
+    errEl.style.display = 'none';
+    if (!title) { errEl.textContent = 'Title is required.'; errEl.style.display = 'block'; return; }
+    const { data: measure, error } = await supabase.from('congress_measures').insert({
+      type_key: document.getElementById('nm-type').value,
+      chamber_id: document.getElementById('nm-chamber').value,
+      title,
+      summary: document.getElementById('nm-summary').value.trim() || null,
+      created_by: _me.id,
+    }).select().single();
+    if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+    const { data: v1 } = await supabase.from('congress_measure_versions').insert({
+      measure_id: measure.id, version_number: 1,
+      full_text: document.getElementById('nm-text').value, created_by: _me.id,
+    }).select().single();
+    if (v1) await supabase.from('congress_measures').update({ current_version_id: v1.id }).eq('id', measure.id);
+    document.getElementById('cg-new-measure-modal').classList.remove('open');
+    ['nm-title','nm-summary','nm-text'].forEach(id => document.getElementById(id).value = '');
+    await loadMeasures();
+    renderDashboard(); renderMeasureList(); renderArchive();
+  };
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    document.getElementById('cg-measure-modal').classList.remove('open');
+    document.getElementById('cg-new-measure-modal').classList.remove('open');
+  });
+}
+
+init();
+</script>
+</body>
+</html>
