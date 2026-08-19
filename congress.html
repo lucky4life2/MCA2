@@ -93,6 +93,25 @@
   .cg-debate-meta { font-size: 11px; color: var(--muted); margin-bottom: 4px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .cg-pos-tag { font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 1px 7px; border-radius: 8px; background: var(--bg); color: var(--mid); }
   .cg-debate-archived { font-style: italic; color: var(--muted); }
+  .cg-debate-actions { margin-left: auto; display: flex; gap: 8px; }
+  .cg-debate-actions button { background: none; border: none; padding: 0; font-size: 11px; color: var(--blue); cursor: pointer; text-decoration: underline; }
+  .cg-debate-actions button.danger { color: #c0392b; }
+  .cg-post-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .cg-post-row select, .cg-post-row input { flex: 1; min-width: 120px; }
+
+  .cg-committee-card ul { list-style: none; margin: 6px 0 0; padding: 0; }
+  .cg-committee-card li { font-size: 12px; padding: 3px 0; display: flex; justify-content: space-between; gap: 8px; }
+  .cg-committee-role { font-size: 10px; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .cg-committee-add-row { display: flex; gap: 8px; margin-top: 10px; }
+  .cg-committee-add-row select { flex: 1; }
+
+  .cg-amendment { border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-bottom: 10px; font-size: 13px; }
+  .cg-amendment-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .cg-amendment-diff { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
+  .cg-amendment-diff > div { background: var(--bg); border-radius: 4px; padding: 6px 8px; font-size: 12px; white-space: pre-wrap; }
+  .cg-amendment-diff .before { border-left: 3px solid #c0392b; }
+  .cg-amendment-diff .after { border-left: 3px solid #2d7d2f; }
+  .cg-amendment-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -117,6 +136,7 @@
   <div class="cg-tabs" role="tablist">
     <button class="cg-tab active" data-tab="dashboard" role="tab" aria-selected="true">Dashboard</button>
     <button class="cg-tab" data-tab="legislation" role="tab" aria-selected="false">Legislation</button>
+    <button class="cg-tab" data-tab="committees" role="tab" aria-selected="false">Committees</button>
     <button class="cg-tab" data-tab="archive" role="tab" aria-selected="false">Archive</button>
   </div>
 
@@ -132,6 +152,14 @@
       </div>
     </div>
     <div class="cg-list" id="cg-measure-list"></div>
+  </div>
+
+  <div id="tab-committees" style="display:none;">
+    <div class="cg-toolbar">
+      <p style="font-size:13px;color:var(--muted);margin:0;">Committee membership, chairs, and their assigned measures.</p>
+      <button class="btn btn-primary" id="btn-new-committee" style="display:none;">+ New Committee</button>
+    </div>
+    <div id="cg-committee-list" class="cg-grid"></div>
   </div>
 
   <div id="tab-archive" style="display:none;">
@@ -193,14 +221,49 @@
   </div>
 </div>
 
+<!-- New committee modal -->
+<div class="modal-overlay" id="cg-new-committee-modal">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="cg-nc-title" style="max-width:480px;">
+    <div class="modal-head">
+      <div class="modal-title" id="cg-nc-title">New Committee</div>
+      <button class="modal-close" id="cg-nc-close" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="nc-name">Name</label>
+        <input class="form-input" id="nc-name" maxlength="120">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="nc-key">Key (short, unique, no spaces)</label>
+        <input class="form-input" id="nc-key" maxlength="60" placeholder="e.g. rules_committee">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="nc-chamber">Chamber (optional — leave blank for a joint committee)</label>
+        <select class="form-select" id="nc-chamber"><option value="">Joint / cross-chamber</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="nc-desc">Description</label>
+        <textarea class="form-textarea" id="nc-desc" rows="2"></textarea>
+      </div>
+      <div id="nc-error" class="form-error" style="display:none;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" id="nc-cancel">Cancel</button>
+      <button class="btn btn-primary" id="nc-submit">Create</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
 import { supabase } from './supabase.js';
 
 let _me = null;
-let _access = { manage: false, sponsor: false, certify: false, chambers: new Set() };
+let _access = { manage: false, sponsor: false, certify: false, moderate: false, chambers: new Set() };
 let _chambers = [], _types = [], _statuses = [];
 let _measures = [];
+let _committees = [], _committeeMembers = [], _memberProfiles = [];
 let _currentMeasure = null;
+const POSITIONS = ['support', 'oppose', 'neutral', 'question', 'sponsor_statement', 'committee_report'];
 
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function show(which) {
@@ -210,16 +273,18 @@ function show(which) {
 }
 
 async function resolveAccess() {
-  const [{ data: manage }, { data: sponsor }, { data: certify }, { data: memberships }] = await Promise.all([
+  const [{ data: manage }, { data: sponsor }, { data: certify }, { data: moderate }, { data: memberships }] = await Promise.all([
     supabase.rpc('user_has_permission', { perm: 'can_manage_congress' }),
     supabase.rpc('user_has_permission', { perm: 'can_sponsor_congress_legislation' }),
     supabase.rpc('user_has_permission', { perm: 'can_certify_congress_votes' }),
+    supabase.rpc('user_has_permission', { perm: 'can_moderate_congress_debate' }),
     supabase.from('congress_members').select('chamber_id').eq('user_id', _me.id).eq('status', 'active'),
   ]);
   return {
     manage: manage === true,
     sponsor: sponsor === true,
     certify: certify === true,
+    moderate: moderate === true,
     chambers: new Set((memberships || []).map(m => m.chamber_id)),
   };
 }
@@ -241,14 +306,18 @@ async function init() {
   _chambers = chambers || []; _types = types || []; _statuses = statuses || [];
   populateFilters();
   populateNewMeasureForm();
+  populateNewCommitteeForm();
+  document.getElementById('btn-new-committee').style.display = _access.manage ? '' : 'none';
 
   show('main');
   bindTabs();
   bindModals();
-  await loadMeasures();
+  bindCommitteeModal();
+  await Promise.all([loadMeasures(), loadCommittees()]);
   renderDashboard();
   renderMeasureList();
   renderArchive();
+  renderCommittees();
 }
 
 function populateFilters() {
@@ -265,16 +334,110 @@ function populateNewMeasureForm() {
   document.getElementById('nm-chamber').innerHTML = _chambers.map(c => `<option value="${c.id}">${esc(c.label)}</option>`).join('');
 }
 
+function populateNewCommitteeForm() {
+  document.getElementById('nc-chamber').insertAdjacentHTML('beforeend', _chambers.map(c => `<option value="${c.id}">${esc(c.label)}</option>`).join(''));
+}
+
 function bindTabs() {
   document.querySelectorAll('.cg-tab').forEach(btn => {
     btn.onclick = () => {
       document.querySelectorAll('.cg-tab').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
       btn.classList.add('active'); btn.setAttribute('aria-selected', 'true');
-      ['dashboard', 'legislation', 'archive'].forEach(t => {
+      ['dashboard', 'legislation', 'committees', 'archive'].forEach(t => {
         document.getElementById('tab-' + t).style.display = (t === btn.dataset.tab) ? '' : 'none';
       });
     };
   });
+}
+
+// ── Committees ──────────────────────────────────────────────────
+async function loadCommittees() {
+  const [{ data: committees }, { data: members }] = await Promise.all([
+    supabase.from('congress_committees').select('*').eq('is_active', true).order('name'),
+    supabase.from('congress_committee_members').select('*, profiles(display_name, username)'),
+  ]);
+  _committees = committees || [];
+  _committeeMembers = members || [];
+}
+
+function renderCommittees() {
+  const el = document.getElementById('cg-committee-list');
+  if (!_committees.length) { el.innerHTML = `<div class="cg-empty-state">No committees yet.</div>`; return; }
+  el.innerHTML = _committees.map(c => {
+    const members = _committeeMembers.filter(m => m.committee_id === c.id);
+    return `
+    <div class="cg-card cg-committee-card" data-committee="${c.id}">
+      <h3>${esc(c.name)}${c.chamber_id ? ` · ${esc(chamberLabel(c.chamber_id))}` : ' · Joint'}</h3>
+      ${c.description ? `<p style="font-size:12px;color:var(--mid);margin:0 0 6px;">${esc(c.description)}</p>` : ''}
+      <ul>
+        ${members.length ? members.map(m => `
+          <li><span>${esc(m.profiles?.display_name || m.profiles?.username || 'Member')}</span>
+            <span class="cg-committee-role">${esc(m.role)}${_access.manage ? ` · <a href="#" data-remove-member="${m.id}">remove</a>` : ''}</span></li>
+        `).join('') : `<li class="cg-empty">No members assigned.</li>`}
+      </ul>
+      ${_access.manage ? `
+        <div class="cg-committee-add-row">
+          <select data-add-user="${c.id}">
+            <option value="">Add member…</option>
+            ${_memberProfiles.map(p => `<option value="${p.id}">${esc(p.display_name || p.username)}</option>`).join('')}
+          </select>
+          <select data-add-role="${c.id}" style="max-width:110px;">
+            <option value="member">Member</option>
+            <option value="vice_chair">Vice Chair</option>
+            <option value="chair">Chair</option>
+          </select>
+        </div>` : ''}
+    </div>`;
+  }).join('');
+
+  el.querySelectorAll('select[data-add-user]').forEach(sel => {
+    sel.onchange = async () => {
+      const committeeId = sel.dataset.addUser;
+      const userId = sel.value;
+      if (!userId) return;
+      const role = el.querySelector(`select[data-add-role="${committeeId}"]`).value;
+      const { error } = await supabase.from('congress_committee_members').insert({ committee_id: committeeId, user_id: userId, role, added_by: _me.id });
+      if (!error) { await loadCommittees(); renderCommittees(); }
+      sel.value = '';
+    };
+  });
+  el.querySelectorAll('a[data-remove-member]').forEach(a => {
+    a.onclick = async (e) => {
+      e.preventDefault();
+      await supabase.from('congress_committee_members').delete().eq('id', a.dataset.removeMember);
+      await loadCommittees(); renderCommittees();
+    };
+  });
+}
+
+function bindCommitteeModal() {
+  document.getElementById('btn-new-committee').onclick = async () => {
+    // lazy-load member directory the first time it's needed
+    if (!_memberProfiles.length) {
+      const { data } = await supabase.from('profiles').select('id, display_name, username').order('display_name');
+      _memberProfiles = data || [];
+    }
+    document.getElementById('cg-new-committee-modal').classList.add('open');
+  };
+  document.getElementById('cg-nc-close').onclick = () => document.getElementById('cg-new-committee-modal').classList.remove('open');
+  document.getElementById('nc-cancel').onclick = () => document.getElementById('cg-new-committee-modal').classList.remove('open');
+  document.getElementById('cg-new-committee-modal').addEventListener('click', (e) => { if (e.target.id === 'cg-new-committee-modal') e.currentTarget.classList.remove('open'); });
+  document.getElementById('nc-submit').onclick = async () => {
+    const name = document.getElementById('nc-name').value.trim();
+    const key = document.getElementById('nc-key').value.trim();
+    const errEl = document.getElementById('nc-error');
+    errEl.style.display = 'none';
+    if (!name || !key) { errEl.textContent = 'Name and key are both required.'; errEl.style.display = 'block'; return; }
+    const { error } = await supabase.from('congress_committees').insert({
+      name, key, chamber_id: document.getElementById('nc-chamber').value || null,
+      description: document.getElementById('nc-desc').value.trim() || null,
+      created_by: _me.id,
+    });
+    if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+    document.getElementById('cg-new-committee-modal').classList.remove('open');
+    ['nc-name', 'nc-key', 'nc-desc'].forEach(id => document.getElementById(id).value = '');
+    await loadCommittees(); renderCommittees();
+  };
 }
 
 async function loadMeasures() {
@@ -355,49 +518,99 @@ function bindRowClicks(container) {
   });
 }
 
-// ── Measure detail / voting / debate ──────────────────────────────
+// ── Measure detail / voting / debate / amendments ─────────────────
 async function openMeasure(id) {
-  const [{ data: measure }, { data: version }, { data: rollCalls }, { data: posts }] = await Promise.all([
+  const [{ data: measure }, { data: version }, { data: rollCalls }, { data: posts }, { data: amendments }, { data: reports }] = await Promise.all([
     supabase.from('congress_measures').select('*').eq('id', id).single(),
     supabase.from('congress_measure_versions').select('*').eq('measure_id', id).order('version_number', { ascending: false }).limit(1),
     supabase.from('congress_roll_calls').select('*').eq('measure_id', id).order('created_at', { ascending: false }),
     supabase.from('congress_debate_posts').select('*, profiles(display_name, username)').eq('measure_id', id).eq('is_archived', false).order('created_at'),
+    supabase.from('congress_amendments').select('*, profiles!congress_amendments_sponsor_id_fkey(display_name, username)').eq('measure_id', id).order('number'),
+    supabase.from('congress_committee_reports').select('*, profiles(display_name, username)').eq('measure_id', id).order('created_at', { ascending: false }),
   ]);
   if (!measure) return;
   _currentMeasure = measure;
   const latestVersion = (version && version[0]) || null;
   const openRollCall = (rollCalls || []).find(rc => rc.status === 'open');
-  const latestRollCall = openRollCall || (rollCalls || [])[0] || null;
+  const latestMeasureRollCall = openRollCall || (rollCalls || []).find(rc => !rc.amendment_id) || null;
 
   document.getElementById('cg-modal-title').textContent = `${measure.number || 'Draft'} — ${measure.title}`;
   document.getElementById('cg-modal-sub').textContent = `${typeLabel(measure.type_key)} · ${chamberLabel(measure.chamber_id)} · ${statusLabel(measure.status_key)}`;
 
   let voteBlockHtml = '';
-  if (latestRollCall) {
-    voteBlockHtml = await renderVoteBlock(latestRollCall, measure);
+  if (latestMeasureRollCall) {
+    voteBlockHtml = await renderVoteBlock(latestMeasureRollCall, measure);
   }
+
+  const isChamberMember = _access.chambers.has(measure.chamber_id);
+  const canPost = _access.manage || isChamberMember;
+  const canProposeAmendment = _access.manage || isChamberMember;
+  const isOwnDraft = measure.status_key === 'draft' && measure.created_by === _me.id;
 
   document.getElementById('cg-modal-body').innerHTML = `
     <p style="font-size:13px;color:var(--mid);">${esc(measure.summary || '')}</p>
-    <div class="cg-section-label">Full Text</div>
+    ${_access.manage ? `
+      <div class="form-group">
+        <label class="form-label" for="cg-committee-assign">Committee</label>
+        <select class="form-select" id="cg-committee-assign" style="max-width:320px;">
+          <option value="">Unassigned</option>
+          ${_committees.filter(c => !c.chamber_id || c.chamber_id === measure.chamber_id).map(c => `<option value="${c.id}" ${c.id === measure.committee_id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
+        </select>
+      </div>` : ''}
+    <div class="cg-section-label">Full Text — v${latestVersion?.version_number ?? '—'}${latestVersion?.is_locked ? ' (locked)' : ''}</div>
     <div class="cg-fulltext">${esc(latestVersion?.full_text || '(No version text yet.)')}</div>
     ${voteBlockHtml}
+
+    <div class="cg-section-label">Amendments</div>
+    <div id="cg-amendments">
+      ${(amendments || []).length ? amendments.map(a => renderAmendment(a, measure)).join('') : '<div class="cg-empty-state">No amendments proposed.</div>'}
+    </div>
+    ${canProposeAmendment ? `
+      <button class="btn btn-outline" id="cg-propose-amendment-toggle" style="margin-top:6px;">+ Propose Amendment</button>
+      <div id="cg-propose-amendment-form" style="display:none;margin-top:10px;">
+        <div class="form-group"><label class="form-label" for="am-explain">Explanation</label><textarea class="form-textarea" id="am-explain" rows="2"></textarea></div>
+        <div class="cg-amendment-diff">
+          <div><label class="form-label">Text to remove/replace (optional)</label><textarea class="form-textarea" id="am-before" rows="3"></textarea></div>
+          <div><label class="form-label">New text</label><textarea class="form-textarea" id="am-after" rows="3"></textarea></div>
+        </div>
+        <button class="btn btn-primary" id="am-submit">Submit Amendment</button>
+      </div>` : ''}
+
+    ${(reports || []).length || _access.manage || isChamberMember ? `
+      <div class="cg-section-label">Committee Reports</div>
+      <div id="cg-reports">
+        ${(reports || []).length ? reports.map(r => `
+          <div class="cg-debate-post">
+            <div class="cg-debate-meta"><strong>${esc(r.profiles?.display_name || r.profiles?.username || 'Committee')}</strong>
+              <span class="cg-pos-tag">${esc((r.recommendation || 'no_recommendation').replace('_',' '))}</span></div>
+            <div>${esc(r.summary)}</div>
+          </div>
+        `).join('') : '<div class="cg-empty-state">No committee reports filed.</div>'}
+      </div>
+      ${measure.committee_id ? `
+        <div class="form-group" style="margin-top:8px;">
+          <textarea class="form-textarea" id="cg-new-report" rows="2" placeholder="File a committee report…"></textarea>
+          <div class="cg-post-row" style="margin-top:6px;">
+            <select id="cg-report-rec">
+              <option value="favorable">Favorable</option>
+              <option value="unfavorable">Unfavorable</option>
+              <option value="no_recommendation">No recommendation</option>
+            </select>
+            <button class="btn btn-outline" id="cg-report-submit">File Report</button>
+          </div>
+        </div>` : ''}
+    ` : ''}
+
     <div class="cg-section-label">Debate</div>
     <div id="cg-debate-thread">
-      ${(posts || []).length ? posts.map(p => `
-        <div class="cg-debate-post">
-          <div class="cg-debate-meta">
-            <strong>${esc(p.profiles?.display_name || p.profiles?.username || 'Member')}</strong>
-            ${p.position ? `<span class="cg-pos-tag">${esc(p.position.replace('_',' '))}</span>` : ''}
-            ${p.section_ref ? `<span>${esc(p.section_ref)}</span>` : ''}
-            ${p.is_edited ? '<span>(edited)</span>' : ''}
-          </div>
-          <div>${esc(p.body)}</div>
-        </div>
-      `).join('') : '<div class="cg-empty-state">No debate yet.</div>'}
+      ${(posts || []).length ? posts.map(p => renderDebatePost(p)).join('') : '<div class="cg-empty-state">No debate yet.</div>'}
     </div>
-    ${(_access.manage || _access.chambers.has(measure.chamber_id)) ? `
+    ${canPost ? `
       <div class="form-group" style="margin-top:1rem;">
+        <div class="cg-post-row">
+          <select id="cg-post-position"><option value="">No position tag</option>${POSITIONS.map(p => `<option value="${p}">${p.replace('_',' ')}</option>`).join('')}</select>
+          <input class="form-input" id="cg-post-section" placeholder="Section ref (optional)">
+        </div>
         <textarea class="form-textarea" id="cg-new-post" rows="2" placeholder="Add to the debate…" aria-label="Add debate comment"></textarea>
         <button class="btn btn-outline" id="cg-post-submit" style="margin-top:6px;">Post</button>
       </div>` : ''}
@@ -405,19 +618,110 @@ async function openMeasure(id) {
 
   const foot = document.getElementById('cg-modal-foot');
   const footBtns = [];
-  const noActiveRollCall = !latestRollCall || ['certified', 'voided'].includes(latestRollCall.status);
+  const noActiveRollCall = !latestMeasureRollCall || ['certified', 'voided'].includes(latestMeasureRollCall.status);
   if (_access.manage) {
     if (measure.status_key !== 'passed' && measure.status_key !== 'failed' && measure.status_key !== 'enacted' && noActiveRollCall) {
       footBtns.push(`<button class="btn btn-outline" id="cg-schedule-vote">Schedule &amp; Open Vote</button>`);
     }
-    if (measure.status_key === 'voting' && latestRollCall && latestRollCall.status === 'open') {
+    if (measure.status_key === 'voting' && latestMeasureRollCall && latestMeasureRollCall.status === 'open') {
       footBtns.push(`<button class="btn btn-outline" id="cg-close-vote">Close Voting</button>`);
     }
-    if (latestRollCall && latestRollCall.status === 'closed' && _access.certify) {
+    if (latestMeasureRollCall && latestMeasureRollCall.status === 'closed' && _access.certify) {
       footBtns.push(`<button class="btn btn-primary" id="cg-certify-vote">Certify Result</button>`);
     }
   }
   foot.innerHTML = footBtns.join('');
+
+  // Committee assignment
+  document.getElementById('cg-committee-assign') && (document.getElementById('cg-committee-assign').onchange = async (e) => {
+    await supabase.from('congress_measures').update({ committee_id: e.target.value || null }).eq('id', measure.id);
+    await loadMeasures();
+  });
+
+  // Amendments
+  document.getElementById('cg-propose-amendment-toggle') && (document.getElementById('cg-propose-amendment-toggle').onclick = () => {
+    document.getElementById('cg-propose-amendment-form').style.display = 'block';
+    document.getElementById('cg-propose-amendment-toggle').style.display = 'none';
+  });
+  document.getElementById('am-submit') && (document.getElementById('am-submit').onclick = async () => {
+    const explanation = document.getElementById('am-explain').value.trim();
+    if (!explanation) { showModalError('An explanation is required.'); return; }
+    const nextNumber = ((amendments || []).reduce((max, a) => Math.max(max, a.number), 0)) + 1;
+    const { error } = await supabase.from('congress_amendments').insert({
+      measure_id: measure.id, number: nextNumber, sponsor_id: _me.id, explanation,
+      affected_text_before: document.getElementById('am-before').value || null,
+      affected_text_after: document.getElementById('am-after').value || null,
+      created_by: _me.id,
+    });
+    if (error) showModalError(error.message); else openMeasure(measure.id);
+  });
+  document.querySelectorAll('button[data-amend-disposition]').forEach(btn => {
+    btn.onclick = async () => {
+      const { error } = await supabase.rpc('congress_set_amendment_disposition', {
+        p_amendment_id: btn.dataset.amendId, p_status: btn.dataset.amendDisposition,
+      });
+      if (error) showModalError(error.message); else openMeasure(measure.id);
+    };
+  });
+  document.querySelectorAll('button[data-amend-vote]').forEach(btn => {
+    btn.onclick = async () => {
+      const amend = amendments.find(a => a.id === btn.dataset.amendVote);
+      const { data: rc, error } = await supabase.from('congress_roll_calls').insert({
+        amendment_id: amend.id, chamber_id: measure.chamber_id, measure_version_id: latestVersion.id,
+        question: `On Amendment #${amend.number} to ${measure.number || measure.title}`,
+        created_by: _me.id,
+      }).select().single();
+      if (error) { showModalError(error.message); return; }
+      await supabase.from('congress_amendments').update({ status: 'voting' }).eq('id', amend.id);
+      const { error: openErr } = await supabase.rpc('congress_open_roll_call', { p_roll_call_id: rc.id });
+      if (openErr) showModalError(openErr.message); else openMeasure(measure.id);
+    };
+  });
+
+  // Committee reports
+  document.getElementById('cg-report-submit') && (document.getElementById('cg-report-submit').onclick = async () => {
+    const summary = document.getElementById('cg-new-report').value.trim();
+    if (!summary) return;
+    const { error } = await supabase.from('congress_committee_reports').insert({
+      measure_id: measure.id, committee_id: measure.committee_id, summary,
+      recommendation: document.getElementById('cg-report-rec').value, filed_by: _me.id,
+    });
+    if (error) showModalError(error.message); else openMeasure(measure.id);
+  });
+
+  // Debate posting
+  document.getElementById('cg-post-submit') && (document.getElementById('cg-post-submit').onclick = async () => {
+    const body = document.getElementById('cg-new-post').value.trim();
+    if (!body) return;
+    const { error } = await supabase.from('congress_debate_posts').insert({
+      measure_id: measure.id, author_id: _me.id, body,
+      position: document.getElementById('cg-post-position').value || null,
+      section_ref: document.getElementById('cg-post-section').value.trim() || null,
+    });
+    if (!error) openMeasure(measure.id); else showModalError(error.message);
+  });
+  document.querySelectorAll('button[data-edit-post]').forEach(btn => {
+    btn.onclick = () => startEditPost(btn.dataset.editPost, posts);
+  });
+  document.querySelectorAll('button[data-archive-post]').forEach(btn => {
+    btn.onclick = async () => {
+      const reason = prompt('Reason for archiving this post (visible in the moderation audit log):');
+      if (reason === null) return;
+      const { error } = await supabase.from('congress_debate_posts').update({
+        is_archived: true, archived_by: _me.id, archived_reason: reason, archived_at: new Date().toISOString(),
+      }).eq('id', btn.dataset.archivePost);
+      if (error) showModalError(error.message); else openMeasure(measure.id);
+    };
+  });
+
+  document.getElementById('cg-close-vote') && (document.getElementById('cg-close-vote').onclick = async () => {
+    const { error } = await supabase.rpc('congress_close_roll_call', { p_roll_call_id: latestMeasureRollCall.id });
+    if (!error) openMeasure(measure.id); else showModalError(error.message);
+  });
+  document.getElementById('cg-certify-vote') && (document.getElementById('cg-certify-vote').onclick = async () => {
+    const { error } = await supabase.rpc('congress_certify_roll_call', { p_roll_call_id: latestMeasureRollCall.id, p_note: 'Certified via portal' });
+    if (!error) { openMeasure(measure.id); await loadMeasures(); renderMeasureList(); renderDashboard(); renderArchive(); } else showModalError(error.message);
+  });
 
   document.getElementById('cg-schedule-vote') && (document.getElementById('cg-schedule-vote').onclick = async () => {
     if (!latestVersion) { showModalError('This measure has no version text yet — add a version before opening a vote.'); return; }
@@ -436,24 +740,71 @@ async function openMeasure(id) {
     openMeasure(measure.id);
   });
 
-  document.getElementById('cg-post-submit') && (document.getElementById('cg-post-submit').onclick = async () => {
-    const body = document.getElementById('cg-new-post').value.trim();
-    if (!body) return;
-    const { error } = await supabase.from('congress_debate_posts').insert({
-      measure_id: measure.id, author_id: _me.id, body,
-    });
-    if (!error) openMeasure(measure.id); else showModalError(error.message);
-  });
-  document.getElementById('cg-close-vote') && (document.getElementById('cg-close-vote').onclick = async () => {
-    const { error } = await supabase.rpc('congress_close_roll_call', { p_roll_call_id: latestRollCall.id });
-    if (!error) openMeasure(measure.id); else showModalError(error.message);
-  });
-  document.getElementById('cg-certify-vote') && (document.getElementById('cg-certify-vote').onclick = async () => {
-    const { error } = await supabase.rpc('congress_certify_roll_call', { p_roll_call_id: latestRollCall.id, p_note: 'Certified via portal' });
-    if (!error) { openMeasure(measure.id); await loadMeasures(); renderMeasureList(); renderDashboard(); renderArchive(); } else showModalError(error.message);
-  });
-
   document.getElementById('cg-measure-modal').classList.add('open');
+}
+
+function renderDebatePost(p) {
+  const canEdit = p.author_id === _me.id && !p.is_archived;
+  const canModerate = _access.moderate || _access.manage;
+  return `
+    <div class="cg-debate-post" data-post-id="${p.id}">
+      <div class="cg-debate-meta">
+        <strong>${esc(p.profiles?.display_name || p.profiles?.username || 'Member')}</strong>
+        ${p.position ? `<span class="cg-pos-tag">${esc(p.position.replace('_',' '))}</span>` : ''}
+        ${p.section_ref ? `<span>${esc(p.section_ref)}</span>` : ''}
+        ${p.is_edited ? '<span>(edited)</span>' : ''}
+        <span class="cg-debate-actions">
+          ${canEdit ? `<button data-edit-post="${p.id}">Edit</button>` : ''}
+          ${canModerate && !p.is_archived ? `<button class="danger" data-archive-post="${p.id}">Archive</button>` : ''}
+        </span>
+      </div>
+      <div data-post-body="${p.id}">${esc(p.body)}</div>
+    </div>`;
+}
+
+function startEditPost(postId, posts) {
+  const post = posts.find(p => p.id === postId);
+  const bodyEl = document.querySelector(`[data-post-body="${postId}"]`);
+  if (!post || !bodyEl) return;
+  bodyEl.innerHTML = `
+    <textarea class="form-textarea" rows="2">${esc(post.body)}</textarea>
+    <button class="btn btn-outline" style="margin-top:6px;">Save</button>`;
+  bodyEl.querySelector('button').onclick = async () => {
+    const newBody = bodyEl.querySelector('textarea').value.trim();
+    if (!newBody) return;
+    const { error } = await supabase.from('congress_debate_posts').update({
+      body: newBody, is_edited: true, edited_at: new Date().toISOString(),
+    }).eq('id', postId);
+    if (error) showModalError(error.message); else openMeasure(_currentMeasure.id);
+  };
+}
+
+function renderAmendment(a, measure) {
+  const canDispose = _access.manage && a.status === 'proposed';
+  const canVote = _access.manage && (a.status === 'proposed' || a.status === 'debate');
+  return `
+    <div class="cg-amendment">
+      <div class="cg-amendment-head">
+        <strong>Amendment #${a.number}</strong>
+        <span class="cg-badge ${a.status === 'passed' ? 'passed' : a.status === 'failed' ? 'failed' : 'introduced'}">${esc(a.status)}</span>
+      </div>
+      <div style="font-size:12px;color:var(--mid);">By ${esc(a.profiles?.display_name || a.profiles?.username || 'Member')}</div>
+      <p style="font-size:13px;margin:6px 0;">${esc(a.explanation)}</p>
+      ${(a.affected_text_before || a.affected_text_after) ? `
+        <div class="cg-amendment-diff">
+          <div class="before">${esc(a.affected_text_before || '(nothing removed)')}</div>
+          <div class="after">${esc(a.affected_text_after || '(nothing added)')}</div>
+        </div>` : ''}
+      ${a.disposition_note ? `<div style="font-size:12px;color:var(--muted);">Note: ${esc(a.disposition_note)}</div>` : ''}
+      <div class="cg-amendment-actions">
+        ${canVote ? `<button class="btn btn-outline" data-amend-vote="${a.id}">Schedule &amp; Open Vote</button>` : ''}
+        ${canDispose ? `
+          <button class="btn btn-outline" data-amend-disposition="passed" data-amend-id="${a.id}">Mark Passed</button>
+          <button class="btn btn-outline" data-amend-disposition="failed" data-amend-id="${a.id}">Mark Failed</button>
+          <button class="btn btn-danger" data-amend-disposition="withdrawn" data-amend-id="${a.id}">Withdraw</button>
+        ` : ''}
+      </div>
+    </div>`;
 }
 
 async function renderVoteBlock(rollCall, measure) {
