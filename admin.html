@@ -1059,6 +1059,7 @@
       <div><label class="form-label">Population</label><input type="text" id="nm-population" class="form-input"></div>
       <div><label class="form-label">Territory</label><input type="text" id="nm-territory" class="form-input"></div>
       <div><label class="form-label">Status</label><input type="text" id="nm-status" class="form-input"></div>
+      <div><label class="form-label">Year / Server</label><input type="text" id="nm-season" class="form-input" placeholder="e.g. 2026 or Global Dawn"></div>
       <div><label class="form-label">Flag filename</label><input type="text" id="nm-flag" class="form-input"></div>
       <div><label class="form-label">Sort Order</label><input type="number" id="nm-sort_order" class="form-input" placeholder="0 = first"></div>
       <div style="grid-column:1/-1;">
@@ -2849,7 +2850,7 @@ async function loadNationsAdmin() {
     const owners = (_nationOwnersById[n.id] || []).map(p => p?.display_name || p?.username).filter(Boolean);
     return `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 1.5rem;border-bottom:1px solid var(--border);">
-      <div><div style="font-weight:600;font-size:14px;">${n.name}</div><div style="font-size:12px;color:var(--muted);">${[n.government,n.leader?'Led by '+n.leader:'',n.founded].filter(Boolean).join(' · ')}</div><div style="font-size:12px;color:var(--muted);">${owners.length?'Leader(s): '+owners.join(', '):'No leader assigned'}</div></div>
+      <div><div style="font-weight:600;font-size:14px;">${n.name}${n.season ? ` <span style="font-weight:600;font-size:11px;color:var(--blue);border:1px solid var(--blue);border-radius:20px;padding:1px 8px;vertical-align:middle;">${n.season}</span>` : ''}</div><div style="font-size:12px;color:var(--muted);">${[n.government,n.leader?'Led by '+n.leader:'',n.founded].filter(Boolean).join(' · ')}</div><div style="font-size:12px;color:var(--muted);">${owners.length?'Leader(s): '+owners.join(', '):'No leader assigned'}</div></div>
       <div style="display:flex;gap:8px;"><button class="btn btn-outline btn-sm" onclick="openNationModal('${n.id}')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteNation('${n.id}')">Delete</button></div>
     </div>`;
   }).join('')
@@ -2931,7 +2932,7 @@ async function loadLeadershipAdmin() {
 document.getElementById('btn-add-nation').addEventListener('click', () => openNationModal(null));
 window.openNationModal = (id) => {
   const n = id ? _nationsAdmin.find(x => x.id === id) : null;
-  ['id','name','leader','capital','government','founded','founder','population','territory','status','flag','body','sort_order'].forEach(k => {
+  ['id','name','leader','capital','government','founded','founder','population','territory','status','season','flag','body','sort_order'].forEach(k => {
     const el = document.getElementById('nm-'+k); if (el) el.value = n?.[k] ?? '';
   });
   _nmOwnerIds = n ? (_nationOwnersById[n.id] || []).map(p => p?.id).filter(Boolean) : [];
@@ -2949,7 +2950,7 @@ document.getElementById('nm-save').addEventListener('click', async () => {
   if (!name) { const e = document.getElementById('nm-error'); e.textContent = 'Nation name is required.'; e.style.display = 'block'; return; }
   const id = document.getElementById('nm-id').value;
   const payload = { name };
-  ['leader','capital','government','founded','founder','population','territory','status','flag','body'].forEach(k => { payload[k] = document.getElementById('nm-'+k)?.value.trim()||null; });
+  ['leader','capital','government','founded','founder','population','territory','status','season','flag','body'].forEach(k => { payload[k] = document.getElementById('nm-'+k)?.value.trim()||null; });
   const sortVal = document.getElementById('nm-sort_order')?.value.trim();
   if (sortVal !== '') payload.sort_order = parseInt(sortVal);
   const result = id ? await supabase.from('nations').update(payload).eq('id',id).select() : await supabase.from('nations').insert(payload).select();

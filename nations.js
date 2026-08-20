@@ -38,11 +38,36 @@ function renderGrid(nations) {
         : `<span class="flag-placeholder">No flag</span>`
     }</div>`;
     return `
-      <div class="nation-flag-item" onclick="openNationDetail(${i})" style="cursor:pointer;" title="View ${n.name}">
+      <div class="nation-flag-item" data-season="${n.season || ''}" onclick="openNationDetail(${i})" style="cursor:pointer;" title="View ${n.name}">
         ${flagHtml}
         <div class="nation-name">${n.name}</div>
+        ${n.season ? `<div class="nation-season-tag">${n.season}</div>` : ''}
       </div>`;
   }).join('');
+}
+
+/* ── YEAR / SERVER FILTER ────────────────────────────────────── */
+function renderSeasonFilter(nations) {
+  const filterEl = document.getElementById('nations-filter');
+  if (!filterEl) return;
+
+  const seasons = [...new Set(nations.map(n => n.season).filter(Boolean))];
+  if (seasons.length < 2) { filterEl.innerHTML = ''; return; } // not worth a filter for one season
+
+  filterEl.innerHTML = `
+    <button class="archive-filter-btn active" data-season="all">All</button>
+    ${seasons.map(s => `<button class="archive-filter-btn" data-season="${s}">${s}</button>`).join('')}
+  `;
+  filterEl.querySelectorAll('.archive-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      filterEl.querySelectorAll('.archive-filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const active = btn.dataset.season;
+      document.querySelectorAll('#nations-grid .nation-flag-item').forEach(card => {
+        card.style.display = (active === 'all' || card.dataset.season === active) ? '' : 'none';
+      });
+    });
+  });
 }
 
 /* ── DETAIL VIEW ─────────────────────────────────────────────── */
@@ -61,14 +86,15 @@ function openNationDetail(i) {
   document.getElementById('nation-detail-name').textContent  = n.name;
 
   const coreFields = [
-    ['Leader',     n.leader],
-    ['Capital',    n.capital],
-    ['Government', n.government],
-    ['Founded',    n.founded],
-    ['Founder',    n.founder],
-    ['Population', n.population],
-    ['Territory',  n.territory],
-    ['Status',     n.status],
+    ['Leader',        n.leader],
+    ['Capital',       n.capital],
+    ['Government',    n.government],
+    ['Founded',       n.founded],
+    ['Founder',       n.founder],
+    ['Population',    n.population],
+    ['Territory',     n.territory],
+    ['Status',        n.status],
+    ['Year / Server', n.season],
   ].filter(([,v]) => v);
 
   const extraFields = n.fields || [];
@@ -153,9 +179,10 @@ function openNationDetail(i) {
       _nations = rows.map(r => ({
         id: r.id, name: r.name, leader: r.leader || '', capital: r.capital || '',
         government: r.government || '', founded: r.founded || '', founder: r.founder || '', population: r.population || '',
-        territory: r.territory || '', status: r.status || '', flag: r.flag || '', body: r.body || '', fields: [],
+        territory: r.territory || '', status: r.status || '', season: r.season || '', flag: r.flag || '', body: r.body || '', fields: [],
       }));
       renderGrid(_nations);
+      renderSeasonFilter(_nations);
       openNationDetail(i);
     });
   }
@@ -207,11 +234,13 @@ window.applyFlagDetailClass = applyFlagDetailClass;
       population: r.population || '',
       territory:  r.territory  || '',
       status:     r.status     || '',
+      season:     r.season     || '',
       flag:       r.flag       || '',
       body:       r.body       || '',
       fields:     [],
     }));
     renderGrid(_nations);
+    renderSeasonFilter(_nations);
   } catch(e) {
     grid.innerHTML = '<p style="grid-column:1/-1;color:var(--mid);font-size:14px;">Could not load nations. Check back soon.</p>';
   }

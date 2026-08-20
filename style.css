@@ -1663,6 +1663,17 @@ footer {
   text-align: center;
 }
 
+.nation-season-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--blue);
+  border: 1px solid var(--blue);
+  border-radius: 20px;
+  padding: 1px 8px;
+  margin-top: -4px;
+}
+
 @media (max-width: 640px) {
   .nations-grid { grid-template-columns: repeat(2, 1fr); }
 }
