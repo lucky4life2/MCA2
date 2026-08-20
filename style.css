@@ -14,6 +14,34 @@
   --white:       #ffffff;
 }
 
+/* ── Accessibility: skip link + focus visibility (WCAG 2.4.1 / 2.4.7) ── */
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -48px;
+  z-index: 10000;
+  background: var(--blue);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: top .15s ease;
+}
+.skip-link:focus {
+  top: 8px;
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+/* Strong, consistent focus ring for anything focused via keyboard, on
+   top of/instead of any component-specific :focus rule that only relies
+   on a subtle border-color change. */
+:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}
+
 /* ── DARK MODE ── */
 [data-theme="dark"] {
   --blue:      #95b0d9;   /* dark-mode override: light blue for all blue text/icons */
@@ -533,7 +561,7 @@ nav {
   font-family: 'Open Sans', sans-serif; font-size: 13px;
   background: var(--white); color: var(--black); box-sizing: border-box;
 }
-.form-input:focus { outline: none; border-color: var(--blue); }
+.form-input:focus { outline: 3px solid var(--blue); outline-offset: 1px; border-color: var(--blue); }
 
 /* ── CONTENT ── */
 .content { max-width: 820px; margin: 0 auto; padding: 0 2.5rem; }
@@ -1686,7 +1714,7 @@ footer {
 
 .news-search:focus {
   border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(24,72,158,0.08);
+  box-shadow: 0 0 0 3px rgba(24,72,158,0.45);
 }
 
 .news-search::placeholder {

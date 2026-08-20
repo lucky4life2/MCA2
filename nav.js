@@ -163,7 +163,7 @@ const FOOTER_HTML = () => {
 </footer>
 `; }; // end FOOTER_HTML
 
-const TOAST_HTML = `<div class="toast" id="toast">Address copied to clipboard</div>`;
+const TOAST_HTML = `<div class="toast" id="toast" role="status" aria-live="polite">Address copied to clipboard</div>`;
 
 const PROGRESS_HTML = `<div class="scroll-progress" id="scroll-progress"></div>`;
 
@@ -560,6 +560,20 @@ async function injectNav() {
 
   // Inject nav immediately without waiting for config.
   document.body.insertAdjacentHTML('afterbegin', NAV_HTML());
+
+  // Accessibility: add a "skip to main content" link as the very first
+  // focusable element on the page, so keyboard/screen-reader users don't
+  // have to tab through the full nav (including the Community/About
+  // dropdowns) on every single page. Targets whatever element follows
+  // the injected <nav> in the DOM, since page layouts vary.
+  (function addSkipLink() {
+    const navEl = document.querySelector('body > nav');
+    const mainEl = navEl && navEl.nextElementSibling;
+    if (!mainEl) return;
+    if (!mainEl.id) mainEl.id = 'mca-main-content';
+    if (!mainEl.hasAttribute('tabindex')) mainEl.setAttribute('tabindex', '-1');
+    document.body.insertAdjacentHTML('afterbegin', `<a href="#${mainEl.id}" class="skip-link">Skip to main content</a>`);
+  })();
 
   // Init nav auth immediately (must run after nav is in DOM).
   initNavAuth(_mcaAuthResolve);
