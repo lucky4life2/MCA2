@@ -303,6 +303,7 @@
     </div>
     <div id="tk-error" style="font-size:13px;color:#c0392b;padding:0 1.5rem .5rem;display:none;"></div>
     <div class="modal-foot">
+      <button class="btn btn-outline" id="tk-share" style="display:none;font-size:13px;">🔗 Share</button>
       <button class="btn btn-outline" id="tk-submit-checkoff" style="display:none;font-size:13px;">🚩 Submit for Check-off</button>
       <button class="btn btn-primary" id="tk-checkoff-toggle" style="display:none;font-size:13px;background:#2d7d2f;">✓ Check Off</button>
       <button class="btn btn-outline" id="tk-mark-done" style="font-size:13px;">✓ Mark as Done</button>
@@ -448,6 +449,7 @@ async function init() {
   show('main');
   buildLegend();
   await loadAll();
+  openSharedTaskFromUrl();
 }
 
 function show(which) {
@@ -831,6 +833,69 @@ async function deleteTagEverywhere(id) {
   render();
 }
 
+// Deep-linking: keep the URL in sync with whichever task is open so the
+// address bar always holds a shareable link, and clear it again on close.
+function setShareUrlParam(taskId) {
+  const url = new URL(window.location.href);
+  url.searchParams.set('task', taskId);
+  window.history.replaceState({}, '', url);
+}
+function clearShareUrlParam() {
+  const url = new URL(window.location.href);
+  if (url.searchParams.has('task')) {
+    url.searchParams.delete('task');
+    window.history.replaceState({}, '', url);
+  }
+}
+function shareTaskLink(taskId) {
+  const url = new URL(window.location.href);
+  url.searchParams.set('task', taskId);
+  return url.toString();
+}
+async function copyShareLink(taskId) {
+  const link = shareTaskLink(taskId);
+  const btn = document.getElementById('tk-share');
+  const original = btn.textContent;
+  try {
+    await navigator.clipboard.writeText(link);
+    btn.textContent = '✓ Link Copied';
+  } catch {
+    // Clipboard API unavailable (e.g. insecure context) — fall back to a prompt so it can still be copied manually.
+    window.prompt('Copy this link to share the task:', link);
+    btn.textContent = '✓ Link Ready';
+  }
+  setTimeout(() => { btn.textContent = original; }, 1800);
+}
+document.getElementById('tk-share').onclick = () => {
+  const id = document.getElementById('tk-id').value;
+  if (id) copyShareLink(id);
+};
+
+// Opens a task directly from a ?task=<id> URL, bypassing whatever project/
+// draft/tag filters are currently active — that's the whole point of a
+// share link: it finds the task for you even if you can't find it yourself.
+// Expands its project if collapsed and switches off the drafts-only view
+// if needed so the task is actually reachable behind the modal too.
+function openSharedTaskFromUrl() {
+  const id = new URLSearchParams(window.location.search).get('task');
+  if (!id) return;
+  const t = _tasks.find(x => x.id === id);
+  if (!t) {
+    alert("That task link doesn't point to a task you can see — it may have been deleted or you may not have access to its project.");
+    clearShareUrlParam();
+    return;
+  }
+  if (t.is_draft !== _showDrafts) {
+    _showDrafts = t.is_draft;
+    document.getElementById('btn-view-drafts').classList.toggle('active', _showDrafts);
+  }
+  if (isCollapsed(t.project_id)) {
+    toggleProjectCollapse(t.project_id);
+  }
+  render();
+  openTaskModal(t);
+}
+
 async function openTaskModal(t) {
   document.getElementById('tk-id').value = t?.id || '';
   document.getElementById('tk-name').value = t?.title || '';
@@ -854,6 +919,8 @@ async function openTaskModal(t) {
   doneBtn.textContent = (t && isDoneTask(t)) ? '↺ Mark as Not Done' : '✓ Mark as Done';
   document.getElementById('tk-error').style.display = 'none';
   document.getElementById('tk-comments-wrap').style.display = t ? '' : 'none';
+  document.getElementById('tk-share').style.display = t ? '' : 'none';
+  if (t) setShareUrlParam(t.id);
 
   _editingTag = t?.tag_id || null;
   buildTagPicker(canEdit);
@@ -898,7 +965,10 @@ document.getElementById('btn-new-task').onclick = () => {
   if (!_projects.length) { alert('Create a project first.'); return; }
   openTaskModal(null);
 };
-document.getElementById('tk-close').onclick = document.getElementById('tk-cancel').onclick = () => document.getElementById('tk-modal').style.display = 'none';
+document.getElementById('tk-close').onclick = document.getElementById('tk-cancel').onclick = () => {
+  document.getElementById('tk-modal').style.display = 'none'; clearShareUrlParam();
+  clearShareUrlParam();
+};
 
 document.getElementById('tk-submit-checkoff').onclick = async () => {
   const id = document.getElementById('tk-id').value;
@@ -906,7 +976,7 @@ document.getElementById('tk-submit-checkoff').onclick = async () => {
   if (!confirm('Submit this task for manager check-off?')) return;
   const { error } = await supabase.rpc('submit_task_for_checkoff', { p_task_id: id });
   if (error) { alert('Error: ' + error.message); return; }
-  document.getElementById('tk-modal').style.display = 'none'; loadAll();
+  document.getElementById('tk-modal').style.display = 'none'; clearShareUrlParam(); loadAll();
 };
 document.getElementById('tk-checkoff-toggle').onclick = async () => {
   const id = document.getElementById('tk-id').value;
@@ -915,7 +985,7 @@ document.getElementById('tk-checkoff-toggle').onclick = async () => {
   const fn = t?.checked_off_by ? 'uncheck_task' : 'check_off_task';
   const { error } = await supabase.rpc(fn, { p_task_id: id });
   if (error) { alert('Error: ' + error.message); return; }
-  document.getElementById('tk-modal').style.display = 'none'; loadAll();
+  document.getElementById('tk-modal').style.display = 'none'; clearShareUrlParam(); loadAll();
 };
 
 document.getElementById('tk-mark-done').onclick = async () => {
@@ -928,7 +998,7 @@ document.getElementById('tk-mark-done').onclick = async () => {
     if (!doneTag) { alert('No tag is marked as the done status — set one in Manage Tags first.'); return; }
     await supabase.from('tasks').update({ tag_id: doneTag.id, updated_at: new Date().toISOString() }).eq('id', id);
   }
-  document.getElementById('tk-modal').style.display = 'none'; loadAll();
+  document.getElementById('tk-modal').style.display = 'none'; clearShareUrlParam(); loadAll();
 };
 document.getElementById('tk-save').onclick = async () => {
   const id = document.getElementById('tk-id').value;
@@ -966,13 +1036,13 @@ document.getElementById('tk-save').onclick = async () => {
     if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
   }
 
-  document.getElementById('tk-modal').style.display = 'none'; loadAll();
+  document.getElementById('tk-modal').style.display = 'none'; clearShareUrlParam(); loadAll();
 };
 document.getElementById('tk-delete').onclick = async () => {
   const id = document.getElementById('tk-id').value;
   if (!confirm('Delete this task?')) return;
   await supabase.from('tasks').delete().eq('id', id);
-  document.getElementById('tk-modal').style.display = 'none'; loadAll();
+  document.getElementById('tk-modal').style.display = 'none'; clearShareUrlParam(); loadAll();
 };
 
 // ── Tag manager (admins & owners only — gated via btn-manage-tags visibility) ──
