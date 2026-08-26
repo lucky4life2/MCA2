@@ -9,3 +9,4 @@ target/
 *.zip
 /graphify-out
 /.claude
+*.csv
