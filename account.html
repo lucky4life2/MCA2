@@ -160,6 +160,9 @@
     .deletion-banner-title { font-size:14px; font-weight:700; color:#c0392b; }
     .deletion-banner-text { font-size:13px; color:#7f1d1d; line-height:1.6; }
     .deletion-banner-text strong { color:#c0392b; }
+    .deletion-banner.deletion-banner-success { background:#f0fdf4; border-color:#86efac; }
+    .deletion-banner-success .deletion-banner-title { color:#2d7d2f; }
+    .deletion-banner-success .deletion-banner-text { color:#166534; }
     .del-modal-warning { background:#fef2f2; border:1px solid #fca5a5; border-radius:6px; padding:12px 14px; font-size:13px; color:#7f1d1d; line-height:1.6; margin-bottom:1.25rem; }
     .del-modal-warning strong { color:#c0392b; }
     .del-step-label { font-size:12px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--muted); margin:1.25rem 0 .5rem; }
@@ -559,6 +562,7 @@ let _user = null;
 let _profile = null;
 let _verifyCode = null;
 let _isRecoverySession = false;
+let _deletionAutoCancelled = false;
 let _pwTotpFactorId = null;
 
 // ── Init ─────────────────────────────────────────────────────
@@ -567,6 +571,21 @@ async function init() {
   const hash = window.location.hash;
   const hashParams = new URLSearchParams(hash.replace('#', ''));
   const tokenType = hashParams.get('type');
+
+  // linkIdentity() (Link Google/Discord below) redirects out to the provider
+  // and back — a failure there (e.g. "Identity already linked to another
+  // user") comes back as ?error=...&error_description=... on this page,
+  // not as a JS exception we can catch. Previously nothing looked for it,
+  // so a failed link attempt looked like the button just did nothing.
+  (function showOAuthReturnError() {
+    const queryParams = new URLSearchParams(window.location.search);
+    const oauthError = queryParams.get('error_description') || queryParams.get('error')
+      || hashParams.get('error_description') || hashParams.get('error');
+    if (!oauthError) return;
+    alert('Could not link account: ' + decodeURIComponent(oauthError.replace(/\+/g, ' ')));
+    const cleanSearch = window.location.search.replace(/[?&](error|error_description|error_code)=[^&]*/g, '').replace(/^&/, '?');
+    history.replaceState(null, '', window.location.pathname + cleanSearch + (tokenType ? hash : ''));
+  })();
 
   if (tokenType === 'recovery') {
     _isRecoverySession = true;
@@ -651,6 +670,22 @@ async function init() {
   } catch(e) {}
 
   await loadProfile();
+
+  // Signing back in during the 7-day deletion grace period means the user
+  // changed their mind — auto-cancel the pending deletion right here instead
+  // of leaving it to a manual "Cancel Account Deletion" click, since a user
+  // who came back to sign in has already told us they don't want to lose
+  // the account. renderDeletionBanner() below shows a one-time confirmation
+  // instead of the usual countdown when this fires.
+  _deletionAutoCancelled = false;
+  if (_profile.account_status === 'pending_deletion') {
+    const { error: autoCancelErr } = await supabase.rpc('cancel_own_account_deletion');
+    if (!autoCancelErr) {
+      _profile.account_status = 'active';
+      _profile.deletion_scheduled_at = null;
+      _deletionAutoCancelled = true;
+    }
+  }
 
   // Under-13 age-check / parental consent gate. A missing row means this
   // account has never answered the age question; pending/declined means a
@@ -1282,6 +1317,17 @@ async function renderPage() {
 
 function renderDeletionBanner() {
   const wrap = document.getElementById('deletion-banner-wrap');
+  if (_deletionAutoCancelled) {
+    wrap.innerHTML = `
+      <div class="deletion-banner deletion-banner-success">
+        <div class="deletion-banner-title">Account Deletion Cancelled</div>
+        <div class="deletion-banner-text">
+          Your account was scheduled for deletion, but signing back in cancelled it automatically. Your account is safe.
+        </div>
+      </div>`;
+    _deletionAutoCancelled = false; // one-time confirmation, not shown again on re-render
+    return;
+  }
   if (_profile.account_status !== 'pending_deletion' || !_profile.deletion_scheduled_at) {
     wrap.innerHTML = '';
     return;

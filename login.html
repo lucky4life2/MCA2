@@ -365,6 +365,26 @@
     if (banner) banner.style.display = 'block';
   }
 
+  // Google/Discord send us back here with ?error=...&error_description=...
+  // (or, for the implicit flow, the same pair in the #hash instead of the
+  // query string) when the OAuth attempt itself fails — user denied access,
+  // the provider errored, etc. Previously nothing read these, so a failed
+  // "Continue with Google" silently dumped the user back on a blank login
+  // page with zero explanation, which is exactly what "Google doesn't work"
+  // reports were describing. Surface whichever one is present.
+  (function showOAuthCallbackError() {
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const oauthError = params.get('error_description') || params.get('error')
+      || hashParams.get('error_description') || hashParams.get('error');
+    if (!oauthError) return;
+    const errEl = document.getElementById('signin-error');
+    if (!errEl) return;
+    errEl.textContent = decodeURIComponent(oauthError.replace(/\+/g, ' '));
+    errEl.style.display = 'block';
+    // Clean the error out of the URL so a refresh doesn't keep re-showing it.
+    history.replaceState(null, '', window.location.pathname + window.location.search.replace(/[?&](error|error_description|error_code)=[^&]*/g, '').replace(/^&/, '?'));
+  })();
+
   // Best-effort: flips a dormant account back to active on successful login.
   // No-op (and safe to ignore errors) if the account isn't deactivated.
   async function reactivateIfNeeded() {
@@ -449,14 +469,33 @@
     if (signupConsent.checked) signupConsentError.style.display = 'none';
   });
 
+  // signInWithOAuth() resolves with {error} instead of throwing when the
+  // provider isn't enabled/configured on the Supabase project — previously
+  // that error was never checked, so a broken provider looked exactly like
+  // "nothing happens" when clicked, with no way to tell what went wrong.
+  function showLoginError(message) {
+    // Google/Discord buttons exist on both the Sign In and Create Account
+    // panels, each with its own error element (#signin-error / #signup-error)
+    // — only one panel is visible (.login-panel.active) at a time, so target
+    // that one instead of always writing into the (possibly hidden) sign-in
+    // error element.
+    const activePanel = document.querySelector('.login-panel.active');
+    const errEl = (activePanel && activePanel.querySelector('.login-error'))
+      || document.getElementById('signin-error');
+    if (!errEl) return;
+    errEl.textContent = message;
+    errEl.style.display = 'block';
+  }
+
   // ── Discord ───────────────────────────────────────────────────
   const discordRedirect = window.location.origin + '/' + returnTo;
 
   async function discordLogin() {
-    await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: 'discord',
       options: { redirectTo: discordRedirect }
     });
+    if (error) showLoginError('Could not start Discord sign-in: ' + error.message);
   }
   // Sign In tab's Discord button doesn't show the consent checkbox (that's
   // signup-only now), so it doesn't gate on it — see requireSignupConsent().
@@ -469,10 +508,11 @@
   const googleRedirect = window.location.origin + '/' + returnTo;
 
   async function googleLogin() {
-    await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: googleRedirect }
     });
+    if (error) showLoginError('Could not start Google sign-in: ' + error.message);
   }
   document.getElementById('btn-google-signin').addEventListener('click', googleLogin);
   document.getElementById('btn-google-signup').addEventListener('click', () => {
