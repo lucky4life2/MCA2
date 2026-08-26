@@ -1,0 +1,27 @@
+name: MCAVerify
+version: '1.0.0'
+main: com.mca.verify.MCAVerifyPlugin
+api-version: '1.20'
+author: MCA
+description: Links Minecraft accounts to MCA website accounts via /mcaverify codes.
+
+commands:
+  mcaverify:
+    description: Verify your Minecraft account with the MCA website
+    usage: /<command> <code>
+  mcaunverify:
+    description: (Admin) Force-unverify a player's linked account
+    usage: /<command> <player>
+    permission: mcaverify.admin
+  mcalookup:
+    description: (Admin) Look up a player's linked website account
+    usage: /<command> <player>
+    permission: mcaverify.admin
+
+permissions:
+  mcaverify.use:
+    description: Allows use of /mcaverify
+    default: true
+  mcaverify.admin:
+    description: Allows use of /mcaunverify and /mcalookup
+    default: op

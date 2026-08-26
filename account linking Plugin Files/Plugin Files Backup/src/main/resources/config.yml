@@ -1,0 +1,54 @@
+# ── MCAVerify configuration ──────────────────────────────────────
+#
+# This plugin links a player's Minecraft account to their profile
+# on the MCA website (Supabase-backed) when they run /mcaverify <code>.
+#
+# IMPORTANT: You must use the SERVICE ROLE key here, NOT the public
+# "anon" key from supabase.js. The service role key bypasses Row
+# Level Security so the plugin can update other players' profiles.
+# Find it in Supabase: Project Settings -> API -> service_role secret.
+#
+# NEVER share this key or commit it to a public repo / website.
+
+supabase:
+  url: "https://hjaywokvgdzhvsoygctc.supabase.co"
+  service_role_key: "PUT_YOUR_SUPABASE_SERVICE_ROLE_KEY_HERE"
+
+# Table that stores profiles (matches profiles table used by the website)
+table: "profiles"
+
+# Player UUIDs (with dashes, e.g. "069a79f4-44e9-4726-a5be-fca90e38aaf5")
+# that should ALWAYS have mcaverify.admin, regardless of op status or
+# any permissions plugin. Useful for a hardcoded owner/dev account.
+hardcoded_admins:
+  - "00000000-0000-0000-0000-000000000000"
+
+# Column names (only change if your schema differs from the website's)
+columns:
+  minecraft_username: "minecraft_username"
+  minecraft_verified: "minecraft_verified"
+  minecraft_uuid: "minecraft_uuid"
+  verify_code: "mc_verify_code"
+  verify_expires: "mc_verify_expires"
+
+# NEW: periodic heartbeat so the website's admin panel can tell this plugin
+# is actually running (vs. just the Supabase Edge Function being deployed).
+heartbeat:
+  enabled: true
+  interval_seconds: 60
+  # Optional label shown in the admin panel, e.g. "Survival Server".
+  # Leave blank to use the server's name instead.
+  server_name: ""
+
+messages:
+  usage: "&cUsage: /mcaverify <code>"
+  checking: "&7Checking your code..."
+  invalid_or_expired: "&cThat code is invalid or has expired. Generate a new one on the website (My Account)."
+  username_mismatch: "&cThat code is linked to the website account for &f%website_username%&c, not &f%player_name%&c. Make sure your in-game name matches the username you entered on the website."
+  already_verified: "&eThat account is already verified."
+  success: "&aYour Minecraft account is now verified and linked to your MCA account!"
+  error: "&cSomething went wrong contacting the website. Please try again later or contact an admin."
+  no_permission: "&cYou don't have permission to do that."
+  lookup_not_found: "&cNo linked website account found for %player_name%."
+  lookup_found: "&a%player_name% is linked to website account: %website_username% (verified: %verified%)"
+  unverify_done: "&aUnverified %player_name%'s Minecraft link."
