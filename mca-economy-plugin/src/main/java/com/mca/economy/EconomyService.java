@@ -3,6 +3,7 @@ package com.mca.economy;
 import com.google.gson.JsonElement;
 import com.mca.economy.model.EconomyAccount;
 import com.mca.economy.model.EconomyCompany;
+import com.mca.economy.model.EconomyShop;
 import com.mca.economy.supabase.EconomyException;
 import com.mca.economy.supabase.SupabaseClient;
 
@@ -31,8 +32,26 @@ public class EconomyService {
     // profile id -> that player's accounts. Cleared after any mutation so the next read is fresh.
     private final Map<UUID, List<EconomyAccount>> accountsCache = new ConcurrentHashMap<>();
 
+    // Minecraft UUID -> which of that player's accounts local shop trades (buy/sell at a chest)
+    // should use. Purely in-memory and per-session; defaults to their personal account.
+    private final Map<UUID, UUID> activeAccountCache = new ConcurrentHashMap<>();
+
     public EconomyService(SupabaseClient client) {
         this.client = client;
+    }
+
+    public void setActiveAccount(UUID minecraftUuid, UUID accountId) {
+        activeAccountCache.put(minecraftUuid, accountId);
+    }
+
+    /** The account a player's chest trades should use: their explicit /bank use choice, else their personal account, else null. */
+    public EconomyAccount getActiveAccount(UUID minecraftUuid, List<EconomyAccount> accounts) {
+        UUID chosen = activeAccountCache.get(minecraftUuid);
+        if (chosen != null) {
+            for (EconomyAccount a : accounts) if (a.id.equals(chosen)) return a;
+        }
+        for (EconomyAccount a : accounts) if ("personal".equals(a.type)) return a;
+        return accounts.isEmpty() ? null : accounts.get(0);
     }
 
     /** Resolves a player's verified website profile id from their Minecraft UUID, or null if unlinked/unverified. */
@@ -193,5 +212,57 @@ public class EconomyService {
             return result.getAsJsonArray().get(0).getAsJsonObject().get("shares").getAsInt();
         }
         return 0;
+    }
+
+    // ── Physical chest shops ──
+    // These bypass the actor-scoped _economy_* RPCs entirely: the plugin holds
+    // the service_role key, and a shop's buy/sell prices were set by its owner
+    // in advance, so a trade at the chest is authorized by the shop's existence,
+    // not by the clicking player being a member of the owner's account.
+
+    /** Loads every registered shop, for warming the in-memory cache on startup. */
+    public List<EconomyShop> listAllShops() throws EconomyException {
+        JsonElement result = client.select("economy_shops", "select=*");
+        List<EconomyShop> shops = new ArrayList<>();
+        if (result != null && result.isJsonArray()) {
+            for (JsonElement el : result.getAsJsonArray()) {
+                shops.add(EconomyShop.fromJson(el.getAsJsonObject()));
+            }
+        }
+        return shops;
+    }
+
+    public EconomyShop createShop(String world, int x, int y, int z, UUID ownerActorId, UUID accountId,
+                                   String material, BigDecimal buyPrice, BigDecimal sellPrice) throws EconomyException {
+        Map<String, Object> row = new HashMap<>();
+        row.put("world", world);
+        row.put("x", x);
+        row.put("y", y);
+        row.put("z", z);
+        row.put("owner_actor_id", ownerActorId.toString());
+        row.put("account_id", accountId.toString());
+        row.put("material", material);
+        row.put("buy_price", buyPrice);
+        row.put("sell_price", sellPrice);
+        JsonElement result = client.insert("economy_shops", row);
+        JsonElement created = result.isJsonArray() ? result.getAsJsonArray().get(0) : result;
+        return EconomyShop.fromJson(created.getAsJsonObject());
+    }
+
+    public void removeShop(String world, int x, int y, int z) throws EconomyException {
+        String query = "world=eq." + URLEncoder.encode(world, StandardCharsets.UTF_8) + "&x=eq." + x + "&y=eq." + y + "&z=eq." + z;
+        client.delete("economy_shops", query);
+    }
+
+    /** Runs a shop trade directly as the shop owner (buy) or has the owner pay out (sell) — see class note above. */
+    public void shopTrade(UUID actingActorId, UUID fromAccountId, UUID toAccountId, BigDecimal amount, String memo) throws EconomyException {
+        Map<String, Object> params = new HashMap<>();
+        params.put("p_actor", actingActorId.toString());
+        params.put("p_from", fromAccountId.toString());
+        params.put("p_to", toAccountId.toString());
+        params.put("p_amount", amount);
+        params.put("p_memo", memo);
+        client.rpc("_economy_transfer", params);
+        accountsCache.remove(actingActorId);
     }
 }

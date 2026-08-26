@@ -83,6 +83,40 @@ public class SupabaseClient {
         return send(request);
     }
 
+    /**
+     * Inserts a single row directly into a table via PostgREST and returns
+     * the inserted row. Used for simple, plugin-owned tables (like
+     * economy_shops) that don't need actor-scoped validation through an RPC.
+     */
+    public JsonElement insert(String table, Map<String, Object> row) throws EconomyException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/rest/v1/" + table))
+                .timeout(Duration.ofSeconds(15))
+                .header("apikey", serviceRoleKey)
+                .header("Authorization", "Bearer " + serviceRoleKey)
+                .header("Content-Type", "application/json")
+                .header("Prefer", "return=representation")
+                .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(row)))
+                .build();
+        return send(request);
+    }
+
+    /**
+     * Deletes rows matching a PostgREST filter query string, e.g.
+     * "world=eq.world&x=eq.5&y=eq.64&z=eq.-12" (no leading '?').
+     */
+    public void delete(String table, String queryString) throws EconomyException {
+        String url = baseUrl + "/rest/v1/" + table + (queryString == null || queryString.isBlank() ? "" : "?" + queryString);
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(Duration.ofSeconds(15))
+                .header("apikey", serviceRoleKey)
+                .header("Authorization", "Bearer " + serviceRoleKey)
+                .DELETE()
+                .build();
+        send(request);
+    }
+
     private JsonElement send(HttpRequest request) throws EconomyException {
         HttpResponse<String> response;
         try {

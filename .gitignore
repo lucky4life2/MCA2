@@ -7,3 +7,5 @@
 /.continue
 target/
 *.zip
+/graphify-out
+/.claude

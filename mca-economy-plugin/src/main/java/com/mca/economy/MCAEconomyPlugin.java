@@ -2,6 +2,8 @@ package com.mca.economy;
 
 import com.mca.economy.command.BankCommand;
 import com.mca.economy.command.CompanyCommand;
+import com.mca.economy.command.ShopCommand;
+import com.mca.economy.listener.ShopInteractListener;
 import com.mca.economy.supabase.SupabaseClient;
 import com.mca.economy.vault.VaultEconomyProvider;
 import net.milkbowl.vault.economy.Economy;
@@ -23,6 +25,7 @@ public class MCAEconomyPlugin extends JavaPlugin implements Listener {
     private SupabaseClient supabaseClient;
     private EconomyService economyService;
     private VaultEconomyProvider vaultProvider;
+    private ShopManager shopManager;
     private ExecutorService asyncExecutor;
 
     private String currencySymbol;
@@ -59,7 +62,7 @@ public class MCAEconomyPlugin extends JavaPlugin implements Listener {
             getServer().getServicesManager().register(Economy.class, vaultProvider, this, ServicePriority.Highest);
             getLogger().info("Registered as the Vault economy provider.");
         } else {
-            getLogger().warning("Vault not found — local trading via ChestShop (or anything else Vault-based) will not work. /bank and /company still will.");
+            getLogger().warning("Vault not found — other Vault-based plugins won't see MCA balances. /bank, /company, and /shop chest trading still work fine without it.");
         }
 
         getServer().getPluginManager().registerEvents(this, this);
@@ -71,6 +74,14 @@ public class MCAEconomyPlugin extends JavaPlugin implements Listener {
         CompanyCommand companyCommand = new CompanyCommand(this, economyService);
         getCommand("company").setExecutor(companyCommand);
         getCommand("company").setTabCompleter(companyCommand);
+
+        this.shopManager = new ShopManager(economyService, getLogger());
+        runAsync(shopManager::loadAll); // populate the chest-shop cache before players start clicking things
+
+        ShopCommand shopCommand = new ShopCommand(this, economyService, shopManager);
+        getCommand("shop").setExecutor(shopCommand);
+        getCommand("shop").setTabCompleter(shopCommand);
+        getServer().getPluginManager().registerEvents(new ShopInteractListener(this, economyService, shopManager), this);
 
         // Warm the cache for anyone already online (e.g. after a /reload).
         getServer().getOnlinePlayers().forEach(p -> runAsync(() -> {

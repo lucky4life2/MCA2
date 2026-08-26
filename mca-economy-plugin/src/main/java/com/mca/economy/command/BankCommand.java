@@ -50,6 +50,7 @@ public class BankCommand implements CommandExecutor, TabCompleter {
                     case "create" -> handleCreate(player, args);
                     case "pay" -> handlePay(player, args);
                     case "invite" -> handleInvite(player, args);
+                    case "use" -> handleUse(player, args);
                     default -> plugin.runSync(() -> sendUsage(player));
                 }
             } catch (EconomyException e) {
@@ -150,6 +151,14 @@ public class BankCommand implements CommandExecutor, TabCompleter {
             plugin.runSync(() -> player.sendMessage(err("\"" + args[2] + "\" isn't a valid amount.")));
             return;
         }
+        if (amount.signum() <= 0) {
+            plugin.runSync(() -> player.sendMessage(err("Amount must be a positive number.")));
+            return;
+        }
+        if (from.balance.signum() <= 0) {
+            plugin.runSync(() -> player.sendMessage(err("Your " + from.name + " account has no funds to send.")));
+            return;
+        }
         String memo = args.length > 3 ? String.join(" ", java.util.Arrays.copyOfRange(args, 3, args.length)) : null;
 
         EconomyAccount to = resolveTarget(myAccounts, args[1]);
@@ -160,6 +169,24 @@ public class BankCommand implements CommandExecutor, TabCompleter {
 
         service.transfer(actorId, from.id, to.id, amount, memo);
         plugin.runSync(() -> player.sendMessage(info("Paid " + fmt(amount) + " to " + to.name + ".")));
+    }
+
+    private void handleUse(Player player, String[] args) throws EconomyException {
+        if (args.length < 2) {
+            plugin.runSync(() -> player.sendMessage(err("Usage: /bank use <account> — sets which account chest shops buy/sell from for you")));
+            return;
+        }
+        UUID actorId = requireActor(player);
+        if (actorId == null) return;
+
+        List<EconomyAccount> accounts = service.myAccounts(actorId);
+        EconomyAccount account = find(accounts, args[1]);
+        if (account == null) {
+            plugin.runSync(() -> player.sendMessage(err("No account of yours matches \"" + args[1] + "\".")));
+            return;
+        }
+        service.setActiveAccount(player.getUniqueId(), account.id);
+        plugin.runSync(() -> player.sendMessage(info("Chest shops will now use \"" + account.name + "\" for you.")));
     }
 
     private void handleInvite(Player player, String[] args) throws EconomyException {
@@ -227,6 +254,7 @@ public class BankCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(line("/bank create <personal|business> <name> — open an account"));
         player.sendMessage(line("/bank pay <player|account> <amount> [memo] — send money"));
         player.sendMessage(line("/bank invite <account> <player> — add a manager to an account"));
+        player.sendMessage(line("/bank use <account> — pick which account chest shops trade from for you"));
     }
 
     private String fmt(BigDecimal amount) {
@@ -241,7 +269,7 @@ public class BankCommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return filter(List.of("balance", "list", "create", "pay", "invite"), args[0]);
+            return filter(List.of("balance", "list", "create", "pay", "invite", "use"), args[0]);
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("create")) {
             return filter(List.of("personal", "business"), args[1]);

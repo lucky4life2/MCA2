@@ -2,22 +2,25 @@ name: MCAEconomy
 version: '1.0.0'
 main: com.mca.economy.MCAEconomyPlugin
 api-version: '1.21'
-depend: [Vault]
+softdepend: [Vault]
 author: MCA
-description: MCA's website-integrated economy — bank accounts, companies, and shares, backed by Supabase.
+description: MCA's website-integrated economy — bank accounts, companies, shares, and physical chest shops, backed by Supabase.
 
 commands:
   bank:
     description: Manage your bank accounts.
-    usage: /bank <balance|list|create|pay|invite|history>
+    usage: /bank <balance|list|create|pay|invite|use>
   company:
     description: Manage and trade company shares.
     usage: /company <list|info|found|buy|sell|setprice>
+  shop:
+    description: Set up and manage physical chest shops.
+    usage: /shop <create|remove|info>
 
 permissions:
   mcaeconomy.use:
-    description: Use /bank and /company for your own accounts.
+    description: Use /bank, /company, and /shop for your own accounts and shops.
     default: true
   mcaeconomy.admin:
-    description: Bypass account ownership checks (mirrors can_manage_economy on the website).
+    description: Bypass account/shop ownership checks (mirrors can_manage_economy on the website).
     default: op
