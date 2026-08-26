@@ -208,8 +208,19 @@
             </datalist>
           </div>
           <div class="form-group">
-            <label class="form-label">Hero Image URL (optional)</label>
-            <input type="text" id="np-image" class="form-input" placeholder="https://…">
+            <label class="form-label">Hero Image (optional)</label>
+            <div id="np-image-dropzone" style="border:2px dashed var(--border);border-radius:6px;padding:.85rem;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;">
+              <div id="np-image-preview-wrap" style="display:none;margin-bottom:8px;">
+                <img id="np-image-preview" style="max-width:100%;max-height:140px;border-radius:5px;display:block;margin:0 auto;">
+              </div>
+              <div id="np-image-dropzone-label" style="font-size:12px;color:var(--muted);">Drag &amp; drop a photo here, or click to browse</div>
+              <input type="file" id="np-image-file" accept="image/*" style="display:none;">
+            </div>
+            <div id="np-image-uploading" style="font-size:11px;color:var(--muted);margin-top:4px;display:none;">Uploading…</div>
+            <div id="np-image-error" style="font-size:11px;color:#c0392b;margin-top:4px;display:none;"></div>
+            <input type="hidden" id="np-image">
+            <div class="form-hint"><a href="#" id="np-image-url-toggle">Or paste an image URL instead</a></div>
+            <input type="text" id="np-image-url-input" class="form-input" placeholder="https://…" style="display:none;margin-top:6px;">
           </div>
         </div>
 
@@ -248,8 +259,10 @@
           <button class="tb-btn" data-prefix="> "   title="Quote">❝ Quote</button>
           <button class="tb-btn" data-wrap="`"      title="Code">Code</button>
           <button class="tb-btn" data-link         title="Insert link">Link</button>
+          <button class="tb-btn" id="tb-insert-image" title="Insert a photo">🖼 Photo</button>
           <button class="tb-btn" data-prefix="---" title="Divider">—</button>
         </div>
+        <input type="file" id="np-inline-image-file" accept="image/*" style="display:none;">
 
         <!-- Body textarea -->
         <div class="editor-wrap form-group" id="np-write-area">
@@ -577,7 +590,7 @@ function clearEditor() {
   document.getElementById('np-editing-id').value = '';
   document.getElementById('np-title').value      = '';
   document.getElementById('np-category').value   = '';
-  document.getElementById('np-image').value      = '';
+  setHeroImage('');
   document.getElementById('np-summary').value    = '';
   document.getElementById('np-body').value       = '';
   document.getElementById('np-author-name').value    = '';
@@ -596,7 +609,7 @@ window.loadIntoEditor = async (id) => {
   document.getElementById('np-editing-id').value = id;
   document.getElementById('np-title').value      = a.title   || '';
   document.getElementById('np-category').value   = a.category || '';
-  document.getElementById('np-image').value      = a.image_url || '';
+  setHeroImage(a.image_url || '');
   document.getElementById('np-summary').value    = a.summary  || '';
   document.getElementById('np-body').value       = a.body     || '';
   document.getElementById('np-author-name').value = a.author_name || '';
@@ -615,6 +628,96 @@ window.loadIntoEditor = async (id) => {
   setEditorMode('write');
   toast('Article loaded into editor');
 };
+
+// ── Photo uploads (hero image + inline body images) ────────────
+// Shares the same public news-images bucket for both. Files are grouped
+// under the article's id once it has one, or a per-session draft folder
+// before the first save.
+let _uploadFolder = `draft-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+function uploadFolder() { return _editingId || _uploadFolder; }
+
+async function uploadNewsImage(file) {
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const path = `${uploadFolder()}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+  const { error } = await supabase.storage.from('news-images').upload(path, file, { upsert: true });
+  if (error) throw error;
+  const { data } = supabase.storage.from('news-images').getPublicUrl(path);
+  return data.publicUrl;
+}
+
+function setHeroImage(url) {
+  document.getElementById('np-image').value = url || '';
+  document.getElementById('np-image-preview').src = url || '';
+  document.getElementById('np-image-preview-wrap').style.display = url ? '' : 'none';
+  document.getElementById('np-image-dropzone-label').textContent = url ? 'Click to replace' : 'Drag & drop a photo here, or click to browse';
+}
+
+async function handleHeroFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const errEl = document.getElementById('np-image-error');
+  const uploadingEl = document.getElementById('np-image-uploading');
+  errEl.style.display = 'none';
+  uploadingEl.style.display = '';
+  try {
+    const url = await uploadNewsImage(file);
+    setHeroImage(url);
+  } catch (err) {
+    errEl.textContent = 'Upload failed: ' + err.message;
+    errEl.style.display = 'block';
+  } finally {
+    uploadingEl.style.display = 'none';
+  }
+}
+
+const npImageDropzone = document.getElementById('np-image-dropzone');
+const npImageFile     = document.getElementById('np-image-file');
+npImageDropzone.addEventListener('click', () => npImageFile.click());
+npImageFile.addEventListener('change', e => { handleHeroFile(e.target.files[0]); npImageFile.value = ''; });
+['dragover','dragenter'].forEach(evt => npImageDropzone.addEventListener(evt, e => {
+  e.preventDefault(); npImageDropzone.style.borderColor = 'var(--blue)'; npImageDropzone.style.background = 'var(--bg)';
+}));
+['dragleave','dragend'].forEach(evt => npImageDropzone.addEventListener(evt, () => {
+  npImageDropzone.style.borderColor = 'var(--border)'; npImageDropzone.style.background = 'transparent';
+}));
+npImageDropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  npImageDropzone.style.borderColor = 'var(--border)'; npImageDropzone.style.background = 'transparent';
+  handleHeroFile(e.dataTransfer.files[0]);
+});
+
+// Manual URL fallback, tucked behind a toggle link so uploading stays the default path.
+const npImageUrlToggle = document.getElementById('np-image-url-toggle');
+const npImageUrlInput  = document.getElementById('np-image-url-input');
+npImageUrlToggle.addEventListener('click', e => {
+  e.preventDefault();
+  const showing = npImageUrlInput.style.display !== 'none';
+  npImageUrlInput.style.display = showing ? 'none' : '';
+  if (!showing) { npImageUrlInput.value = document.getElementById('np-image').value; npImageUrlInput.focus(); }
+});
+npImageUrlInput.addEventListener('input', () => setHeroImage(npImageUrlInput.value.trim()));
+
+// Inline "insert photo" toolbar button — uploads and drops markdown at the cursor.
+const npInlineImageFile = document.getElementById('np-inline-image-file');
+document.getElementById('tb-insert-image').addEventListener('click', () => npInlineImageFile.click());
+npInlineImageFile.addEventListener('change', async e => {
+  const file = e.target.files[0];
+  npInlineImageFile.value = '';
+  if (!file || !file.type.startsWith('image/')) return;
+  const textarea = document.getElementById('np-body');
+  const start = textarea.selectionStart, end = textarea.selectionEnd;
+  const placeholder = '![Uploading photo…]()';
+  textarea.setRangeText(placeholder, start, end, 'end');
+  updatePreview(); updateCharCounts();
+  try {
+    const url = await uploadNewsImage(file);
+    const alt = file.name.replace(/\.[^.]+$/, '');
+    textarea.value = textarea.value.replace(placeholder, `![${alt}](${url})`);
+  } catch (err) {
+    textarea.value = textarea.value.replace(placeholder, '');
+    toast('Photo upload failed: ' + err.message, true);
+  }
+  updatePreview(); updateCharCounts();
+});
 
 // ── Email subscribers when an article goes live ────────────────
 async function notifySubscribers(articleId) {
