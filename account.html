@@ -131,6 +131,13 @@
       .account-hero h1 { font-size: 1.6rem; }
     }
 
+    /* Two-column layout on wide viewports so the page doesn't require
+       as much vertical scrolling to reach the sections at the bottom. */
+    @media (min-width: 900px) {
+      .account-wrap { max-width: 1180px; }
+      .account-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 2rem; align-items: start; }
+    }
+
     /* 2FA */
     .twofa-status-row { display: flex; align-items: center; gap: 12px; margin-bottom: 1rem; }
     .twofa-status-icon { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 16px; }
@@ -246,6 +253,8 @@
     </div>
 
     <div id="deletion-banner-wrap"></div>
+
+    <div class="account-grid">
 
     <!-- Profile -->
     <div class="account-section">
@@ -546,6 +555,8 @@
         <p class="danger-zone-note">Deleting your account starts a <strong>7-day waiting period</strong>. Your account is deactivated immediately, but your data isn't permanently erased until 7 days have passed — you can sign back in any time before then to cancel the deletion. Because this leads to permanent, unrecoverable deletion, we'll ask you to re-verify your identity with everything on file (password, two-factor code, and an emailed code) before it's scheduled.</p>
         <button class="btn btn-danger" id="btn-delete-account">Delete My Account</button>
       </div>
+    </div>
+
     </div>
 
   </div>
