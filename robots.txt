@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+
+Disallow: /admin.html
+Disallow: /account.html
+Disallow: /tasks.html
+Disallow: /news-publish.html
+Disallow: /archive-publish.html
+Disallow: /parental-consent.html
+
+Sitemap: https://minecraftclubofamerica.me/sitemap.xml
