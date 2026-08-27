@@ -75,6 +75,7 @@
     .badge-verified { background: #e8f8e8; color: #2d7d2f; }
     .badge-pending  { background: #fff8e1; color: #b07d00; }
     .badge-unlinked { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+    .badge-revoked  { background: #fdecea; color: #c0392b; }
 
     .btn { font-size: 11px; font-weight: 600; letter-spacing: .5px; padding: 6px 14px; border-radius: 3px; cursor: pointer; transition: background .15s, color .15s, border-color .15s; border: none; white-space: nowrap; }
     .btn-primary { background: var(--blue); color: #fff; }
@@ -427,10 +428,11 @@
       <!-- Site group -->
       <div class="admin-tab-group" id="tabgrp-site">
         <button class="admin-tab admin-tab-group-trigger" id="tabgrp-site-trigger">
-          Site <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          Site <span id="site-group-badge" style="display:none" class="admin-tab-group-badge"></span> <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="admin-tab-group-menu">
           <button class="admin-tab-group-item" data-tab="minecraft">Minecraft</button>
+          <button class="admin-tab-group-item" data-tab="economy" id="tab-btn-economy">Economy <span id="economy-pending-badge" style="display:none" class="admin-tab-group-badge"></span></button>
           <button class="admin-tab-group-item" data-tab="shop">Shop</button>
           <button class="admin-tab-group-item" data-tab="config">Config</button>
           <button class="admin-tab-group-item" data-tab="legal-notice">Legal Notices</button>
@@ -455,6 +457,7 @@
           <div class="stat-cell"><div class="stat-label">Active Now</div><div class="stat-value" id="stat-active-now" style="color:#22c55e;">—</div></div>
           -->
           <div class="stat-cell" id="stat-news-pending-cell" style="display:none;cursor:pointer;" onclick="document.querySelector('[data-tab=news]').click();"><div class="stat-label">News Awaiting Review</div><div class="stat-value" id="stat-news-pending" style="color:#c0392b;">—</div></div>
+          <div class="stat-cell" id="stat-company-pending-cell" style="display:none;cursor:pointer;" onclick="document.querySelector('[data-tab=economy]').click();"><div class="stat-label">Companies Awaiting Review</div><div class="stat-value" id="stat-company-pending" style="color:#c0392b;">—</div></div>
         </div>
       </div>
 
@@ -705,6 +708,27 @@
           <div class="admin-section-title">Verified Accounts</div>
         </div>
         <div class="admin-section-body" id="verified-list">
+          <div class="verify-empty">Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── ECONOMY ───────────────────────────────────────── -->
+    <div class="admin-panel" id="tab-economy">
+      <div class="admin-section">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Companies Awaiting Review</div>
+          <span id="company-pending-count-badge" class="badge badge-pending">0</span>
+        </div>
+        <div class="admin-section-body" id="company-pending-list">
+          <div class="verify-empty">Loading...</div>
+        </div>
+      </div>
+      <div class="admin-section">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Reviewed Companies</div>
+        </div>
+        <div class="admin-section-body" id="company-reviewed-list">
           <div class="verify-empty">Loading...</div>
         </div>
       </div>
@@ -1300,6 +1324,7 @@ const ALL_PERMISSIONS = [
   { key: 'can_manage_shop',      label: 'Manage Shop Products',    group: 'content' },
   { key: 'can_manage_config',    label: 'Edit Site Config',        group: 'content' },
   { key: 'can_manage_minecraft', label: 'MC Verifications',        group: 'content' },
+  { key: 'can_manage_economy',   label: 'Approve Companies & Manage Economy', group: 'content' },
   { key: 'can_lock_site',        label: 'Lock / Unlock Site',      group: 'admin' },
   { key: 'can_manage_tasks',     label: 'Manage Task Board',       group: 'admin' },
   { key: 'can_test_tasks',       label: 'Tester: Submit Check-offs', group: 'admin' },
@@ -1332,6 +1357,9 @@ async function init() {
     if (!_myPermissions.can_view_audit_log) {
       document.getElementById('tab-btn-audit-log').classList.add('hidden');
     }
+    if (!_myPermissions.can_manage_economy) {
+      document.getElementById('tab-btn-economy').classList.add('hidden');
+    }
 
     const levelLabel = _myLevel >= 100 ? 'Owner' : _myLevel >= 80 ? 'Administrator' : 'Staff';
     document.getElementById('admin-hero-meta').textContent = 'Signed in as ' + levelLabel;
@@ -1340,6 +1368,7 @@ async function init() {
     checkPluginBridge();
     loadLockState();
     loadPendingNewsCount();
+    loadPendingCompanyCount();
     restoreActiveTab();
     // initPresenceWatcher(); // disabled — see commented block below
   } catch(e) {
@@ -2544,6 +2573,113 @@ window.revokeMC   = async (id) => {
   await supabase.from('profiles').update({ minecraft_verified: false, minecraft_username: null, mc_verify_code: null, mc_verify_expires: null }).eq('id', id);
   await loadAll();
 };
+// ── Economy: company approvals ────────────────────────────────
+// Founding a company writes it as approval_status='pending' / is_active=false
+// and hands every share to the founder's treasury account. Until it's approved
+// here it won't appear in the Stock Market list on the account page.
+let _adminCompanies = [];
+
+async function loadEconomyAdmin() {
+  const pendingEl  = document.getElementById('company-pending-list');
+  const reviewedEl = document.getElementById('company-reviewed-list');
+  if (!_myPermissions.can_manage_economy) {
+    pendingEl.innerHTML = `<div class="verify-empty">You don't have permission to review companies.</div>`;
+    reviewedEl.innerHTML = '';
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from('economy_companies')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    pendingEl.innerHTML = `<div class="verify-empty">Couldn't load companies: ${escapeHtml(error.message)}</div>`;
+    reviewedEl.innerHTML = '';
+    return;
+  }
+
+  _adminCompanies = data || [];
+  const pending  = _adminCompanies.filter(c => c.approval_status === 'pending');
+  const reviewed = _adminCompanies.filter(c => c.approval_status !== 'pending');
+
+  document.getElementById('company-pending-count-badge').textContent = pending.length;
+  pendingEl.innerHTML  = pending.length  ? pending.map(c => companyCard(c, true)).join('')   : `<div class="verify-empty">No companies awaiting review.</div>`;
+  reviewedEl.innerHTML = reviewed.length ? reviewed.map(c => companyCard(c, false)).join('') : `<div class="verify-empty">No companies have been reviewed yet.</div>`;
+}
+
+function companyCard(c, isPending) {
+  const founder = _allMembers.find(m => m.id === c.founder_id);
+  const founderName = founder ? (founder.display_name || founder.username || founder.email || c.founder_id) : 'Unknown founder';
+  const created = c.created_at ? new Date(c.created_at).toLocaleDateString() : '';
+  const statusBadge = c.approval_status === 'approved'
+    ? `<span class="badge badge-verified">Approved</span>`
+    : c.approval_status === 'rejected'
+      ? `<span class="badge badge-revoked">Rejected</span>`
+      : `<span class="badge badge-pending">Pending</span>`;
+
+  return `<div class="verify-card">
+    <div class="verify-card-info">
+      <div class="verify-card-name">${escapeHtml(c.ticker)} — ${escapeHtml(c.name)} ${isPending ? '' : statusBadge}</div>
+      <div class="verify-card-detail">
+        ${c.total_shares.toLocaleString()} shares @ $${Number(c.share_price).toFixed(2)} —
+        market cap $${(c.total_shares * Number(c.share_price)).toFixed(2)}<br>
+        Founded by ${escapeHtml(founderName)}${created ? ' on ' + created : ''}
+        ${c.description ? '<br>' + escapeHtml(c.description) : ''}
+        ${c.review_note ? '<br>Note: ' + escapeHtml(c.review_note) : ''}
+      </div>
+    </div>
+    <div class="btn-actions">
+      ${isPending ? `
+        <button class="btn btn-success btn-sm" onclick="approveCompany('${c.id}')">Approve</button>
+        <button class="btn btn-danger btn-sm" onclick="rejectCompany('${c.id}')">Reject</button>
+      ` : ''}
+    </div>
+  </div>`;
+}
+
+window.approveCompany = async (id) => {
+  const c = _adminCompanies.find(x => x.id === id);
+  if (!confirm(`Approve ${c?.ticker || 'this company'}? It will start trading immediately at $${Number(c?.share_price || 0).toFixed(2)}/share.`)) return;
+  const note = prompt('Optional note for the founder (leave blank to skip):', '') || null;
+  const { error } = await supabase.rpc('economy_approve_company', { p_company_id: id, p_note: note });
+  if (error) { alert('Failed to approve: ' + error.message); return; }
+  await loadEconomyAdmin();
+  loadPendingCompanyCount();
+};
+
+window.rejectCompany = async (id) => {
+  const c = _adminCompanies.find(x => x.id === id);
+  const note = prompt(`Reject ${c?.ticker || 'this company'}? Give the founder a reason:`, '');
+  if (note === null) return;
+  const { error } = await supabase.rpc('economy_reject_company', { p_company_id: id, p_note: note || null });
+  if (error) { alert('Failed to reject: ' + error.message); return; }
+  await loadEconomyAdmin();
+  loadPendingCompanyCount();
+};
+
+async function loadPendingCompanyCount() {
+  if (!_myPermissions.can_manage_economy) return;
+  const { count } = await supabase
+    .from('economy_companies')
+    .select('id', { count: 'exact', head: true })
+    .eq('approval_status', 'pending');
+  const tabBadge  = document.getElementById('economy-pending-badge');
+  const grpBadge  = document.getElementById('site-group-badge');
+  const statCell  = document.getElementById('stat-company-pending-cell');
+  const statValue = document.getElementById('stat-company-pending');
+  if (count) {
+    if (tabBadge) { tabBadge.textContent = count; tabBadge.style.display = 'inline'; }
+    if (grpBadge) { grpBadge.textContent = count; grpBadge.style.display = 'inline'; }
+    if (statCell) statCell.style.display = '';
+    if (statValue) statValue.textContent = count;
+  } else {
+    if (tabBadge) tabBadge.style.display = 'none';
+    if (grpBadge) grpBadge.style.display = 'none';
+    if (statCell) statCell.style.display = 'none';
+  }
+}
+
 window.allowEmail = async (id) => {
   const member = _allMembers.find(m => m.id === id);
   if (!confirm(`Allow ${member?.email || 'this user'} to sign in with email? Their email will be marked as verified without sending a confirmation.`)) return;
@@ -3212,6 +3348,7 @@ function switchTab(tabName) {
   if (tabName === 'club-presidents') loadClubPresidentsAdmin();
   if (tabName === 'nations')         loadNationsAdmin();
   if (tabName === 'audit-log')       loadAuditLog();
+  if (tabName === 'economy')         loadEconomyAdmin();
 
   // Persist so a refresh (or reopening the page) lands back on this tab.
   // replaceState (not pushState) so tab switches don't pile up browser history.

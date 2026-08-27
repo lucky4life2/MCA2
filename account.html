@@ -14,9 +14,7 @@
     .account-hero h1 { font-family: 'Times New Roman', serif; font-size: clamp(28px, 4vw, 42px); font-weight: 700; color: var(--blue); line-height: 1.15; }
     .account-hero-sub { font-size: 14px; color: var(--muted); margin-top: 0.5rem; }
 
-    /* Sections sit flush against each other; the -1px pulls adjacent
-       borders together so the seam reads as a single hairline. */
-    .account-section { border: 1px solid var(--border); background: var(--white); margin-bottom: -1px; overflow: hidden; }
+    .account-section { border: 1px solid var(--border); border-radius: 6px; background: var(--white); margin-bottom: 1.25rem; overflow: hidden; }
     .account-section-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
     .account-section-title { font-family: 'Times New Roman', serif; font-size: 1.1rem; color: var(--blue); font-weight: normal; }
     .account-section-badge { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 3px 8px; border-radius: 3px; }
@@ -134,10 +132,15 @@
     }
 
     /* Two-column layout on wide viewports so the page doesn't require
-       as much vertical scrolling to reach the sections at the bottom. */
+       as much vertical scrolling to reach the sections at the bottom.
+       Multi-column rather than grid on purpose: a 2-col grid lays sections
+       out in rows sized to the taller card, so a short section leaves a
+       dead gap beneath it. Columns flow continuously, so sections stack
+       with the same 1.25rem rhythm they have on mobile. */
     @media (min-width: 900px) {
       .account-wrap { max-width: 1180px; }
-      .account-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; align-items: start; }
+      .account-grid { column-count: 2; column-gap: 1.25rem; }
+      .account-grid > .account-section { break-inside: avoid; }
     }
 
     /* 2FA */
@@ -360,9 +363,14 @@
           <div style="padding:0.5rem 0;color:var(--muted);font-size:13px;">Loading...</div>
         </div>
 
+        <div id="stock-my-submissions-body"></div>
+
         <div style="margin-top:1rem;">
           <button class="btn btn-outline" id="btn-stock-show-found">+ Found a Company</button>
         </div>
+        <!-- Outside #stock-found-form on purpose: the form is hidden on a
+             successful submit, which would hide this confirmation with it. -->
+        <div class="form-success" id="stock-found-success"></div>
 
         <div id="stock-found-form" style="display:none;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
           <div class="form-group">
@@ -389,6 +397,7 @@
             <label class="form-label" for="stock-found-price">Initial Share Price</label>
             <input type="number" min="0" step="0.01" id="stock-found-price" class="form-input" value="10.00">
           </div>
+          <p class="form-hint" style="margin-bottom:0.75rem;">New companies are reviewed by an economy admin before they can be traded. You'll hold all the shares in your treasury account in the meantime.</p>
           <div class="form-error" id="stock-found-error"></div>
           <button class="btn btn-primary" id="btn-stock-found-submit">Found Company</button>
           <button class="btn btn-outline" id="btn-stock-cancel-found" style="margin-left:8px;">Cancel</button>
@@ -950,7 +959,17 @@ async function loadMyRoles() {
 // ── Economy ──────────────────────────────────────────────────
 let _econAccounts = [];
 let _companies = [];
+// Every company RLS lets you see, including your own pending/rejected ones.
+// _companies holds only the tradeable subset, but a name/ticker taken by a
+// pending submission is still taken, so duplicate checks read this instead.
+let _allCompanies = [];
 let _selectedTradeCompany = null;
+
+// Names are compared trimmed and case-insensitively so "Acme" and " acme "
+// count as the same name.
+function normalizeName(value) {
+  return (value || '').trim().toLowerCase();
+}
 
 function fmtMoney(amount) {
   const n = Number(amount || 0);
@@ -1007,20 +1026,24 @@ async function loadStockMarket() {
   const companiesBody = document.getElementById('stock-companies-body');
   if (!companiesBody) return;
 
+  // No is_active filter here: RLS already limits rows to approved companies
+  // plus ones you founded or hold the treasury for, so a single fetch covers
+  // both the tradeable market and your own pending/rejected submissions.
   const { data: companies, error: cErr } = await supabase
     .from('economy_companies')
     .select('*')
-    .eq('is_active', true)
     .order('ticker');
 
   if (cErr) {
     companiesBody.innerHTML = `<div style="padding:0.5rem 0;color:var(--muted);font-size:13px;">Couldn't load companies: ${escapeHtml(cErr.message)}</div>`;
     return;
   }
-  _companies = companies || [];
+  _allCompanies = companies || [];
+  _companies = _allCompanies.filter(c => c.is_active);
+  renderMySubmissions(_allCompanies.filter(c => c.founder_id === _user?.id && !c.is_active));
 
   if (!_companies.length) {
-    companiesBody.innerHTML = '<div style="padding:0.5rem 0;color:var(--muted);font-size:13px;">No companies have been founded yet.</div>';
+    companiesBody.innerHTML = '<div style="padding:0.5rem 0;color:var(--muted);font-size:13px;">No companies are trading yet.</div>';
   } else {
     companiesBody.innerHTML = _companies.map(c => `
       <div class="connected-row">
@@ -1071,6 +1094,42 @@ async function loadStockMarket() {
       }
     }
   }
+}
+
+// Companies you founded that aren't tradeable yet. Without this they'd vanish
+// from the Companies list and only surface as a holding, which reads like the
+// founding silently failed.
+function renderMySubmissions(mine) {
+  const el = document.getElementById('stock-my-submissions-body');
+  if (!el) return;
+  if (!mine.length) { el.innerHTML = ''; return; }
+
+  const badgeFor = (c) => {
+    if (c.approval_status === 'pending')  return ['badge-pending', 'Pending Review'];
+    if (c.approval_status === 'rejected') return ['badge-revoked', 'Rejected'];
+    return ['badge-unlinked', 'Suspended'];
+  };
+
+  el.innerHTML = `
+    <div class="account-section-title" style="font-size:1rem;margin:1.25rem 0 0.5rem;">Your Submissions</div>
+    ${mine.map(c => {
+      const [cls, label] = badgeFor(c);
+      const detail = c.approval_status === 'pending'
+        ? 'Waiting on an economy admin — not tradeable yet.'
+        : (c.review_note ? escapeHtml(c.review_note) : 'Not tradeable.');
+      return `
+        <div class="connected-row">
+          <div class="connected-provider">
+            <div class="connected-provider-info">
+              <div class="connected-provider-name">${escapeHtml(c.ticker)} — ${escapeHtml(c.name)}</div>
+              <div class="connected-provider-detail">${c.total_shares} shares @ ${fmtMoney(c.share_price)} · ${detail}</div>
+            </div>
+          </div>
+          <span class="account-section-badge ${cls}">${label}</span>
+        </div>
+      `;
+    }).join('')}
+  `;
 }
 
 function openTradePanel(ticker) {
@@ -1157,6 +1216,11 @@ function wireEconomyForms() {
       const errEl = document.getElementById('econ-new-error');
       errEl.style.display = 'none';
       if (!name) { errEl.textContent = 'Enter a name for the account.'; errEl.style.display = 'block'; return; }
+      if (_econAccounts.some(a => normalizeName(a.name) === normalizeName(name))) {
+        errEl.textContent = 'You already have an account with that name. Pick a different name.';
+        errEl.style.display = 'block';
+        return;
+      }
 
       const btn = document.getElementById('btn-econ-create-account');
       btn.disabled = true;
@@ -1225,6 +1289,7 @@ function wireEconomyForms() {
     showFoundBtn._wired = true;
     showFoundBtn.addEventListener('click', () => {
       fillAccountSelect(document.getElementById('stock-found-treasury'));
+      document.getElementById('stock-found-success').style.display = 'none';
       foundForm.style.display = 'block';
     });
     document.getElementById('btn-stock-cancel-found').addEventListener('click', () => { foundForm.style.display = 'none'; });
@@ -1236,10 +1301,23 @@ function wireEconomyForms() {
       const totalShares = parseInt(document.getElementById('stock-found-shares').value, 10);
       const initialPrice = parseFloat(document.getElementById('stock-found-price').value);
       const errEl = document.getElementById('stock-found-error');
+      const succEl = document.getElementById('stock-found-success');
       errEl.style.display = 'none';
+      succEl.style.display = 'none';
 
       if (!treasuryId || !name || !ticker || !totalShares || totalShares <= 0 || isNaN(initialPrice) || initialPrice < 0) {
         errEl.textContent = 'Fill in all fields with valid values.';
+        errEl.style.display = 'block';
+        return;
+      }
+
+      if (_allCompanies.some(c => normalizeName(c.name) === normalizeName(name))) {
+        errEl.textContent = 'A company with that name already exists. Pick a different name.';
+        errEl.style.display = 'block';
+        return;
+      }
+      if (_allCompanies.some(c => (c.ticker || '').toUpperCase() === ticker)) {
+        errEl.textContent = `The ticker ${ticker} is already taken. Pick a different ticker.`;
         errEl.style.display = 'block';
         return;
       }
@@ -1251,12 +1329,28 @@ function wireEconomyForms() {
         p_treasury_account_id: treasuryId, p_total_shares: totalShares, p_initial_price: initialPrice
       });
       btn.disabled = false;
-      if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+      if (error) {
+        // RLS hides other people's pending companies, so the check above can't
+        // see every name in use — the unique indexes are the real backstop.
+        // Translate their raw Postgres text into something readable.
+        const detail = `${error.message || ''} ${error.details || ''}`;
+        if (error.code === '23505' && detail.includes('economy_companies_ticker_key')) {
+          errEl.textContent = `The ticker ${ticker} is already taken. Pick a different ticker.`;
+        } else if (error.code === '23505' && detail.includes('economy_companies_name_key')) {
+          errEl.textContent = 'A company with that name already exists. Pick a different name.';
+        } else {
+          errEl.textContent = error.message;
+        }
+        errEl.style.display = 'block';
+        return;
+      }
 
       foundForm.style.display = 'none';
       document.getElementById('stock-found-name').value = '';
       document.getElementById('stock-found-ticker').value = '';
       document.getElementById('stock-found-description').value = '';
+      succEl.textContent = `${ticker} submitted for review. It'll start trading once an economy admin approves it.`;
+      succEl.style.display = 'block';
       await loadStockMarket();
     });
   }
