@@ -1019,6 +1019,27 @@
   </div>
 </div>
 
+<!-- Email Member modal -->
+<div class="modal-overlay" id="email-member-modal" role="dialog" aria-modal="true" aria-labelledby="em-title" style="display:none;position:fixed;inset:0;background:rgba(10,15,30,.5);z-index:400;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:var(--white);border-radius:8px;border:1px solid var(--border);width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(10,15,30,.2);">
+    <div style="padding:1.5rem 1.5rem 0;display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-family:'Times New Roman',serif;font-size:1.3rem;color:var(--blue);font-weight:normal;" id="em-title">Email Member</div>
+      <button id="em-close" aria-label="Close dialog" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:20px;line-height:1;padding:4px;">✕</button>
+    </div>
+    <div style="padding:1.5rem;">
+      <input type="hidden" id="em-user-id">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:1rem;">To: <strong id="em-recipient-name"></strong> &lt;<span id="em-recipient-email"></span>&gt;</div>
+      <div class="form-group"><label class="form-label">Subject</label><input type="text" id="em-subject" class="form-input" maxlength="200"></div>
+      <div class="form-group"><label class="form-label">Message</label><textarea id="em-message" class="form-input" rows="6" style="resize:vertical;" maxlength="10000" placeholder="Write your message…"></textarea></div>
+    </div>
+    <div id="em-error" style="font-size:13px;color:#c0392b;padding:0 1.5rem .5rem;display:none;"></div>
+    <div style="padding:0 1.5rem 1.5rem;display:flex;gap:10px;justify-content:flex-end;">
+      <button id="em-cancel" style="background:transparent;color:var(--muted);font-size:13px;font-weight:600;padding:9px 18px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">Cancel</button>
+      <button id="em-send" style="background:var(--blue);color:#fff;font-size:13px;font-weight:600;padding:9px 18px;border:none;border-radius:4px;cursor:pointer;">Send Email</button>
+    </div>
+  </div>
+</div>
+
 <!-- Club President modal -->
 <div id="cp-modal" style="display:none;position:fixed;inset:0;background:rgba(10,15,30,.5);z-index:400;align-items:center;justify-content:center;padding:1rem;">
   <div style="background:var(--white);border-radius:8px;border:1px solid var(--border);width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(10,15,30,.2);">
@@ -1589,6 +1610,8 @@ function renderMembers(members) {
       ? `<button class="btn btn-success btn-sm" onclick="unfreezeAccount('${m.id}')">Unfreeze</button>` : '';
     const deleteBtn = _myPermissions.can_manage_users && !['owner','super_admin'].includes(m.role)
       ? `<button class="btn btn-danger btn-sm" onclick="deleteAccount('${m.id}')">Delete</button>` : '';
+    const emailMemberBtn = m.email && !m.email_access_revoked && _myPermissions.can_manage_users
+      ? `<button class="btn btn-outline btn-sm" onclick="openEmailMemberModal('${m.id}')">Email</button>` : '';
 
     return `<tr>
       <td>
@@ -1603,7 +1626,7 @@ function renderMembers(members) {
       <td>${mcBadge}</td>
       <td>
         <div class="btn-actions">
-          ${allowEmailBtn}${revokeEmailBtn}${revokeDiscordBtn}${revokeGoogleBtn}
+          ${emailMemberBtn}${allowEmailBtn}${revokeEmailBtn}${revokeDiscordBtn}${revokeGoogleBtn}
           ${freezeBtn}${unfreezeBtn}${deleteBtn}
         </div>
       </td>
@@ -2834,6 +2857,47 @@ document.getElementById('btn-send-legal-notice').addEventListener('click', async
     statusEl.textContent = 'Error: ' + e.message;
   }
   btn.disabled = false;
+});
+
+// ── Email an individual member ─────────────────────────────────
+window.openEmailMemberModal = (userId) => {
+  const m = _allMembers.find(x => x.id === userId);
+  if (!m) return;
+  document.getElementById('em-user-id').value = userId;
+  document.getElementById('em-recipient-name').textContent = m.display_name || m.username || 'Member';
+  document.getElementById('em-recipient-email').textContent = m.email || '';
+  document.getElementById('em-subject').value = '';
+  document.getElementById('em-message').value = '';
+  document.getElementById('em-error').style.display = 'none';
+  document.getElementById('email-member-modal').style.display = 'flex';
+};
+document.getElementById('em-close').onclick = document.getElementById('em-cancel').onclick = () => {
+  document.getElementById('email-member-modal').style.display = 'none';
+};
+document.getElementById('em-send').addEventListener('click', async () => {
+  const btn = document.getElementById('em-send');
+  const errEl = document.getElementById('em-error');
+  const userId = document.getElementById('em-user-id').value;
+  const subject = document.getElementById('em-subject').value.trim();
+  const message = document.getElementById('em-message').value.trim();
+  errEl.style.display = 'none';
+  if (!subject) { errEl.textContent = 'Subject is required.'; errEl.style.display = 'block'; return; }
+  if (!message) { errEl.textContent = 'Message is required.'; errEl.style.display = 'block'; return; }
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(`${supabase.supabaseUrl}/functions/v1/email-member`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: supabase.supabaseKey, Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ user_id: userId, subject, message }),
+    });
+    const json = await res.json();
+    if (!res.ok || json.error) { errEl.textContent = 'Error: ' + (json.error || 'Failed to send.'); errEl.style.display = 'block'; }
+    else { document.getElementById('email-member-modal').style.display = 'none'; }
+  } catch (e) {
+    errEl.textContent = 'Error: ' + e.message; errEl.style.display = 'block';
+  }
+  btn.disabled = false; btn.textContent = 'Send Email';
 });
 
 let _nationsAdmin = [], _leadersAdmin = [], _nationOwnersById = {}, _nmOwnerIds = [];
