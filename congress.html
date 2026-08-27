@@ -355,9 +355,9 @@ async function init() {
 
   const [{ data: chambers }, { data: types }, { data: statuses }, { data: motionTypes }] = await Promise.all([
     supabase.from('congress_chambers').select('*').eq('is_active', true).order('sort_order'),
-    supabase.from('congress_measure_types').select('*').eq('is_active', true).order('sort_order'),
-    supabase.from('congress_measure_statuses').select('*').order('sort_order'),
-    supabase.from('congress_motion_types').select('*').order('sort_order'),
+    supabase.from('congress_lookups').select('*').eq('kind', 'measure_type').eq('is_enabled', true).order('sort_order'),
+    supabase.from('congress_lookups').select('*').eq('kind', 'measure_status').order('sort_order'),
+    supabase.from('congress_lookups').select('*').eq('kind', 'motion_type').order('sort_order'),
   ]);
   _chambers = chambers || []; _types = types || []; _statuses = statuses || []; _motionTypes = motionTypes || [];
   populateFilters();
@@ -654,8 +654,8 @@ function bindLeadershipTools() {
   document.getElementById('cg-lt-motion-types').onchange = async (e) => {
     const key = e.target.dataset.motionTypeToggle;
     if (!key) return;
-    await supabase.from('congress_motion_types').update({ is_enabled: e.target.checked }).eq('key', key);
-    const { data } = await supabase.from('congress_motion_types').select('*').order('sort_order');
+    await supabase.from('congress_lookups').update({ is_enabled: e.target.checked }).eq('kind', 'motion_type').eq('key', key);
+    const { data } = await supabase.from('congress_lookups').select('*').eq('kind', 'motion_type').order('sort_order');
     _motionTypes = data || [];
   };
   document.getElementById('cal-submit').onclick = async () => {

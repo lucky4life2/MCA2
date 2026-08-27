@@ -93,7 +93,7 @@ select senate_id, '11111111-1111-1111-1111-111111111106', 'active' from senate;
 
 create temp table measure as (
   insert into public.congress_measures (type_key, chamber_id, title, status_key, created_by)
-  select (select key from public.congress_measure_types limit 1), house_id,
+  select (select key from public.congress_lookups where kind = 'measure_type' limit 1), house_id,
          'Test Measure', 'voting', '11111111-1111-1111-1111-111111111101'
   from house
   returning id as mid
