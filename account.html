@@ -14,7 +14,9 @@
     .account-hero h1 { font-family: 'Times New Roman', serif; font-size: clamp(28px, 4vw, 42px); font-weight: 700; color: var(--blue); line-height: 1.15; }
     .account-hero-sub { font-size: 14px; color: var(--muted); margin-top: 0.5rem; }
 
-    .account-section { border: 1px solid var(--border); border-radius: 6px; background: var(--white); margin-bottom: 1.25rem; overflow: hidden; }
+    /* Sections sit flush against each other; the -1px pulls adjacent
+       borders together so the seam reads as a single hairline. */
+    .account-section { border: 1px solid var(--border); background: var(--white); margin-bottom: -1px; overflow: hidden; }
     .account-section-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
     .account-section-title { font-family: 'Times New Roman', serif; font-size: 1.1rem; color: var(--blue); font-weight: normal; }
     .account-section-badge { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 3px 8px; border-radius: 3px; }
@@ -135,7 +137,7 @@
        as much vertical scrolling to reach the sections at the bottom. */
     @media (min-width: 900px) {
       .account-wrap { max-width: 1180px; }
-      .account-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 2rem; align-items: start; }
+      .account-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; align-items: start; }
     }
 
     /* 2FA */
@@ -276,6 +278,16 @@
       </div>
     </div>
 
+    <!-- My Roles -->
+    <div class="account-section" id="section-my-roles">
+      <div class="account-section-header">
+        <div class="account-section-title">My Roles</div>
+      </div>
+      <div class="account-section-body" id="my-roles-body">
+        <!-- injected -->
+      </div>
+    </div>
+
     <!-- Economy -->
     <div class="account-section" id="section-economy">
       <div class="account-section-header">
@@ -399,16 +411,6 @@
           <button class="btn btn-danger" id="btn-stock-trade-sell" style="margin-left:8px;">Sell</button>
           <button class="btn btn-outline" id="btn-stock-trade-cancel" style="margin-left:8px;">Cancel</button>
         </div>
-      </div>
-    </div>
-
-    <!-- My Roles -->
-    <div class="account-section" id="section-my-roles">
-      <div class="account-section-header">
-        <div class="account-section-title">My Roles</div>
-      </div>
-      <div class="account-section-body" id="my-roles-body">
-        <!-- injected -->
       </div>
     </div>
 
