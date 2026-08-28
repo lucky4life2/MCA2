@@ -74,7 +74,13 @@ public class BankCommand implements CommandExecutor, TabCompleter {
                 plugin.runSync(() -> player.sendMessage(err("No account matching \"" + args[1] + "\".")));
                 return;
             }
-            plugin.runSync(() -> player.sendMessage(info(account.name + ": " + fmt(account.balance))));
+            plugin.runSync(() -> {
+                player.sendMessage(info(account.name + ": " + fmt(account.balance) + " available"));
+                if (account.reservedBalance.signum() > 0) {
+                    player.sendMessage(line(fmt(account.reservedBalance)
+                            + " is reserved against open orders on the exchange."));
+                }
+            });
             return;
         }
         plugin.runSync(() -> {
@@ -84,7 +90,9 @@ public class BankCommand implements CommandExecutor, TabCompleter {
             }
             player.sendMessage(header("Your Balances"));
             for (EconomyAccount a : accounts) {
-                player.sendMessage(line(a.name + " (" + a.type + "): " + fmt(a.balance)));
+                player.sendMessage(line(a.name + " (" + a.type + "): " + fmt(a.balance)
+                        + (a.reservedBalance.signum() > 0
+                            ? " (+" + fmt(a.reservedBalance) + " reserved)" : "")));
             }
         });
     }

@@ -861,6 +861,8 @@ async function initNavAuth(_authReadyResolve) {
           <div class="nav-account-dropdown-divider"></div>
           ` : ''}
           <a class="nav-account-dropdown-item" href="account.html">Account</a>
+          <a class="nav-account-dropdown-item" href="economy.html">Economy</a>
+          <a class="nav-account-dropdown-item" href="stocks.html">Stock Exchange</a>
           <a class="nav-account-dropdown-item" href="congress.html">Congress</a>
           <a class="nav-account-dropdown-item" href="help.html">Help</a>
           <a class="nav-account-dropdown-item" href="shop.html">Shop</a>

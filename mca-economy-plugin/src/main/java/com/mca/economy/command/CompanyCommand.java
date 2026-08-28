@@ -72,7 +72,8 @@ public class CompanyCommand implements CommandExecutor, TabCompleter {
             }
             player.sendMessage(header("Companies"));
             for (EconomyCompany c : companies) {
-                player.sendMessage(line(c.ticker + " — " + c.name + " @ " + fmt(c.sharePrice) + "/share"));
+                player.sendMessage(line(c.ticker + " — " + c.name + " @ " + c.displayPrice()
+                        + (c.tradingHalted ? " (halted)" : "")));
             }
         });
     }
@@ -90,8 +91,14 @@ public class CompanyCommand implements CommandExecutor, TabCompleter {
         plugin.runSync(() -> {
             player.sendMessage(header(company.name + " (" + company.ticker + ")"));
             if (!company.description.isBlank()) player.sendMessage(line(company.description));
-            player.sendMessage(line("Share price: " + fmt(company.sharePrice)));
-            player.sendMessage(line("Total shares: " + company.totalShares));
+            player.sendMessage(line("Last traded price: " + company.displayPrice()));
+            player.sendMessage(line("Shares issued: " + company.sharesIssued
+                    + " of " + company.totalShares + " authorized"));
+            player.sendMessage(line("Status: " + company.status));
+            if (company.tradingHalted) {
+                player.sendMessage(err("Trading halted: "
+                        + (company.haltReason == null ? "no reason recorded" : company.haltReason)));
+            }
         });
     }
 
@@ -124,8 +131,12 @@ public class CompanyCommand implements CommandExecutor, TabCompleter {
         }
 
         EconomyCompany company = service.createCompany(actorId, name, ticker, "", treasury.id, totalShares, initialPrice);
-        plugin.runSync(() -> player.sendMessage(info("Founded " + company.name + " (" + company.ticker + ") — "
-                + company.totalShares + " shares at " + fmt(company.sharePrice) + " each, held by " + treasury.name + ".")));
+        plugin.runSync(() -> {
+            player.sendMessage(info("Founded " + company.name + " (" + company.ticker + ") with "
+                    + company.totalShares + " authorized shares. None are issued yet."));
+            player.sendMessage(line("The company has its own account, separate from your wallet."));
+            player.sendMessage(line("It is paid only when shares actually sell — open an offering on the website to raise Marks."));
+        });
     }
 
     private void handleBuy(Player player, String[] args) throws EconomyException {

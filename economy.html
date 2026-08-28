@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Economy — Minecraft Club of America</title>
+  <meta name="description" content="Manage your MCA Marks wallets, send Marks, and review your transaction history.">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/x-icon" href="images/icon.ico">
+  <style>
+    .form-group { margin-bottom: 1rem; }
+    .form-label { display: block; font-size: 11px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; color: var(--mid); margin-bottom: 5px; }
+    .form-input { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 4px; font-family: 'Open Sans', sans-serif; font-size: 14px; background: var(--white); color: var(--black); box-sizing: border-box; }
+    .form-input:focus { outline: none; border-color: var(--blue); }
+    .form-hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .form-error { font-size: 12px; color: #c0392b; margin-top: 6px; display: none; }
+    .form-success { font-size: 12px; color: #2d7d2f; margin-top: 6px; display: none; }
+    .btn { font-size: 12px; font-weight: 600; letter-spacing: .5px; padding: 9px 18px; border-radius: 4px; cursor: pointer; border: none; font-family: inherit; }
+    .btn-primary { background: var(--blue); color: #fff; }
+    .btn-primary:hover { background: var(--blue-dark); }
+    .btn-primary:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+    .btn-outline { background: transparent; color: var(--blue); border: 1px solid var(--border); text-decoration: none; display: inline-block; }
+    .btn-outline:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+    .btn-danger { background: transparent; color: #c0392b; border: 1px solid var(--border); }
+    .btn-danger:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
+    .econ-subform { display: none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+<script type="module" src="nav.js"></script>
+<div id="nav-root"></div>
+
+<!-- Signed out -->
+<div id="econ-signed-out" class="econ-wrap econ-wrap-narrow" style="display:none;">
+  <div class="econ-hero">
+    <div class="econ-hero-eyebrow">Economy</div>
+    <h1>Your Marks</h1>
+    <div class="econ-hero-sub">Sign in to see your wallets.</div>
+  </div>
+  <p class="econ-muted">The MCA economy runs on Marks. You need an account to hold them.</p>
+  <p style="margin-top:1.25rem;"><a class="btn btn-primary" href="login.html" style="text-decoration:none;">Sign In</a></p>
+</div>
+
+<!-- Main -->
+<div id="econ-main" class="econ-wrap econ-wrap-narrow" style="display:none;">
+  <div class="econ-hero">
+    <div class="econ-hero-eyebrow">Economy</div>
+    <h1>Your Marks</h1>
+    <div class="econ-hero-sub">Wallets, transfers and history.</div>
+  </div>
+
+  <div class="econ-section">
+    <div class="econ-section-header">
+      <div class="econ-section-title">Total Holdings</div>
+      <a class="btn btn-outline" href="stocks.html">Stock Exchange</a>
+    </div>
+    <div class="econ-section-body">
+      <div class="econ-stat-row">
+        <div class="econ-stat">
+          <div class="econ-stat-label">Available</div>
+          <div class="econ-stat-value" id="econ-total-available">—</div>
+        </div>
+        <div class="econ-stat">
+          <div class="econ-stat-label">Reserved</div>
+          <div class="econ-stat-value" id="econ-total-reserved">—</div>
+        </div>
+        <div class="econ-stat">
+          <div class="econ-stat-label">Wallets</div>
+          <div class="econ-stat-value" id="econ-total-wallets">—</div>
+        </div>
+      </div>
+      <p class="econ-caveat">Reserved Marks are held against your open buy orders on the exchange. They are still yours; they just cannot be spent until the order fills or is cancelled.</p>
+    </div>
+  </div>
+
+  <div class="econ-section">
+    <div class="econ-section-header">
+      <div class="econ-section-title">Wallets</div>
+      <div class="econ-row-actions">
+        <button class="btn btn-outline" id="btn-show-create">+ New Wallet</button>
+        <button class="btn btn-outline" id="btn-show-pay">Send Marks</button>
+      </div>
+    </div>
+    <div class="econ-section-body">
+      <div id="econ-wallets"><div class="econ-muted">Loading…</div></div>
+
+      <div id="form-create" class="econ-subform">
+        <div class="form-group">
+          <label class="form-label" for="create-type">Wallet Type</label>
+          <select id="create-type" class="form-input">
+            <option value="personal">Personal</option>
+            <option value="business">Business</option>
+          </select>
+          <div class="form-hint">You can only have one personal wallet.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="create-name">Wallet Name</label>
+          <input type="text" id="create-name" class="form-input" maxlength="60" placeholder="e.g. Building Fund">
+        </div>
+        <div class="form-error" id="create-error"></div>
+        <button class="btn btn-primary" id="btn-create">Create Wallet</button>
+        <button class="btn btn-outline" id="btn-cancel-create" style="margin-left:8px;">Cancel</button>
+      </div>
+
+      <div id="form-pay" class="econ-subform">
+        <div class="form-group">
+          <label class="form-label" for="pay-from">From</label>
+          <select id="pay-from" class="form-input"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pay-to">To (username, or one of your own wallet names)</label>
+          <input type="text" id="pay-to" class="form-input" placeholder="username or wallet name">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pay-amount">Amount in Marks</label>
+          <input type="number" min="0.01" step="0.01" id="pay-amount" class="form-input" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pay-memo">Memo (optional)</label>
+          <input type="text" id="pay-memo" class="form-input" maxlength="140" placeholder="What is this for?">
+        </div>
+        <div class="form-error" id="pay-error"></div>
+        <div class="form-success" id="pay-success"></div>
+        <button class="btn btn-primary" id="btn-pay">Review &amp; Send</button>
+        <button class="btn btn-outline" id="btn-cancel-pay" style="margin-left:8px;">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="econ-section">
+    <div class="econ-section-header"><div class="econ-section-title">Recent Activity</div></div>
+    <div class="econ-section-body">
+      <div id="econ-history"><div class="econ-muted">Loading…</div></div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { supabase } from './supabase.js';
+import {
+  fmtMarks, fmtDate, escapeHtml, showError, showSuccess, clearMessages,
+  confirmAction, loadMyAccounts
+} from './economy.js';
+
+let _accounts = [];
+
+// ── Boot ─────────────────────────────────────────────────────
+const { data: { session } } = await supabase.auth.getSession();
+if (!session) {
+  document.getElementById('econ-signed-out').style.display = '';
+} else {
+  document.getElementById('econ-main').style.display = '';
+  await refresh();
+  wire();
+}
+
+async function refresh() {
+  try {
+    _accounts = await loadMyAccounts();
+  } catch (e) {
+    document.getElementById('econ-wallets').innerHTML =
+      '<div class="econ-muted">Could not load wallets: ' + escapeHtml(e.message) + '</div>';
+    return;
+  }
+  renderTotals();
+  renderWallets();
+  fillFromSelect();
+  await renderHistory();
+}
+
+function renderTotals() {
+  const avail = _accounts.reduce((s, a) => s + Number(a.balance || 0), 0);
+  const held = _accounts.reduce((s, a) => s + Number(a.reserved_balance || 0), 0);
+  document.getElementById('econ-total-available').textContent = fmtMarks(avail);
+  document.getElementById('econ-total-reserved').textContent = fmtMarks(held);
+  document.getElementById('econ-total-wallets').textContent = String(_accounts.length);
+}
+
+function renderWallets() {
+  const el = document.getElementById('econ-wallets');
+  if (!_accounts.length) {
+    el.innerHTML = '<div class="econ-muted">No wallets yet. Create one to start holding Marks.</div>';
+    return;
+  }
+  el.innerHTML = _accounts.map(a => {
+    const held = Number(a.reserved_balance || 0);
+    return '<div class="econ-row">' +
+      '<div>' +
+        '<div class="econ-row-main">' + escapeHtml(a.name) + '</div>' +
+        '<div class="econ-row-detail">' + escapeHtml(a.type) +
+          ' · ' + fmtMarks(a.balance) + ' available' +
+          (held > 0 ? ' · ' + fmtMarks(held) + ' reserved' : '') +
+          (a.is_frozen ? ' · frozen' : '') +
+        '</div>' +
+      '</div>' +
+      '<div class="econ-row-actions">' +
+        '<button class="btn btn-outline" data-rename="' + a.id + '">Rename</button>' +
+        '<button class="btn btn-danger" data-close="' + a.id + '">Close</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  el.querySelectorAll('[data-rename]').forEach(b =>
+    b.addEventListener('click', () => renameWallet(b.getAttribute('data-rename'))));
+  el.querySelectorAll('[data-close]').forEach(b =>
+    b.addEventListener('click', () => closeWallet(b.getAttribute('data-close'))));
+}
+
+function fillFromSelect() {
+  const sel = document.getElementById('pay-from');
+  sel.innerHTML = _accounts.map(a =>
+    '<option value="' + a.id + '">' + escapeHtml(a.name) + ' — ' + fmtMarks(a.balance) + '</option>'
+  ).join('');
+}
+
+async function renderHistory() {
+  const el = document.getElementById('econ-history');
+  const ids = _accounts.map(a => a.id);
+  if (!ids.length) { el.innerHTML = '<div class="econ-muted">Nothing yet.</div>'; return; }
+
+  const { data, error } = await supabase
+    .from('economy_transactions')
+    .select('amount,type,category,memo,created_at,from_account_id,to_account_id')
+    .or('from_account_id.in.(' + ids.join(',') + '),to_account_id.in.(' + ids.join(',') + ')')
+    .order('created_at', { ascending: false })
+    .limit(40);
+
+  if (error) { el.innerHTML = '<div class="econ-muted">Could not load history.</div>'; return; }
+  if (!data.length) { el.innerHTML = '<div class="econ-muted">No transactions yet.</div>'; return; }
+
+  el.innerHTML = '<table class="econ-table"><thead><tr>' +
+    '<th>When</th><th>Type</th><th>Detail</th><th class="econ-num">Amount</th>' +
+    '</tr></thead><tbody>' +
+    data.map(t => {
+      const incoming = ids.indexOf(t.to_account_id) !== -1;
+      const sign = incoming ? '+' : '−';
+      const color = incoming ? '#2d7d2f' : 'var(--mid)';
+      return '<tr>' +
+        '<td>' + escapeHtml(fmtDate(t.created_at)) + '</td>' +
+        '<td>' + escapeHtml(String(t.type).replace(/_/g, ' ')) + '</td>' +
+        '<td>' + escapeHtml(t.memo || '—') + '</td>' +
+        '<td class="econ-num" style="color:' + color + ';">' + sign + ' ' + fmtMarks(t.amount) + '</td>' +
+      '</tr>';
+    }).join('') +
+    '</tbody></table>';
+}
+
+// ── Actions ──────────────────────────────────────────────────
+function wire() {
+  const createForm = document.getElementById('form-create');
+  const payForm = document.getElementById('form-pay');
+
+  document.getElementById('btn-show-create').addEventListener('click', () => {
+    createForm.style.display = createForm.style.display === 'block' ? 'none' : 'block';
+  });
+  document.getElementById('btn-cancel-create').addEventListener('click', () => {
+    createForm.style.display = 'none';
+  });
+  document.getElementById('btn-show-pay').addEventListener('click', () => {
+    payForm.style.display = payForm.style.display === 'block' ? 'none' : 'block';
+    fillFromSelect();
+  });
+  document.getElementById('btn-cancel-pay').addEventListener('click', () => {
+    payForm.style.display = 'none';
+  });
+
+  document.getElementById('btn-create').addEventListener('click', createWallet);
+  document.getElementById('btn-pay').addEventListener('click', sendMarks);
+}
+
+async function createWallet() {
+  const errEl = document.getElementById('create-error');
+  clearMessages(errEl);
+  const type = document.getElementById('create-type').value;
+  const name = document.getElementById('create-name').value.trim();
+  if (!name) { showError(errEl, { message: 'Give the wallet a name.' }); return; }
+
+  const btn = document.getElementById('btn-create');
+  btn.disabled = true;
+  const { error } = await supabase.rpc('economy_create_account', {
+    p_type: type, p_name: name, p_nation_id: null
+  });
+  btn.disabled = false;
+
+  if (error) { showError(errEl, error); return; }
+  document.getElementById('create-name').value = '';
+  document.getElementById('form-create').style.display = 'none';
+  await refresh();
+}
+
+async function renameWallet(id) {
+  const wallet = _accounts.find(a => a.id === id);
+  if (!wallet) return;
+  const name = window.prompt('New name for "' + wallet.name + '":', wallet.name);
+  if (name === null) return;
+
+  const { error } = await supabase.rpc('economy_rename_account', {
+    p_account_id: id, p_name: name.trim()
+  });
+  if (error) { window.alert(error.message); return; }
+  await refresh();
+}
+
+async function closeWallet(id) {
+  const wallet = _accounts.find(a => a.id === id);
+  if (!wallet) return;
+
+  // The server enforces the zero-balance rule; showing the numbers first
+  // means the refusal is never a surprise.
+  const ok = await confirmAction({
+    title: 'Close this wallet?',
+    lines: [
+      { label: 'Wallet', value: wallet.name },
+      { label: 'Available', value: fmtMarks(wallet.balance) },
+      { label: 'Reserved', value: fmtMarks(wallet.reserved_balance) }
+    ],
+    note: 'A wallet can only be closed once it holds no Marks and no shares. Its transaction history is kept — closing hides the wallet and stops it receiving Marks, it does not erase the ledger.',
+    confirmLabel: 'Close wallet',
+    danger: true
+  });
+  if (!ok) return;
+
+  const { error } = await supabase.rpc('economy_close_account', { p_account_id: id });
+  if (error) { window.alert(error.message); return; }
+  await refresh();
+}
+
+async function sendMarks() {
+  const errEl = document.getElementById('pay-error');
+  const okEl = document.getElementById('pay-success');
+  clearMessages(errEl, okEl);
+
+  const fromId = document.getElementById('pay-from').value;
+  const toRaw = document.getElementById('pay-to').value.trim();
+  const amount = Number(document.getElementById('pay-amount').value);
+  const memo = document.getElementById('pay-memo').value.trim() || null;
+
+  if (!fromId) { showError(errEl, { message: 'Pick a wallet to send from.' }); return; }
+  if (!toRaw) { showError(errEl, { message: 'Say who you are sending to.' }); return; }
+  if (!(amount > 0)) { showError(errEl, { message: 'Enter an amount greater than zero.' }); return; }
+
+  // Resolve the destination: one of your own wallets by name, else a username.
+  let toAccountId = null;
+  const own = _accounts.find(a => a.name.toLowerCase() === toRaw.toLowerCase() && a.id !== fromId);
+  if (own) {
+    toAccountId = own.id;
+  } else {
+    const { data: profile } = await supabase
+      .from('profiles').select('id,username,display_name')
+      .ilike('username', toRaw).limit(1).maybeSingle();
+    if (!profile) { showError(errEl, { message: 'No player or wallet found called "' + toRaw + '".' }); return; }
+    const { data: acctId } = await supabase.rpc('economy_get_personal_account_id', {
+      p_target_user_id: profile.id
+    });
+    if (!acctId) { showError(errEl, { message: 'That player does not have a wallet yet.' }); return; }
+    toAccountId = acctId;
+  }
+
+  const from = _accounts.find(a => a.id === fromId);
+  const ok = await confirmAction({
+    title: 'Send Marks?',
+    lines: [
+      { label: 'From', value: from ? from.name : 'wallet' },
+      { label: 'To', value: toRaw },
+      { label: 'Amount', value: fmtMarks(amount) },
+      { label: 'Memo', value: memo || '—' }
+    ],
+    note: 'Transfers are final. They move Marks between wallets and never create new ones.',
+    confirmLabel: 'Send'
+  });
+  if (!ok) return;
+
+  const btn = document.getElementById('btn-pay');
+  btn.disabled = true;
+  const { error } = await supabase.rpc('economy_transfer', {
+    p_from: fromId, p_to: toAccountId, p_amount: amount, p_memo: memo
+  });
+  btn.disabled = false;
+
+  if (error) { showError(errEl, error); return; }
+  showSuccess(okEl, 'Sent ' + fmtMarks(amount) + ' to ' + toRaw + '.');
+  document.getElementById('pay-amount').value = '';
+  document.getElementById('pay-memo').value = '';
+  await refresh();
+}
+</script>
+</body>
+</html>

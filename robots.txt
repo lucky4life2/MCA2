@@ -3,6 +3,7 @@ Allow: /
 
 Disallow: /admin.html
 Disallow: /account.html
+Disallow: /economy.html
 Disallow: /tasks.html
 Disallow: /news-publish.html
 Disallow: /archive-publish.html

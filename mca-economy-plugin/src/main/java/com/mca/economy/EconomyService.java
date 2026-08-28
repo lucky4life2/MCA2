@@ -1,6 +1,7 @@
 package com.mca.economy;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.mca.economy.model.EconomyAccount;
 import com.mca.economy.model.EconomyCompany;
 import com.mca.economy.model.EconomyShop;
@@ -185,7 +186,8 @@ public class EconomyService {
 
     /** Companies are publicly readable (RLS allows select for everyone), read straight from the table. */
     public List<EconomyCompany> listCompanies() throws EconomyException {
-        JsonElement result = client.select("economy_companies", "is_active=eq.true&order=ticker.asc");
+        // status is the lifecycle truth now; is_active is derived from it.
+        JsonElement result = client.select("economy_companies", "status=eq.public&order=ticker.asc");
         List<EconomyCompany> companies = new ArrayList<>();
         if (result != null && result.isJsonArray()) {
             for (JsonElement el : result.getAsJsonArray()) {
@@ -204,8 +206,27 @@ public class EconomyService {
         return null;
     }
 
-    /** How many shares of a company a given account holds. 0 if none. */
+    /**
+     * How many shares of a company an account OWNS in total: available plus
+     * whatever is reserved against open sell orders on the website exchange.
+     * `shares` alone would under-report anyone with a resting sell order.
+     */
     public int getShareholding(UUID accountId, UUID companyId) throws EconomyException {
+        String query = "account_id=eq." + accountId + "&company_id=eq." + companyId
+                + "&select=shares,reserved_shares&limit=1";
+        JsonElement result = client.select("economy_shareholdings", query);
+        if (result != null && result.isJsonArray() && !result.getAsJsonArray().isEmpty()) {
+            JsonObject row = result.getAsJsonArray().get(0).getAsJsonObject();
+            int available = row.get("shares").getAsInt();
+            int reserved = (row.has("reserved_shares") && !row.get("reserved_shares").isJsonNull())
+                    ? row.get("reserved_shares").getAsInt() : 0;
+            return available + reserved;
+        }
+        return 0;
+    }
+
+    /** Shares free to sell right now, excluding any reserved against open orders. */
+    public int getAvailableShareholding(UUID accountId, UUID companyId) throws EconomyException {
         String query = "account_id=eq." + accountId + "&company_id=eq." + companyId + "&select=shares&limit=1";
         JsonElement result = client.select("economy_shareholdings", query);
         if (result != null && result.isJsonArray() && !result.getAsJsonArray().isEmpty()) {

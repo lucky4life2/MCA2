@@ -92,4 +92,11 @@
     <priority>0.3</priority>
   </url>
 
+  <url>
+    <loc>https://minecraftclubofamerica.me/stocks.html</loc>
+    <lastmod>2026-08-27</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+
 </urlset>

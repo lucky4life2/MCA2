@@ -1,4 +1,4 @@
-# Tests — Congress Voting Module (Phase 4)
+# Tests
 
 ## Files
 
@@ -6,6 +6,7 @@
 |---|---|---|
 | `congress_voting.pgtap.sql` | All 12 backend-verifiable requirements from the Phase 4 spec: valid submission, duplicate/concurrent prevention, eligibility, chamber restriction, closed-vote rejection, quorum/threshold math, vote-change rules, version locking, amendment version creation, leadership/admin authorization, certified immutability, discussion-post RLS, and the audit-log gap. | Written and reviewed against the live schema; **not yet executed** (see below). |
 | `frontend_and_mobile.md` | Everything pgTAP can't see: render-time XSS escaping, vote-button UX, loading/error feedback, mobile tap targets, axe-core accessibility scan. | Outline only — no Playwright harness exists in this repo yet. |
+| `economy_exchange.sql` | The economy and stock exchange: offerings paying the company only as shares sell, order-book matching and price-time priority, reservation accounting, self-trade prevention, authorization boundaries, dividend rounding, circuit breakers, ledger immutability, dissolution, and Treasury reconciliation. | **Written and executed — 46 assertions, 46 passed, 0 failed** (2026-08-27, against the live project inside a transaction that rolled back). |
 
 ## Why the pgTAP suite hasn't been run
 
@@ -61,3 +62,36 @@ leaves fixture rows in the branch.
   race safe regardless of timing.
 - **Frontend rendering, mobile layout, screen-reader behavior** — see
   `frontend_and_mobile.md`; these need a browser, not a SQL session.
+
+
+## The economy suite (`economy_exchange.sql`)
+
+Unlike the congress suite this one deliberately does **not** use pgTAP. pgTAP is
+available on the project but not installed, and installing an extension is a
+persistent schema change to production — which is exactly why the congress
+suite has never been run. `economy_exchange.sql` uses plain plpgsql assertions
+instead, so it needs no setup:
+
+```bash
+psql "<connection-string>" -f tests/economy_exchange.sql
+```
+
+It runs inside one transaction that rolls back, reuses existing `profiles` rows
+rather than inserting into `auth.users`, and prints a table of `ok` / `NOT OK`
+rows followed by a passed/failed/total summary.
+
+Two things it deliberately does **not** claim to test:
+
+- **True concurrency.** A single SQL session cannot fork two simultaneous
+  transactions. The suite tests the actual backstops instead — the
+  non-negative-balance and non-negative-shares CHECK constraints, and the fact
+  that reserved Marks are excluded from spendable balance. Matching is
+  serialised per company by a `SELECT ... FOR UPDATE` on the company row, so a
+  lost race blocks rather than double-spends.
+- **Front-end behaviour.** Confirmation dialogs, escaping, and mobile layout
+  need a browser. See `frontend_and_mobile.md`.
+
+One assertion is intentionally inverted: `reconciliation detects Marks that were
+never issued` passes when reconciliation reports a **mismatch**, because the
+fixtures deliberately seed balances without issuance rows. A suite that
+reconciled cleanly there would prove the check cannot spot unbacked currency.
