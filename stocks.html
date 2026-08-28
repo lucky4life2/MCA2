@@ -46,7 +46,7 @@
     <button class="econ-tab" data-route="#/">Companies</button>
     <button class="econ-tab" data-route="#/offerings">Offerings</button>
     <button class="econ-tab" data-route="#/portfolio">My Portfolio</button>
-    <button class="econ-tab" data-route="#/manage" id="tab-manage" style="display:none;">Manage</button>
+    <button class="econ-tab" data-route="#/manage" id="tab-manage" style="display:none;">Company Tools</button>
     <button class="econ-tab" data-route="#/admin" id="tab-admin" style="display:none;">Admin</button>
   </div>
 
@@ -85,7 +85,7 @@ if (_session) {
   _myRoles = await loadMyCompanyRoles();
   _isEconAdmin = await hasPermission('can_manage_economy');
   _isTreasury = await hasPermission('can_manage_treasury');
-  if (_myRoles.length) document.getElementById('tab-manage').style.display = '';
+  document.getElementById('tab-manage').style.display = '';
   if (_isEconAdmin || _isTreasury) document.getElementById('tab-admin').style.display = '';
 }
 
@@ -138,7 +138,10 @@ function accountOptions() {
 
 async function refreshState() {
   try { _companies = await loadCompanies(); } catch (e) { /* keep previous */ }
-  if (_session) { try { _accounts = await loadMyAccounts(); } catch (e) { /* keep previous */ } }
+  if (_session) {
+    try { _accounts = await loadMyAccounts(); } catch (e) { /* keep previous */ }
+    try { _myRoles = await loadMyCompanyRoles(); } catch (e) { /* keep previous */ }
+  }
 }
 
 // ── Router ───────────────────────────────────────────────────
@@ -148,6 +151,7 @@ async function route() {
   if (hash.indexOf('#/manage/') === 0) { setTab('#/manage'); return renderManageCompany(hash.slice(9)); }
   if (hash === '#/offerings') { setTab(hash); return renderOfferings(); }
   if (hash === '#/portfolio') { setTab(hash); return renderPortfolio(); }
+  if (hash === '#/found') { setTab('#/manage'); return renderFoundCompany(); }
   if (hash === '#/manage') { setTab(hash); return renderManageList(); }
   if (hash === '#/admin') { setTab(hash); return renderAdmin(); }
   setTab('#/');
@@ -182,7 +186,8 @@ async function renderDiscovery() {
         'You raise Marks by opening an offering — and the company is paid only as shares are actually bought, ' +
         'never for simply being listed.</p>' +
         (_session
-          ? '<p style="margin-top:1rem;"><a class="btn btn-outline" href="#/manage">Company tools</a></p>'
+          ? '<p style="margin-top:1rem;"><a class="btn btn-primary" href="#/found">Found a company</a>' +
+            '<a class="btn btn-outline" href="#/manage" style="margin-left:8px;">Company tools</a></p>'
           : '<p style="margin-top:1rem;"><a class="btn btn-primary" href="login.html">Sign in to found a company</a></p>') +
       '</div>' +
     '</div>';
@@ -661,25 +666,164 @@ async function cancelOrder(id) {
 // ── Company management ───────────────────────────────────────
 async function renderManageList() {
   document.getElementById('page-title').textContent = 'Company Tools';
-  document.getElementById('page-sub').textContent = 'Companies you are an officer of.';
+  document.getElementById('page-sub').textContent = 'Companies you help run, and companies you hold shares in.';
   if (!_session) return requireSignIn();
 
-  if (!_myRoles.length) {
+  view.innerHTML = '<div class="econ-muted">Loading…</div>';
+
+  // Shares and officer roles are different things, and conflating them is how
+  // a 100% shareholder ends up staring at "you are not an officer of any
+  // company yet" and reading it as "you own nothing". List both, and say
+  // plainly which is which.
+  const holdings = await loadMyHoldings(_accounts.map(function (a) { return a.id; }));
+  const roleCompanyIds = _myRoles.map(function (m) { return m.company_id; });
+  const investorOnly = holdings.filter(function (h) {
+    return roleCompanyIds.indexOf(h.company_id) === -1;
+  });
+
+  view.innerHTML =
+    '<div class="econ-section"><div class="econ-section-header">' +
+      '<div class="econ-section-title">Companies You Run</div></div><div class="econ-section-body">' +
+      (_myRoles.length
+        ? _myRoles.map(function (m) {
+            const c = m.economy_companies || {};
+            return '<div class="econ-row"><div>' +
+              '<div class="econ-row-main">' + escapeHtml(c.ticker || '?') + ' — ' + escapeHtml(c.name || '') + '</div>' +
+              '<div class="econ-row-detail">' + escapeHtml(m.role) + ' · ' + escapeHtml(c.status || '') + '</div>' +
+            '</div><div class="econ-row-actions">' +
+              '<a class="btn btn-outline" href="#/manage/' + encodeURIComponent(c.ticker || '') + '">Open</a>' +
+            '</div></div>';
+          }).join('')
+        : '<p class="econ-muted">You are not an officer of any company yet. Found one below to become its founder, ' +
+          'or ask an officer of an existing company to add you.</p>') +
+      '<p style="margin-top:1rem;"><a class="btn btn-primary" href="#/found">Found a company</a></p>' +
+    '</div></div>' +
+
+    (investorOnly.length
+      ? '<div class="econ-section"><div class="econ-section-header">' +
+          '<div class="econ-section-title">Companies You Hold Shares In</div></div><div class="econ-section-body">' +
+          investorOnly.map(function (h) {
+            const c = h.economy_companies || {};
+            return '<div class="econ-row"><div>' +
+              '<div class="econ-row-main">' + escapeHtml(c.ticker || '?') + ' — ' + escapeHtml(c.name || '') + '</div>' +
+              '<div class="econ-row-detail">' + fmtShares(h.shares + h.reserved_shares) + ' shares held · ' +
+                escapeHtml(c.status || '') + '</div>' +
+            '</div><div class="econ-row-actions">' +
+              '<a class="btn btn-outline" href="#/c/' + encodeURIComponent(c.ticker || '') + '">View</a>' +
+            '</div></div>';
+          }).join('') +
+          '<p class="econ-caveat">Shares are property, not authority. Holding shares — even every share — does not ' +
+          'by itself hand you a company’s tools: an officer of that company adds officers, and an economy admin can ' +
+          'do it if no officer is reachable. What shares do give you is a vote on company decisions and a share of ' +
+          'any dividend it pays.</p>' +
+        '</div></div>'
+      : '');
+}
+
+// ── Founding a company ───────────────────────────────────────
+// economy_create_company has existed since the exchange launched, but nothing
+// on the site ever called it, which is why founding a company was a dead end.
+async function renderFoundCompany() {
+  document.getElementById('page-title').textContent = 'Found a Company';
+  document.getElementById('page-sub').textContent = 'Register a business on the exchange.';
+  if (!_session) return requireSignIn();
+
+  if (!_accounts.length) {
     view.innerHTML = '<div class="econ-section"><div class="econ-section-body">' +
-      '<p class="econ-muted">You are not an officer of any company yet.</p></div></div>';
+      '<p class="econ-muted">You need a wallet first — a company is registered from an account you own.</p>' +
+      '<p style="margin-top:1rem;"><a class="btn btn-primary" href="economy.html">Open a wallet</a></p>' +
+      '</div></div>';
     return;
   }
-  view.innerHTML = '<div class="econ-section"><div class="econ-section-header">' +
-    '<div class="econ-section-title">Your Companies</div></div><div class="econ-section-body">' +
-    _myRoles.map(function (m) {
-      const c = m.economy_companies || {};
-      return '<div class="econ-row"><div>' +
-        '<div class="econ-row-main">' + escapeHtml(c.ticker || '?') + ' — ' + escapeHtml(c.name || '') + '</div>' +
-        '<div class="econ-row-detail">' + escapeHtml(m.role) + ' · ' + escapeHtml(c.status || '') + '</div>' +
-      '</div><div class="econ-row-actions">' +
-        '<a class="btn btn-outline" href="#/manage/' + encodeURIComponent(c.ticker || '') + '">Open</a>' +
+
+  view.innerHTML =
+    '<div class="econ-section"><div class="econ-section-header"><div class="econ-section-title">Company Details</div></div>' +
+      '<div class="econ-section-body">' +
+        '<p class="econ-muted" style="margin-bottom:1rem;">Founding gives the company its own account, separate from ' +
+        'your wallet. It moves no Marks and issues no shares: authorized shares are only a ceiling, and the company ' +
+        'is paid only as an offering actually sells. An economy admin reviews the registration before the company ' +
+        'is listed.</p>' +
+        '<div class="econ-two-col">' +
+          '<div class="form-group"><label class="form-label" for="co-name">Company name</label>' +
+            '<input type="text" id="co-name" class="form-input" maxlength="80" placeholder="Redstone Logistics"></div>' +
+          '<div class="form-group"><label class="form-label" for="co-ticker">Ticker</label>' +
+            '<input type="text" id="co-ticker" class="form-input" maxlength="6" placeholder="RSL">' +
+            '<div class="form-hint">1–6 letters, and not already taken.</div></div>' +
+        '</div>' +
+        '<div class="form-group"><label class="form-label" for="co-desc">What does it do?</label>' +
+          '<textarea id="co-desc" class="form-input" rows="4" maxlength="600" ' +
+            'placeholder="What the business actually does, in plain words."></textarea></div>' +
+        '<div class="form-group"><label class="form-label" for="co-account">Register from</label>' +
+          '<select id="co-account" class="form-input">' + accountOptions() + '</select>' +
+          '<div class="form-hint">Must be an account you own. This records who founded the company — it is not ' +
+          'where offering proceeds land.</div></div>' +
+        '<div class="econ-two-col">' +
+          '<div class="form-group"><label class="form-label" for="co-shares">Authorized shares</label>' +
+            '<input type="number" min="1" step="1" id="co-shares" class="form-input" value="1000">' +
+            '<div class="form-hint">The ceiling on shares that can ever exist. None are issued today.</div></div>' +
+          '<div class="form-group"><label class="form-label" for="co-price">Reference price (Marks)</label>' +
+            '<input type="number" min="0" step="0.01" id="co-price" class="form-input" value="10.00">' +
+            '<div class="form-hint">A starting figure for your first offering, not a market price. There is no ' +
+            'price until shares actually trade.</div></div>' +
+        '</div>' +
+        '<div class="form-error" id="co-err"></div><div class="form-success" id="co-ok"></div>' +
+        '<button class="btn btn-primary" id="btn-found">Found company</button>' +
       '</div></div>';
-    }).join('') + '</div></div>';
+
+  document.getElementById('btn-found').addEventListener('click', foundCompany);
+}
+
+async function foundCompany() {
+  const errEl = document.getElementById('co-err');
+  const okEl = document.getElementById('co-ok');
+  clearMessages(errEl, okEl);
+
+  const name = document.getElementById('co-name').value.trim();
+  const ticker = document.getElementById('co-ticker').value.trim().toUpperCase();
+  const desc = document.getElementById('co-desc').value.trim();
+  const accountId = document.getElementById('co-account').value;
+  const shares = Math.floor(Number(document.getElementById('co-shares').value));
+  const price = Number(document.getElementById('co-price').value);
+
+  if (!name) { showError(errEl, { message: 'Give the company a name.' }); return; }
+  if (!/^[A-Z]{1,6}$/.test(ticker)) {
+    showError(errEl, { message: 'A ticker is 1–6 letters — no spaces, digits or symbols.' }); return;
+  }
+  if (!accountId) { showError(errEl, { message: 'Choose an account to register from.' }); return; }
+  if (!(shares > 0)) { showError(errEl, { message: 'Authorized shares must be a positive whole number.' }); return; }
+  if (!(price >= 0)) { showError(errEl, { message: 'Reference price cannot be negative.' }); return; }
+
+  const ok = await confirmAction({
+    title: 'Found ' + name + '?',
+    lines: [
+      { label: 'Ticker', value: ticker },
+      { label: 'Authorized shares', value: fmtShares(shares) },
+      { label: 'Shares issued today', value: 'None' },
+      { label: 'Reference price', value: fmtMarks(price) },
+      { label: 'Cost to you', value: 'Nothing — founding moves no Marks' }
+    ],
+    note: 'The registration goes to an economy admin for review. Until it is approved the company is not listed, ' +
+          'cannot raise Marks and cannot trade.',
+    confirmLabel: 'Found company'
+  });
+  if (!ok) return;
+
+  const btn = document.getElementById('btn-found');
+  btn.disabled = true;
+  const { error } = await supabase.rpc('economy_create_company', {
+    p_name: name,
+    p_ticker: ticker,
+    p_description: desc || null,
+    p_treasury_account_id: accountId,
+    p_total_shares: shares,
+    p_initial_price: price
+  });
+  btn.disabled = false;
+  if (error) { showError(errEl, error); return; }
+
+  showSuccess(okEl, name + ' registered as ' + ticker + '. It is awaiting admin review.');
+  await refreshState();
+  setTimeout(function () { location.hash = '#/manage'; }, 1200);
 }
 
 async function renderManageCompany(tickerRaw) {
@@ -953,6 +1097,20 @@ async function renderAdmin() {
     return;
   }
 
+  const haltedCompanies = _companies.filter(function (co) { return co.trading_halted; });
+
+  // Treasury issuance targets any account, not just the admin's own, so this
+  // reads the full list rather than reusing _accounts.
+  let _allAccounts = [];
+  if (_isTreasury) {
+    const { data: everyAccount } = await supabase.from('economy_accounts')
+      .select('id,name,type,balance').is('closed_at', null).order('name');
+    _allAccounts = everyAccount || [];
+  }
+
+  const { data: pendingCompanies } = await supabase.from('economy_companies')
+    .select('id,name,ticker,description,total_shares,created_at')
+    .eq('approval_status', 'pending').order('created_at');
   const { data: pendingOfferings } = await supabase.from('economy_offerings')
     .select('*,economy_companies(ticker,name)').eq('status', 'pending');
   const { data: flags } = await supabase.from('economy_trade_flags')
@@ -971,6 +1129,26 @@ async function renderAdmin() {
         ? '<p class="econ-caveat" style="color:#2d7d2f;">Balanced — every Mark in circulation traces to a Treasury issuance record.</p>'
         : '<div class="econ-halt" style="margin-top:1rem;"><strong>Reconciliation mismatch.</strong>' +
           'Marks in accounts do not match Treasury issuance. Investigate before allowing further trading.</div>') +
+      '</div></div>' : '') +
+
+    // A founded company sits at 'pending' until an admin reviews it. Without
+    // this panel nothing would ever leave that state.
+    (_isEconAdmin ? '<div class="econ-section"><div class="econ-section-header"><div class="econ-section-title">Companies Awaiting Review</div></div>' +
+      '<div class="econ-section-body">' +
+        ((pendingCompanies || []).length
+          ? pendingCompanies.map(function (co) {
+              return '<div class="econ-row"><div>' +
+                '<div class="econ-row-main">' + escapeHtml(co.ticker) + ' — ' + escapeHtml(co.name) + '</div>' +
+                '<div class="econ-row-detail">' + fmtShares(co.total_shares) + ' authorized shares · registered ' +
+                  escapeHtml(fmtDate(co.created_at)) + '</div>' +
+                (co.description
+                  ? '<div class="econ-row-detail">' + escapeHtml(co.description) + '</div>' : '') +
+              '</div><div class="econ-row-actions">' +
+                '<button class="btn btn-primary" data-approve-co="' + co.id + '">Approve</button>' +
+                '<button class="btn btn-danger" data-reject-co="' + co.id + '">Reject</button>' +
+              '</div></div>';
+            }).join('')
+          : '<p class="econ-muted">No companies awaiting review.</p>') +
       '</div></div>' : '') +
 
     (_isEconAdmin ? '<div class="econ-section"><div class="econ-section-header"><div class="econ-section-title">Offerings Awaiting Review</div></div>' +
@@ -1018,11 +1196,56 @@ async function renderAdmin() {
         '</div>' +
       '</div></div>' : '') +
 
+    // A circuit-breaker halt sets trading_halted on the company itself, which
+    // the exchange-wide resume above does not touch. Without this panel a
+    // tripped breaker halts a company permanently, because nothing else on the
+    // site can call economy_set_company_halt.
+    (_isEconAdmin ? '<div class="econ-section"><div class="econ-section-header">' +
+      '<div class="econ-section-title">Halted Companies</div></div>' +
+      '<div class="econ-section-body">' +
+        (haltedCompanies.length
+          ? haltedCompanies.map(function (co) {
+              return '<div class="econ-row"><div>' +
+                '<div class="econ-row-main">' + escapeHtml(co.ticker) + ' — ' + escapeHtml(co.name) + '</div>' +
+                '<div class="econ-row-detail">' + escapeHtml(co.halt_reason || 'No reason was recorded.') + '</div>' +
+              '</div><div class="econ-row-actions">' +
+                '<button class="btn btn-primary" data-resume-co="' + co.id + '">Resume trading</button>' +
+              '</div></div>';
+            }).join('')
+          : '<p class="econ-muted">No company is individually halted.</p>') +
+        '<p class="econ-caveat">Resuming lets orders be placed again, but it does not re-run matching on orders ' +
+        'already resting in the book. Two orders that crossed at the moment the breaker tripped stay open until ' +
+        'someone places a new crossing order or cancels them.</p>' +
+        '<div style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--border);">' +
+          '<div class="econ-two-col">' +
+            '<div class="form-group"><label class="form-label" for="halt-co">Company</label>' +
+              '<select id="halt-co" class="form-input">' +
+                _companies.map(function (co) {
+                  return '<option value="' + co.id + '">' + escapeHtml(co.ticker) + ' — ' +
+                    escapeHtml(co.name) + '</option>';
+                }).join('') + '</select></div>' +
+            '<div class="form-group"><label class="form-label" for="halt-co-reason">Reason (required to halt)</label>' +
+              '<input type="text" id="halt-co-reason" class="form-input" placeholder="Why is this company being halted?"></div>' +
+          '</div>' +
+          '<div class="form-error" id="halt-co-err"></div><div class="form-success" id="halt-co-ok"></div>' +
+          '<button class="btn btn-danger" id="btn-halt-co">Halt this company</button>' +
+        '</div>' +
+      '</div></div>' : '') +
+
     (_isTreasury ? '<div class="econ-section"><div class="econ-section-header"><div class="econ-section-title">Treasury</div></div>' +
       '<div class="econ-section-body">' +
         '<p class="econ-muted" style="margin-bottom:1rem;">The only way Marks enter or leave circulation. Every action is recorded permanently with your name, the amount and the reason.</p>' +
-        '<div class="form-group"><label class="form-label" for="tr-account">Account ID</label>' +
-          '<input type="text" id="tr-account" class="form-input" placeholder="economy_accounts.id"></div>' +
+        '<div class="form-group"><label class="form-label" for="tr-account">Account</label>' +
+          '<select id="tr-account" class="form-input">' +
+            (_allAccounts.length
+              ? _allAccounts.map(function (a) {
+                  return '<option value="' + a.id + '">' + escapeHtml(a.name) + ' (' + escapeHtml(a.type) +
+                    ') — ' + fmtMarks(a.balance) + '</option>';
+                }).join('')
+              : '<option value="">No accounts found</option>') +
+          '</select>' +
+          '<div class="form-hint">Issuing credits this account and records the same amount in the Treasury ledger, ' +
+          'so reconciliation stays balanced.</div></div>' +
         '<div class="econ-two-col">' +
           '<div class="form-group"><label class="form-label" for="tr-amount">Amount (Marks)</label>' +
             '<input type="number" min="0.01" step="0.01" id="tr-amount" class="form-input"></div>' +
@@ -1048,6 +1271,12 @@ async function renderAdmin() {
       '</div></div>' : '');
 
   if (_isEconAdmin) {
+    view.querySelectorAll('[data-approve-co]').forEach(function (b) {
+      b.addEventListener('click', function () { reviewCompany(b.getAttribute('data-approve-co'), true); });
+    });
+    view.querySelectorAll('[data-reject-co]').forEach(function (b) {
+      b.addEventListener('click', function () { reviewCompany(b.getAttribute('data-reject-co'), false); });
+    });
     view.querySelectorAll('[data-approve-off]').forEach(function (b) {
       b.addEventListener('click', function () { reviewOffering(b.getAttribute('data-approve-off'), true); });
     });
@@ -1057,11 +1286,69 @@ async function renderAdmin() {
     document.getElementById('btn-halt').addEventListener('click', function () { setHalt(false); });
     document.getElementById('btn-resume').addEventListener('click', function () { setHalt(true); });
     document.getElementById('btn-save-settings').addEventListener('click', saveSettings);
+    view.querySelectorAll('[data-resume-co]').forEach(function (b) {
+      b.addEventListener('click', function () { setCompanyHalt(b.getAttribute('data-resume-co'), false); });
+    });
+    document.getElementById('btn-halt-co').addEventListener('click', function () {
+      setCompanyHalt(document.getElementById('halt-co').value, true);
+    });
   }
   if (_isTreasury) {
     document.getElementById('btn-issue').addEventListener('click', function () { treasury('issue'); });
     document.getElementById('btn-remove').addEventListener('click', function () { treasury('remove'); });
   }
+}
+
+async function setCompanyHalt(companyId, halt) {
+  const errEl = document.getElementById('halt-co-err');
+  const okEl = document.getElementById('halt-co-ok');
+  clearMessages(errEl, okEl);
+
+  const co = _companies.find(function (x) { return x.id === companyId; });
+  if (!co) { showError(errEl, { message: 'Choose a company.' }); return; }
+
+  const reason = halt ? document.getElementById('halt-co-reason').value.trim() : '';
+  if (halt && !reason) { showError(errEl, { message: 'A halt has to state a reason.' }); return; }
+
+  const ok = await confirmAction({
+    title: (halt ? 'Halt trading in ' : 'Resume trading in ') + co.ticker + '?',
+    lines: [
+      { label: 'Company', value: co.ticker + ' — ' + co.name },
+      { label: 'Reason', value: halt ? reason : (co.halt_reason || 'No reason was recorded.') }
+    ],
+    note: halt
+      ? 'No new orders can be placed in this company until it is resumed. Orders already resting stay where they are.'
+      : 'Resuming allows new orders again. It does not re-run matching on orders already in the book, so anything ' +
+        'that crossed while the company was halted stays open until a new crossing order arrives or it is cancelled.',
+    confirmLabel: halt ? 'Halt company' : 'Resume company',
+    danger: halt
+  });
+  if (!ok) return;
+
+  const { error } = await supabase.rpc('economy_set_company_halt', {
+    p_company_id: companyId, p_halted: halt, p_reason: halt ? reason : null
+  });
+  if (error) { showError(errEl, error); return; }
+
+  showSuccess(okEl, (halt ? 'Halted ' : 'Resumed ') + co.ticker + '.');
+  await refreshState();
+  setTimeout(renderAdmin, 900);
+}
+
+async function reviewCompany(id, approve) {
+  const note = window.prompt(approve
+    ? 'Approval note (optional):'
+    : 'Why is this registration being rejected?');
+  if (note === null) return;
+  if (!approve && !note.trim()) { window.alert('A rejection has to state a reason.'); return; }
+
+  const { error } = await supabase.rpc(
+    approve ? 'economy_approve_company' : 'economy_reject_company',
+    { p_company_id: id, p_note: note || null }
+  );
+  if (error) { window.alert(error.message); return; }
+  await refreshState();
+  renderAdmin();
 }
 
 async function reviewOffering(id, approve) {
