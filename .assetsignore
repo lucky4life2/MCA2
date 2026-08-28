@@ -1,0 +1,42 @@
+# Files in this repo that must NOT be served publicly by Cloudflare Workers.
+# Wrangler uploads every file under `assets.directory` (the repo root), so
+# anything not part of the actual website has to be listed here.
+# gitignore-style syntax; paths are relative to the assets directory.
+
+# Version control and tooling state
+**/.git
+**/.github
+**/.claude
+**/.wrangler
+**/.vscode
+**/.idea
+**/.DS_Store
+**/node_modules
+
+# Server-side / backend sources — not part of the static site
+supabase
+tests
+mca-economy-plugin
+account linking Plugin Files
+
+# Local analysis output
+graphify-out
+
+# Internal docs and notes
+AI Instructions.md
+**/*.md
+
+# Deployment config and secrets
+wrangler.jsonc
+wrangler.toml
+package.json
+package-lock.json
+.gitignore
+.dev.vars*
+.env*
+
+# Build artifacts
+**/*.sql
+**/*.jar
+**/*.zip
+**/*.csv

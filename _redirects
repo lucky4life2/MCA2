@@ -1,0 +1,8 @@
+# Cloudflare Workers static-assets redirect rules.
+# This file is parsed by Workers and is never served as an asset.
+
+# assets.html_handling is "none", so Workers does not automatically map "/"
+# to index.html. This rewrites (status 200, no redirect) the bare root URL
+# onto index.html, keeping https://minecraftclubofamerica.me/ canonical
+# as listed in sitemap.xml.
+/ /index.html 200
