@@ -212,7 +212,10 @@ export async function loadOpenOfferings() {
     .select('*,economy_companies(id,ticker,name,description,industry,status)')
     .eq('status', 'open')
     .order('created_at', { ascending: false });
-  if (error) return [];
+  // An empty list and a failed query are not the same thing. Returning []
+  // for both is how an RLS recursion error spent weeks looking like "there
+  // are simply no offerings" — so at minimum, say so in the console.
+  if (error) { console.error('loadOpenOfferings failed:', error.message); return []; }
   return data || [];
 }
 
@@ -224,7 +227,9 @@ export async function loadMyCompanyRoles() {
     .from('economy_company_members')
     .select('*,economy_companies(id,ticker,name,status)')
     .eq('user_id', user.id);
-  if (error) return [];
+  // Same trap: a swallowed error here renders as "you are not an officer of
+  // any company yet", which is a lie the user has no way to debug.
+  if (error) { console.error('loadMyCompanyRoles failed:', error.message); return []; }
   return data || [];
 }
 
