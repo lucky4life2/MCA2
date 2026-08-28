@@ -347,8 +347,11 @@ async function sendMarks() {
   if (own) {
     toAccountId = own.id;
   } else {
+    // Must be public_profiles, not profiles: a member can only read their own
+    // profiles row, so looking a recipient up by username always came back
+    // empty and every transfer failed with "No player or wallet found".
     const { data: profile } = await supabase
-      .from('profiles').select('id,username,display_name')
+      .from('public_profiles').select('id,username,display_name')
       .ilike('username', toRaw).limit(1).maybeSingle();
     if (!profile) { showError(errEl, { message: 'No player or wallet found called "' + toRaw + '".' }); return; }
     const { data: acctId } = await supabase.rpc('economy_get_personal_account_id', {

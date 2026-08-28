@@ -323,6 +323,30 @@ let _archiveFiltered = [];
 const POSITIONS = ['support', 'oppose', 'neutral', 'question', 'sponsor_statement', 'committee_report'];
 
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ── Member name directory ────────────────────────────────────
+// profiles is readable only by yourself or staff — it holds emails and
+// verification tokens — so embedding profiles(display_name, username) came
+// back null for ordinary members and every name on this page rendered as the
+// literal word "Member". public_profiles is a view exposing only
+// id/username/display_name, which is safe for any signed-in member to read.
+let _directory = null;
+
+async function loadDirectory() {
+  if (_directory) return _directory;
+  const { data, error } = await supabase
+    .from('public_profiles').select('id, username, display_name');
+  if (error) { console.error('loadDirectory failed:', error.message); return new Map(); }
+  _directory = new Map((data || []).map(p => [p.id, p.display_name || p.username]));
+  return _directory;
+}
+
+// Resolve a user id to a display name. `fallback` is what to show when the id
+// is null or unknown (a deleted account, say) — never a silent blank.
+function nameOf(userId, fallback = 'Member') {
+  if (!userId || !_directory) return fallback;
+  return _directory.get(userId) || fallback;
+}
 function show(which) {
   document.getElementById('loading').style.display = 'none';
   document.getElementById('denied').style.display = which === 'denied' ? 'block' : 'none';
@@ -351,6 +375,8 @@ async function init() {
   if (!session?.user) return show('denied');
   _me = session.user;
   _access = await resolveAccess();
+  // Loaded once up front so every render below can resolve names synchronously.
+  await loadDirectory();
   // View access: any authenticated member can view public/members-visible content;
   // page itself doesn't gate on chamber membership so the public can browse what's public.
   document.getElementById('btn-new-measure').style.display = (_access.manage || _access.sponsor) ? '' : 'none';
@@ -426,7 +452,7 @@ function bindTabs() {
 async function loadCommittees() {
   const [{ data: committees }, { data: members }] = await Promise.all([
     supabase.from('congress_committees').select('*').eq('is_active', true).order('name'),
-    supabase.from('congress_committee_members').select('*, profiles(display_name, username)'),
+    supabase.from('congress_committee_members').select('*'),
   ]);
   _committees = committees || [];
   _committeeMembers = members || [];
@@ -443,7 +469,7 @@ function renderCommittees() {
       ${c.description ? `<p style="font-size:12px;color:var(--mid);margin:0 0 6px;">${esc(c.description)}</p>` : ''}
       <ul>
         ${members.length ? members.map(m => `
-          <li><span>${esc(m.profiles?.display_name || m.profiles?.username || 'Member')}</span>
+          <li><span>${esc(nameOf(m.user_id))}</span>
             <span class="cg-committee-role">${esc(m.role)}${_access.manage ? ` · <a href="#" data-remove-member="${m.id}">remove</a>` : ''}</span></li>
         `).join('') : `<li class="cg-empty">No members assigned.</li>`}
       </ul>
@@ -486,7 +512,7 @@ function bindCommitteeModal() {
   document.getElementById('btn-new-committee').onclick = async () => {
     // lazy-load member directory the first time it's needed
     if (!_memberProfiles.length) {
-      const { data } = await supabase.from('profiles').select('id, display_name, username').order('display_name');
+      const { data } = await supabase.from('public_profiles').select('id, display_name, username').order('display_name');
       _memberProfiles = data || [];
     }
     document.getElementById('cg-new-committee-modal').classList.add('open');
@@ -517,7 +543,7 @@ async function loadDashboardExtras() {
   const nowIso = new Date().toISOString();
   const [{ data: events }, { data: members }, { data: notes }, { data: pendingCerts }] = await Promise.all([
     supabase.from('congress_calendar_events').select('*').eq('is_cancelled', false).order('starts_at'),
-    supabase.from('congress_members').select('*, profiles(display_name, username)'),
+    supabase.from('congress_members').select('*'),
     supabase.from('congress_notifications').select('*').eq('user_id', _me.id).eq('is_read', false).order('created_at', { ascending: false }).limit(10),
     (_access.manage || _access.certify)
       ? supabase.from('congress_roll_calls').select('id, question, closes_at, measure_id, congress_measures(number, title)').eq('status', 'closed').order('closes_at', { ascending: false })
@@ -537,7 +563,7 @@ async function dismissNotification(id) {
 
 // ── Leadership Tools: presidential action, return-for-correction, roster ──
 async function loadReturns() {
-  const { data } = await supabase.from('congress_returns').select('*, congress_measures(number, title), profiles(display_name, username)').order('returned_at', { ascending: false }).limit(15);
+  const { data } = await supabase.from('congress_returns').select('*, congress_measures(number, title)').order('returned_at', { ascending: false }).limit(15);
   _returns = data || [];
 }
 
@@ -571,7 +597,7 @@ function renderLeadershipTools() {
     <div class="cg-list">${_returns.map(r => `
       <div class="cg-row" style="cursor:default;">
         <span class="cg-row-number">${esc(r.congress_measures?.number || 'Draft')}</span>
-        <span class="cg-row-title">${esc(r.reason)}<span class="cg-sub" style="display:block;">by ${esc(r.profiles?.display_name || r.profiles?.username || '—')} · ${fmtDate(r.returned_at)}</span></span>
+        <span class="cg-row-title">${esc(r.reason)}<span class="cg-sub" style="display:block;">by ${esc(nameOf(r.returned_by, '—'))} · ${fmtDate(r.returned_at)}</span></span>
       </div>`).join('')}</div>` : '';
 
   const rosters = document.getElementById('cg-lt-rosters');
@@ -580,7 +606,7 @@ function renderLeadershipTools() {
       <h3>${esc(c.label)}</h3>
       ${_congressMembers.filter(m => m.chamber_id === c.id).map(m => `
         <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;">
-          <span style="flex:1;">${esc(m.profiles?.display_name || m.profiles?.username || 'Member')}${m.seat_label ? ` <span class="cg-sub">(${esc(m.seat_label)})</span>` : ''}</span>
+          <span style="flex:1;">${esc(nameOf(m.user_id))}${m.seat_label ? ` <span class="cg-sub">(${esc(m.seat_label)})</span>` : ''}</span>
           <select data-member-status="${m.id}">
             ${['active', 'absent', 'excused', 'recused', 'vacant', 'ineligible'].map(s => `<option value="${s}" ${m.status === s ? 'selected' : ''}>${s}</option>`).join('')}
           </select>
@@ -608,7 +634,7 @@ function renderLeadershipTools() {
 
 async function loadMemberDirectory() {
   if (_memberProfiles.length) return;
-  const { data } = await supabase.from('profiles').select('id, display_name, username').order('display_name');
+  const { data } = await supabase.from('public_profiles').select('id, display_name, username').order('display_name');
   _memberProfiles = data || [];
   document.getElementById('lt-add-user').innerHTML = `<option value="">Add member…</option>` + _memberProfiles.map(p => `<option value="${p.id}">${esc(p.display_name || p.username)}</option>`).join('');
 }
@@ -684,7 +710,7 @@ function bindLeadershipTools() {
 async function loadMeasures() {
   const { data, error } = await supabase
     .from('congress_measures')
-    .select('*, congress_measure_sponsors(user_id, sponsor_type), profiles!congress_measures_created_by_fkey(display_name, username)')
+    .select('*, congress_measure_sponsors(user_id, sponsor_type)')
     .order('created_at', { ascending: false });
   if (error) { console.error(error); _measures = []; return; }
   _measures = data || [];
@@ -760,7 +786,7 @@ function renderDashboard() {
         const notable = roster.filter(m => m.status !== 'active');
         return `<li><span style="font-weight:600;">${esc(c.label)}</span>
           <span class="cg-sub">${active}/${roster.length} active · quorum ${quorumNeeded} · <span style="color:${met ? 'var(--green,#2d7d2f)' : '#c0392b'};font-weight:600;">${met ? 'Quorum met' : 'No quorum'}</span>
-          ${notable.length ? '<br>' + notable.map(m => `${esc(m.profiles?.display_name || m.profiles?.username || 'Member')} (${esc(m.status)})`).join(', ') : ''}</span></li>`;
+          ${notable.length ? '<br>' + notable.map(m => `${esc(nameOf(m.user_id))} (${esc(m.status)})`).join(', ') : ''}</span></li>`;
       }).join('')}</ul>` : `<div class="cg-empty">No chambers configured.</div>`}
     </div>`;
 
@@ -860,10 +886,10 @@ async function openMeasure(id) {
     supabase.from('congress_measures').select('*').eq('id', id).single(),
     supabase.from('congress_measure_versions').select('*').eq('measure_id', id).order('version_number', { ascending: false }).limit(1),
     supabase.from('congress_roll_calls').select('*').eq('measure_id', id).order('created_at', { ascending: false }),
-    supabase.from('congress_debate_posts').select('*, profiles(display_name, username)').eq('measure_id', id).eq('is_archived', false).order('created_at'),
-    supabase.from('congress_amendments').select('*, profiles!congress_amendments_sponsor_id_fkey(display_name, username)').eq('measure_id', id).order('number'),
-    supabase.from('congress_committee_reports').select('*, profiles(display_name, username)').eq('measure_id', id).order('created_at', { ascending: false }),
-    supabase.from('congress_motions').select('*, profiles!congress_motions_raised_by_fkey(display_name, username)').eq('measure_id', id).order('created_at', { ascending: false }),
+    supabase.from('congress_debate_posts').select('*').eq('measure_id', id).eq('is_archived', false).order('created_at'),
+    supabase.from('congress_amendments').select('*').eq('measure_id', id).order('number'),
+    supabase.from('congress_committee_reports').select('*').eq('measure_id', id).order('created_at', { ascending: false }),
+    supabase.from('congress_motions').select('*').eq('measure_id', id).order('created_at', { ascending: false }),
   ]);
   if (!measure) return;
   window.history.replaceState(null, '', '?measure=' + id);
@@ -919,7 +945,7 @@ async function openMeasure(id) {
       <div id="cg-reports">
         ${(reports || []).length ? reports.map(r => `
           <div class="cg-debate-post">
-            <div class="cg-debate-meta"><strong>${esc(r.profiles?.display_name || r.profiles?.username || 'Committee')}</strong>
+            <div class="cg-debate-meta"><strong>${esc(nameOf(r.filed_by, 'Committee'))}</strong>
               <span class="cg-pos-tag">${esc((r.recommendation || 'no_recommendation').replace('_',' '))}</span></div>
             <div>${esc(r.summary)}</div>
           </div>
@@ -947,7 +973,7 @@ async function openMeasure(id) {
             <strong>${esc(motionTypeLabel(mo.motion_type_key))}</strong>
             <span class="cg-badge ${mo.status === 'adopted' ? 'passed' : mo.status === 'rejected' ? 'failed' : mo.status === 'withdrawn' ? 'withdrawn' : 'debate'}">${esc(mo.status)}</span>
           </div>
-          <div style="font-size:12px;color:var(--muted);">by ${esc(mo.profiles?.display_name || mo.profiles?.username || 'Member')} · ${fmtDate(mo.created_at)}</div>
+          <div style="font-size:12px;color:var(--muted);">by ${esc(nameOf(mo.raised_by))} · ${fmtDate(mo.created_at)}</div>
           ${mo.note ? `<div style="margin-top:4px;">${esc(mo.note)}</div>` : ''}
           ${_access.manage && mo.status === 'pending' ? `
             <div class="cg-amendment-actions">
@@ -1141,7 +1167,7 @@ function renderDebatePost(p) {
   return `
     <div class="cg-debate-post" data-post-id="${p.id}">
       <div class="cg-debate-meta">
-        <strong>${esc(p.profiles?.display_name || p.profiles?.username || 'Member')}</strong>
+        <strong>${esc(nameOf(p.author_id))}</strong>
         ${p.position ? `<span class="cg-pos-tag">${esc(p.position.replace('_',' '))}</span>` : ''}
         ${p.section_ref ? `<span>${esc(p.section_ref)}</span>` : ''}
         ${p.is_edited ? '<span>(edited)</span>' : ''}
@@ -1180,7 +1206,7 @@ function renderAmendment(a, measure) {
         <strong>Amendment #${a.number}</strong>
         <span class="cg-badge ${a.status === 'passed' ? 'passed' : a.status === 'failed' ? 'failed' : 'introduced'}">${esc(a.status)}</span>
       </div>
-      <div style="font-size:12px;color:var(--mid);">By ${esc(a.profiles?.display_name || a.profiles?.username || 'Member')}</div>
+      <div style="font-size:12px;color:var(--mid);">By ${esc(nameOf(a.sponsor_id))}</div>
       <p style="font-size:13px;margin:6px 0;">${esc(a.explanation)}</p>
       ${(a.affected_text_before || a.affected_text_after) ? `
         <div class="cg-amendment-diff">

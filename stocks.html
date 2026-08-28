@@ -113,6 +113,29 @@ function setTab(r) {
   });
 }
 
+// ── Member name directory ────────────────────────────────────
+// profiles holds emails and verification tokens, so it is readable only by
+// yourself or staff. Names come from public_profiles, a view exposing just
+// id/username/display_name.
+let _directory = null;
+
+async function loadDirectory() {
+  if (_directory) return _directory;
+  const { data, error } = await supabase
+    .from('public_profiles').select('id, username, display_name');
+  if (error) { console.error('loadDirectory failed:', error.message); return new Map(); }
+  _directory = new Map((data || []).map(function (p) {
+    return [p.id, p.display_name || p.username];
+  }));
+  return _directory;
+}
+
+function nameOf(userId, fallback) {
+  const f = fallback || 'Member';
+  if (!userId || !_directory) return f;
+  return _directory.get(userId) || f;
+}
+
 function statusBadge(status) {
   return '<span class="econ-badge econ-badge-' + escapeHtml(status) + '">' + escapeHtml(status) + '</span>';
 }
@@ -845,7 +868,8 @@ async function renderManageCompany(tickerRaw) {
   const { data: offerings } = await supabase.from('economy_offerings')
     .select('*').eq('company_id', c.id).order('created_at', { ascending: false });
   const { data: officers } = await supabase.from('economy_company_members')
-    .select('*,profiles(username,display_name)').eq('company_id', c.id);
+    .select('*').eq('company_id', c.id);
+  await loadDirectory();
 
   view.innerHTML =
     '<div class="econ-section"><div class="econ-section-header"><div class="econ-section-title">Company Account</div></div>' +
@@ -1027,13 +1051,12 @@ function officerPanel(officers) {
     '<div class="econ-section-body">' +
       ((officers || []).length
         ? officers.map(function (m) {
-            const p = m.profiles || {};
             const perms = ['can_manage_profile', 'can_manage_funds', 'can_manage_members',
                            'can_issue_shares', 'can_pay_dividends', 'can_publish_reports']
               .filter(function (k) { return m[k]; })
               .map(function (k) { return k.replace('can_', '').replace(/_/g, ' '); });
             return '<div class="econ-row"><div>' +
-              '<div class="econ-row-main">' + escapeHtml(p.display_name || p.username || 'Unknown') + '</div>' +
+              '<div class="econ-row-main">' + escapeHtml(nameOf(m.user_id, 'Unknown')) + '</div>' +
               '<div class="econ-row-detail">' + escapeHtml(m.role) + ' · ' +
                 escapeHtml(perms.join(', ') || 'no permissions') + '</div>' +
             '</div></div>';
@@ -1067,7 +1090,7 @@ async function addOfficer(c) {
   const username = document.getElementById('off-username').value.trim();
   if (!username) { showError(errEl, { message: 'Enter a username.' }); return; }
 
-  const { data: profile } = await supabase.from('profiles')
+  const { data: profile } = await supabase.from('public_profiles')
     .select('id,username').ilike('username', username).limit(1).maybeSingle();
   if (!profile) { showError(errEl, { message: 'No player called "' + username + '".' }); return; }
 

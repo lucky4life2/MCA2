@@ -462,7 +462,10 @@ async function loadAll() {
   const [{ data: projects }, { data: tasks }, { data: profiles }, { data: userRoles }, { data: comments }, { data: tags }, { data: roles }, { data: access }, { data: assignees }] = await Promise.all([
     supabase.from('task_projects').select('*').order('sort_order').order('created_at'),
     supabase.from('tasks').select('*').order('due_date', { nullsFirst: false }),
-    supabase.from('profiles').select('id, display_name, username, role'),
+    // public_profiles, not profiles: a member can only read their own profiles
+    // row, so this came back with just themselves and every other name and
+    // permission level was missing.
+    supabase.from('public_profiles').select('id, display_name, username, role'),
     supabase.from('user_roles').select('user_id, roles(level)'),
     supabase.from('task_comments').select('task_id'),
     supabase.from('task_tags').select('*').order('sort_order').order('created_at'),
