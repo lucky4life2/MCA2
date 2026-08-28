@@ -1222,6 +1222,11 @@ async function renderConnectedAccounts(skipFetch = false) {
 
       let pendingEmail = null;
       let awaitingCode = false;
+      // Held in memory for the few seconds between requesting a code and
+      // entering it, then submitted with the code. It used to be sent in
+      // step 1 and parked in profiles.pending_email_password as plaintext —
+      // where it also survived indefinitely if the user never finished.
+      let pendingPassword = null;
 
       document.getElementById('btn-add-email-save').addEventListener('click', async () => {
         const emailInput = document.getElementById('add-email-input');
@@ -1250,7 +1255,7 @@ async function renderConnectedAccounts(skipFetch = false) {
           const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/add-email-to-account', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-            body: JSON.stringify({ email, password }),
+            body: JSON.stringify({ email }),
           });
           const json = await res.json();
           saveBtn.disabled = false;
@@ -1266,6 +1271,7 @@ async function renderConnectedAccounts(skipFetch = false) {
 
           // Step 2: switch the form into "enter the code" mode
           pendingEmail = email;
+          pendingPassword = password;
           awaitingCode = true;
           emailInput.disabled = true;
           pwInput.disabled = true;
@@ -1285,12 +1291,13 @@ async function renderConnectedAccounts(skipFetch = false) {
         const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/verify-email-code', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-          body: JSON.stringify({ code }),
+          body: JSON.stringify({ code, password: pendingPassword }),
         });
         const json = await res.json();
         saveBtn.disabled = false;
         if (!res.ok) { errEl.textContent = json.error || 'Unknown error'; errEl.style.display = 'block'; return; }
 
+        pendingPassword = null;
         succEl.textContent = 'Email linked successfully. You can now sign in with email and password.';
         succEl.style.display = 'block';
         saveBtn.disabled = true;
