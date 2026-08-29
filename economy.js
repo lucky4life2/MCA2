@@ -144,10 +144,20 @@ export async function loadMyAccounts() {
   return data || [];
 }
 
+// Every loader below reports a failure to the console before returning its
+// empty value. loadOpenOfferings already did this and says why; the other
+// six did not, so the exact trap that comment describes — an RLS or
+// permission error rendering as "there is simply nothing here" — was still
+// live in six places. An empty result and a broken query must never be
+// indistinguishable to whoever is debugging.
+function reportQueryFailure(what, error) {
+  console.error(what + ' failed:', error.message);
+}
+
 export async function loadExchangeSettings() {
   const { data, error } = await supabase
     .from('economy_exchange_settings').select('*').limit(1).maybeSingle();
-  if (error) return null;
+  if (error) { reportQueryFailure('loadExchangeSettings', error); return null; }
   return data;
 }
 
@@ -162,7 +172,7 @@ export async function loadCompanies() {
 
 export async function loadMarketSummary(companyId) {
   const { data, error } = await supabase.rpc('economy_market_summary', { p_company_id: companyId });
-  if (error) return null;
+  if (error) { reportQueryFailure('loadMarketSummary', error); return null; }
   return Array.isArray(data) ? data[0] : data;
 }
 
@@ -170,7 +180,7 @@ export async function loadOrderBook(companyId, depth) {
   const { data, error } = await supabase.rpc('economy_order_book', {
     p_company_id: companyId, p_depth: depth || 10
   });
-  if (error) return [];
+  if (error) { reportQueryFailure('loadOrderBook', error); return []; }
   return data || [];
 }
 
@@ -181,7 +191,7 @@ export async function loadRecentTrades(companyId, limit) {
     .eq('company_id', companyId)
     .order('created_at', { ascending: false })
     .limit(limit || 25);
-  if (error) return [];
+  if (error) { reportQueryFailure('loadRecentTrades', error); return []; }
   return data || [];
 }
 
@@ -192,7 +202,7 @@ export async function loadMyOrders(accountIds) {
     .select('id,company_id,account_id,side,limit_price,quantity,filled_quantity,status,reserved_amount,reserved_shares,created_at,expires_at')
     .in('account_id', accountIds)
     .order('created_at', { ascending: false });
-  if (error) return [];
+  if (error) { reportQueryFailure('loadMyOrders', error); return []; }
   return data || [];
 }
 
@@ -202,7 +212,7 @@ export async function loadMyHoldings(accountIds) {
     .from('economy_shareholdings')
     .select('company_id,account_id,shares,reserved_shares,economy_companies(ticker,name,last_trade_price,status)')
     .in('account_id', accountIds);
-  if (error) return [];
+  if (error) { reportQueryFailure('loadMyHoldings', error); return []; }
   return (data || []).filter(function (h) { return (h.shares + h.reserved_shares) > 0; });
 }
 

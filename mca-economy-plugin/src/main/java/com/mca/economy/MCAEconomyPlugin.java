@@ -26,6 +26,7 @@ public class MCAEconomyPlugin extends JavaPlugin implements Listener {
     private EconomyService economyService;
     private VaultEconomyProvider vaultProvider;
     private ShopManager shopManager;
+    private ShopInteractListener shopInteractListener;
     private ExecutorService asyncExecutor;
 
     private String currencySymbol;
@@ -81,7 +82,8 @@ public class MCAEconomyPlugin extends JavaPlugin implements Listener {
         ShopCommand shopCommand = new ShopCommand(this, economyService, shopManager);
         getCommand("shop").setExecutor(shopCommand);
         getCommand("shop").setTabCompleter(shopCommand);
-        getServer().getPluginManager().registerEvents(new ShopInteractListener(this, economyService, shopManager), this);
+        this.shopInteractListener = new ShopInteractListener(this, economyService, shopManager);
+        getServer().getPluginManager().registerEvents(shopInteractListener, this);
 
         // Warm the cache for anyone already online (e.g. after a /reload).
         getServer().getOnlinePlayers().forEach(p -> runAsync(() -> {
@@ -111,7 +113,10 @@ public class MCAEconomyPlugin extends JavaPlugin implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {
         if (vaultProvider != null) vaultProvider.invalidate(event.getPlayer().getUniqueId());
-        economyService.invalidateActor(event.getPlayer().getUniqueId());
+        // forgetPlayer, not invalidateActor: the latter clears one of the
+        // three per-player caches and left the other two growing forever.
+        economyService.forgetPlayer(event.getPlayer().getUniqueId());
+        if (shopInteractListener != null) shopInteractListener.forgetPlayer(event.getPlayer().getUniqueId());
     }
 
     /** Runs a blocking economy call off the main thread. Use this from every command handler. */

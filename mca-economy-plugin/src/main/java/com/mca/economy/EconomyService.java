@@ -71,6 +71,40 @@ public class EconomyService {
         actorCache.remove(minecraftUuid);
     }
 
+    /**
+     * Drops everything held for a player who has left. There are three
+     * per-player maps here and invalidateActor() only ever cleared one of
+     * them, so accountsCache and activeAccountCache grew for the lifetime
+     * of the server process — every player who ever logged in kept an
+     * entry. Anything keyed to a player is released in one place now, so a
+     * future fourth cache has an obvious home rather than being forgotten.
+     */
+    public void forgetPlayer(UUID minecraftUuid) {
+        UUID actorId = actorCache.remove(minecraftUuid);
+        if (actorId != null) accountsCache.remove(actorId);
+        activeAccountCache.remove(minecraftUuid);
+    }
+
+    /**
+     * Forgets the cached account lists of everyone holding either side of a
+     * transfer. Invalidating only the initiator left the person receiving
+     * the money reading a stale balance until something else refreshed
+     * them — /bank kept showing the pre-transfer figure. Accounts are
+     * cached by profile id while a transfer names account ids, so the two
+     * are matched by scanning the (small, online-players-only) cache
+     * rather than by guessing at the recipient's profile.
+     */
+    private void invalidateAccountsHolding(UUID... accountIds) {
+        accountsCache.entrySet().removeIf(entry -> {
+            for (EconomyAccount account : entry.getValue()) {
+                for (UUID accountId : accountIds) {
+                    if (account.id.equals(accountId)) return true;
+                }
+            }
+            return false;
+        });
+    }
+
     public List<EconomyAccount> myAccounts(UUID actorId) throws EconomyException {
         JsonElement result = client.rpc("_economy_my_accounts", Map.of("p_actor", actorId.toString()));
         List<EconomyAccount> accounts = new ArrayList<>();
@@ -117,6 +151,7 @@ public class EconomyService {
         params.put("p_memo", memo);
         client.rpc("_economy_transfer", params);
         accountsCache.remove(actorId);
+        invalidateAccountsHolding(fromAccountId, toAccountId);
     }
 
     public EconomyAccount withdraw(UUID actorId, UUID accountId, BigDecimal amount, String memo) throws EconomyException {
@@ -285,5 +320,10 @@ public class EconomyService {
         params.put("p_memo", memo);
         client.rpc("_economy_transfer", params);
         accountsCache.remove(actingActorId);
+        // A chest trade moves money between two different people's wallets,
+        // and for a sale the acting actor is the shop owner, not the player
+        // who just got paid. Both sides have to be forgotten or the seller
+        // reads a stale balance.
+        invalidateAccountsHolding(fromAccountId, toAccountId);
     }
 }

@@ -184,16 +184,56 @@ public class ShopInteractListener implements Listener {
         });
     }
 
-    private void rollbackBuy(Player player, Inventory chestInv, Material material, String message) {
-        player.getInventory().removeItem(new ItemStack(material, 1));
-        chestInv.addItem(new ItemStack(material, 1));
-        player.sendMessage(err(message));
+    /** Releases the debounce entry for a player who has left, so the map does not grow for the life of the server. */
+    public void forgetPlayer(UUID minecraftUuid) {
+        lastTrade.remove(minecraftUuid);
     }
 
+    /**
+     * Undoes a buy whose payment failed.
+     *
+     * Both rollbacks used to take the item back and hand the counterpart
+     * over unconditionally, ignoring what removeItem() reported. The
+     * payment is async, so by the time a rollback runs the player may have
+     * dropped, eaten, or stashed the item — the removal then took nothing
+     * (or took an unrelated stack of the same material) while the chest was
+     * still credited, quietly minting an item out of nothing. Restoring the
+     * other side only when the removal actually succeeded is what keeps the
+     * item count conserved; a rollback that cannot complete says so instead
+     * of guessing.
+     */
+    private void rollbackBuy(Player player, Inventory chestInv, Material material, String message) {
+        boolean tookItBack = player.getInventory()
+                .removeItem(new ItemStack(material, 1)).isEmpty();
+        if (tookItBack) {
+            chestInv.addItem(new ItemStack(material, 1));
+            player.sendMessage(err(message));
+        } else {
+            player.sendMessage(err(message + " The " + prettyName(material)
+                    + " could not be taken back, so it is yours — tell an admin."));
+            plugin.getLogger().warning("Shop buy rollback failed for " + player.getName()
+                    + ": paid nothing but kept 1 " + material.name() + " (payment error: " + message + ")");
+        }
+    }
+
+    /** Undoes a sale whose payout failed. Same conservation rule as rollbackBuy. */
     private void rollbackSell(Player player, Inventory chestInv, Material material, String message) {
-        chestInv.removeItem(new ItemStack(material, 1));
-        player.getInventory().addItem(new ItemStack(material, 1));
-        player.sendMessage(err(message));
+        boolean tookItBack = chestInv.removeItem(new ItemStack(material, 1)).isEmpty();
+        if (tookItBack) {
+            Map<Integer, ItemStack> notReturned = player.getInventory().addItem(new ItemStack(material, 1));
+            if (!notReturned.isEmpty()) {
+                // Inventory filled up while the payout was in flight. Dropping
+                // it at their feet keeps the count right; silently discarding
+                // it would not.
+                player.getWorld().dropItemNaturally(player.getLocation(), new ItemStack(material, 1));
+            }
+            player.sendMessage(err(message));
+        } else {
+            player.sendMessage(err(message + " Your " + prettyName(material)
+                    + " could not be recovered from the chest — tell an admin."));
+            plugin.getLogger().warning("Shop sell rollback failed for " + player.getName()
+                    + ": lost 1 " + material.name() + " with no payout (payout error: " + message + ")");
+        }
     }
 
     private boolean hasRoomForOne(Inventory inv, Material material) {

@@ -10,3 +10,5 @@ target/
 /graphify-out
 /.claude
 *.csv
+/supabase
+/supabase/migrations
