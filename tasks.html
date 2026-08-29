@@ -291,6 +291,8 @@
         <input type="checkbox" id="tk-draft">
         <label for="tk-draft">Save as rough draft — hidden from the board until you publish it.</label>
       </div>
+      <div class="custom-color-note" id="tk-draft-note" style="display:none;">Only the person who created a task can pull it back into drafts.</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:8px;display:none;" id="tk-created-note"></div>
 
       <div id="tk-comments-wrap" style="display:none;margin-top:1rem;border-top:1px solid var(--border);padding-top:1rem;">
         <label class="form-label" id="tk-comments-label">Comments</label>
@@ -915,6 +917,24 @@ async function openTaskModal(t) {
     document.getElementById(id).disabled = !canEdit;
   });
   document.getElementById('tk-draft-row').style.display = canEdit ? '' : 'none';
+
+  // Drafting is the creator's call: RLS only accepts is_draft = true from
+  // whoever created the task, so don't offer the checkbox to anyone else.
+  const isMine = !t || t.created_by === _me.id;
+  const draftLocked = canEdit && !isMine;
+  if (draftLocked) document.getElementById('tk-draft').disabled = true;
+  document.getElementById('tk-draft-note').style.display = draftLocked ? '' : 'none';
+
+  const createdNote = document.getElementById('tk-created-note');
+  if (t && t.created_by) {
+    const who = memberName(t.created_by) || 'a former member';
+    const when = t.created_at ? ' on ' + new Date(t.created_at).toLocaleDateString() : '';
+    createdNote.textContent = `Created by ${who}${when}`;
+    createdNote.style.display = '';
+  } else {
+    createdNote.style.display = 'none';
+  }
+
   document.getElementById('tk-delete').style.display = (t && canEdit) ? '' : 'none';
   document.getElementById('tk-save').style.display = canEdit ? '' : 'none';
   const doneBtn = document.getElementById('tk-mark-done');
