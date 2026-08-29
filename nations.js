@@ -73,6 +73,17 @@ function renderSeasonFilter(nations) {
 /* ── DETAIL VIEW ─────────────────────────────────────────────── */
 let _nations = [];
 let _myOwnedNationIds = [];
+/* Names of the server(s) flagged is_current on the history page. Leaders may
+   only edit a nation that belongs to the current server — anything on a past
+   (or unstarted) server is archival and admin-only. Mirrors the same check in
+   the update_own_nation RPC, which is what actually enforces it. */
+let _currentServerNames = [];
+function isEditableSeason(season) {
+  const s = (season || '').trim().toLowerCase();
+  if (!s) return true;                        // unassigned nations aren't archived
+  if (!_currentServerNames.length) return true; // no current server marked — don't lock anyone out
+  return _currentServerNames.includes(s);
+}
 
 function openNationDetail(i) {
   const n = _nations[i];
@@ -114,7 +125,12 @@ function openNationDetail(i) {
   const bodyHtml = n.body ? `<div class="article-body">${renderMd(n.body)}</div>` : '';
 
   const isOwner = _myOwnedNationIds.includes(n.id);
-  const editHtml = isOwner ? `
+  const canEdit = isOwner && isEditableSeason(n.season);
+  const lockedHtml = (isOwner && !canEdit) ? `
+    <div style="margin-bottom:1.5rem;padding:.9rem 1.1rem;border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--mid);">
+      This nation belongs to <strong>${n.season}</strong>, which is not the current server. Its details are part of the historical record and can only be changed by an MCA admin.
+    </div>` : '';
+  const editHtml = canEdit ? `
     <div id="nation-owner-edit-toggle" style="margin-bottom:1.5rem;">
       <button class="btn btn-outline" id="nation-owner-edit-btn" style="font-size:13px;">Edit your nation's info</button>
     </div>
@@ -138,9 +154,9 @@ function openNationDetail(i) {
       </div>
     </div>` : '';
 
-  document.getElementById('nation-detail-body').innerHTML = flagHtml + editHtml + tableHtml + bodyHtml;
+  document.getElementById('nation-detail-body').innerHTML = flagHtml + lockedHtml + editHtml + tableHtml + bodyHtml;
 
-  if (isOwner) {
+  if (canEdit) {
     const toggle = document.getElementById('nation-owner-edit-toggle');
     const form = document.getElementById('nation-owner-edit-form');
     document.getElementById('nation-owner-edit-btn').addEventListener('click', () => {
@@ -216,6 +232,15 @@ window.applyFlagDetailClass = applyFlagDetailClass;
   const grid = document.getElementById('nations-grid');
   if (!grid) return;
 
+  // Started alongside the nations fetch so the edit gate is known by the time
+  // anyone can click into a nation.
+  const currentServersPromise = fetch(
+    `${SUPABASE_URL_N}/rest/v1/history_servers?select=name&is_current=eq.true`,
+    { headers: { 'apikey': SUPABASE_ANON_N, 'Authorization': `Bearer ${SUPABASE_ANON_N}` } }
+  ).then(r => r.ok ? r.json() : [])
+   .then(rows => { _currentServerNames = rows.map(r => (r.name || '').trim().toLowerCase()).filter(Boolean); })
+   .catch(() => { /* leave empty — the RPC still enforces the rule on save */ });
+
   try {
     const res = await fetch(
       `${SUPABASE_URL_N}/rest/v1/nations?select=*&order=sort_order.asc`,
@@ -244,6 +269,8 @@ window.applyFlagDetailClass = applyFlagDetailClass;
   } catch(e) {
     grid.innerHTML = '<p style="grid-column:1/-1;color:var(--mid);font-size:14px;">Could not load nations. Check back soon.</p>';
   }
+
+  await currentServersPromise;
 
   try {
     const user = await getUser();
