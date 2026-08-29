@@ -1114,7 +1114,7 @@
       <div><label class="form-label">Population</label><input type="text" id="nm-population" class="form-input"></div>
       <div><label class="form-label">Territory</label><input type="text" id="nm-territory" class="form-input"></div>
       <div><label class="form-label">Status</label><input type="text" id="nm-status" class="form-input"></div>
-      <div><label class="form-label">Year / Server</label><input type="text" id="nm-season" class="form-input" placeholder="e.g. 2026 or Global Dawn"></div>
+      <div><label class="form-label">Year / Server</label><select id="nm-season" class="form-input"><option value="">— None —</option></select></div>
       <div><label class="form-label">Flag filename</label><input type="text" id="nm-flag" class="form-input"></div>
       <div><label class="form-label">Sort Order</label><input type="number" id="nm-sort_order" class="form-input" placeholder="0 = first"></div>
       <div style="grid-column:1/-1;">
@@ -3059,6 +3059,7 @@ let _nationsAdmin = [], _leadersAdmin = [], _nationOwnersById = {}, _nmOwnerIds 
 async function loadNationsAdmin() {
   const { data } = await supabase.from('nations').select('*').order('sort_order', { ascending: true });
   _nationsAdmin = data || [];
+  fetchSeasonServerNames(); // warm the Year / Server dropdown
 
   const { data: ownerRows } = await supabase.from('nation_owners').select('nation_id,user_id,profiles(id,display_name,username)');
   _nationOwnersById = {};
@@ -3149,9 +3150,32 @@ async function loadLeadershipAdmin() {
   }).join('');
 }
 document.getElementById('btn-add-nation').addEventListener('click', () => openNationModal(null));
+
+// The Year / Server dropdown is driven by the same history_servers rows the
+// history page lists, plus any season already saved on a nation so legacy
+// free-text values survive an edit.
+let _seasonServerNames = null;
+async function fetchSeasonServerNames() {
+  if (_seasonServerNames) return _seasonServerNames;
+  const { data, error } = await supabase.from('history_servers').select('name,sort_order').order('sort_order', { ascending: true });
+  if (error) return [];
+  _seasonServerNames = (data || []).map(s => s.name).filter(Boolean);
+  return _seasonServerNames;
+}
+function populateSeasonSelect(current) {
+  const sel = document.getElementById('nm-season');
+  if (!sel) return;
+  const used = _nationsAdmin.map(n => n.season).filter(Boolean);
+  const opts = [...new Set([...(_seasonServerNames || []), ...used, ...(current ? [current] : [])])];
+  sel.innerHTML = '<option value="">— None —</option>' +
+    opts.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('');
+  sel.value = current || '';
+}
 window.openNationModal = (id) => {
   const n = id ? _nationsAdmin.find(x => x.id === id) : null;
-  ['id','name','leader','capital','government','founded','founder','population','territory','status','season','flag','body','sort_order'].forEach(k => {
+  populateSeasonSelect(n?.season || '');
+  fetchSeasonServerNames().then(() => populateSeasonSelect(document.getElementById('nm-season')?.value || n?.season || ''));
+  ['id','name','leader','capital','government','founded','founder','population','territory','status','flag','body','sort_order'].forEach(k => {
     const el = document.getElementById('nm-'+k); if (el) el.value = n?.[k] ?? '';
   });
   _nmOwnerIds = n ? (_nationOwnersById[n.id] || []).map(p => p?.id).filter(Boolean) : [];
@@ -3256,9 +3280,10 @@ document.getElementById('hs-save').addEventListener('click', async () => {
   const result = id ? await supabase.from('history_servers').update(payload).eq('id', id).select() : await supabase.from('history_servers').insert(payload).select();
   const { error } = result;
   if (error) { const e = document.getElementById('hs-error'); e.textContent = 'Error: ' + error.message; e.style.display = 'block'; return; }
+  _seasonServerNames = null; // server list changed — refresh the nation dropdown cache
   closeHistoryServerModal(); await loadHistoryServersAdmin();
 });
-window.deleteHistoryServer = async (id) => { if (!confirm('Delete this server?')) return; if (!confirm('Are you sure? This cannot be undone.')) return; await supabase.from('history_servers').delete().eq('id', id); await loadHistoryServersAdmin(); };
+window.deleteHistoryServer = async (id) => { if (!confirm('Delete this server?')) return; if (!confirm('Are you sure? This cannot be undone.')) return; await supabase.from('history_servers').delete().eq('id', id); _seasonServerNames = null; await loadHistoryServersAdmin(); };
 
 // ── Club Presidents ───────────────────────────────────────────
 let _clubPresidents = [];
