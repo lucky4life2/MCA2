@@ -226,6 +226,16 @@
 
     .members-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; position: relative; }
 
+    /* The members table is the widest thing on this page: six columns, one
+       stacking role badges and another holding a row of action buttons. At the
+       shared 960px .admin-wrap it never quite fit, so it sat permanently in
+       horizontal scroll. Let this one panel extend past the wrap when the
+       viewport can spare the room; every other tab keeps the standard width.
+       960 + (2 x 80) = 1120, so only widen above that with room to spare. */
+    @media (min-width: 1180px) {
+      #tab-members { margin-left: -80px; margin-right: -80px; }
+    }
+
     /* Messages inbox */
     .msg-row { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; gap: 14px; align-items: flex-start; transition: background .1s; }
     .msg-row:last-child { border-bottom: none; }
