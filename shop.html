@@ -271,6 +271,30 @@
     ]);
   }
 
+  // ── Subscription billing periods
+  // The admin product editor has offered six cycles ever since billing_cycle
+  // was added, but the storefront rendered every subscription as "/mo". A
+  // yearly plan therefore advertised itself at a twelfth of its real cadence.
+  // Everything below reads the product's actual cycle instead.
+  const BILLING_PERIODS = {
+    weekly:     { short: '/wk',  label: 'Billed weekly' },
+    biweekly:   { short: '/2wk', label: 'Billed every 2 weeks' },
+    monthly:    { short: '/mo',  label: 'Billed monthly' },
+    quarterly:  { short: '/qtr', label: 'Billed every 3 months' },
+    semiannual: { short: '/6mo', label: 'Billed every 6 months' },
+    yearly:     { short: '/yr',  label: 'Billed yearly' },
+  };
+  // Products created before billing_cycle existed, and cart entries saved
+  // before the cycle was stored, both arrive with no cycle. Monthly was the
+  // effective behaviour then, so keep it as the fallback rather than showing
+  // a bare price with no cadence at all.
+  function billingPeriod(cycle) { return BILLING_PERIODS[cycle] || BILLING_PERIODS.monthly; }
+  function isSubscription(x) { return !!x && x.product_type === 'subscription'; }
+  function priceLabel(x) {
+    const amount = '$' + Number(x.price).toFixed(2);
+    return isSubscription(x) ? amount + billingPeriod(x.billing_cycle).short : amount;
+  }
+
   // ── Cart
   function cartKey() { return 'mca_cart_' + _userId; }
   function getCart() { if (!_userId) return []; try { return JSON.parse(localStorage.getItem(cartKey())) || []; } catch(e) { return []; } }
@@ -328,7 +352,7 @@
         ${i.image_url ? `<img class="cart-item-img" src="${i.image_url}" alt="${i.name}">` : `<div class="cart-item-img-placeholder"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></div>`}
         <div class="cart-item-info">
           <div class="cart-item-name">${i.name}</div>
-          <div class="cart-item-price">$${Number(i.price).toFixed(2)} each</div>
+          <div class="cart-item-price">${isSubscription(i) ? priceLabel(i) : priceLabel(i) + ' each'}</div>
           <div class="cart-item-controls">
             <button class="cart-qty-btn" onclick="cartQty('${i.id}',-1)">−</button>
             <span class="cart-qty">${i.qty || 1}</span>
@@ -358,7 +382,7 @@
     let cartBtn = '';
     if (showCart) {
       if (_isLoggedIn) {
-        const prod = JSON.stringify({id:p.id,name:p.name,price:p.price,image_url:p.image_url||null}).replace(/"/g,'&quot;');
+        const prod = JSON.stringify({id:p.id,name:p.name,price:p.price,image_url:p.image_url||null,product_type:p.product_type||null,billing_cycle:p.billing_cycle||null}).replace(/"/g,'&quot;');
         const isSubDetail = p.product_type === 'subscription';
         const isOOSDetail = !isSubDetail && p.inventory === 0;
         const detailLabel = isSubDetail ? 'Subscribe' : (isOOSDetail ? 'Out of Stock' : 'Add to Cart');
@@ -394,8 +418,8 @@
           </div>
           <button class="detail-modal-close" onclick="closeDetail()">✕</button>
         </div>
-        <div class="detail-modal-price">${p.product_type === 'subscription' ? '$'+`${Number(p.price).toFixed(2)}/mo` : '$'+`${Number(p.price).toFixed(2)}`}</div>
-        ${p.product_type === 'subscription' ? '<div class="detail-modal-stock" style="color:var(--green);font-weight:600;">Recurring subscription</div>' : `<div class="detail-modal-stock ${p.inventory===0?'out':p.inventory<5?'low':''}">` + (p.inventory===0 ? 'Out of stock' : p.inventory+' in stock') + '</div>'}
+        <div class="detail-modal-price">${priceLabel(p)}</div>
+        ${p.product_type === 'subscription' ? `<div class="detail-modal-stock" style="color:var(--green);font-weight:600;">${billingPeriod(p.billing_cycle).label}</div>` : `<div class="detail-modal-stock ${p.inventory===0?'out':p.inventory<5?'low':''}">` + (p.inventory===0 ? 'Out of stock' : p.inventory+' in stock') + '</div>'}
         ${p.description ? `<div class="detail-modal-desc">${p.description}</div>` : ''}
         ${specs.length ? `
           <div class="detail-modal-specs">
@@ -506,7 +530,7 @@
       let cartBtn = '';
       if (cartAllowed) {
         if (_isLoggedIn) {
-          const prod = JSON.stringify({id:p.id,name:p.name,price:p.price,image_url:p.image_url||null}).replace(/"/g,'&quot;');
+          const prod = JSON.stringify({id:p.id,name:p.name,price:p.price,image_url:p.image_url||null,product_type:p.product_type||null,billing_cycle:p.billing_cycle||null}).replace(/"/g,'&quot;');
           const isOutOfStock = p.product_type !== 'subscription' && p.inventory === 0;
           const btnLabel = p.product_type === 'subscription' ? 'Subscribe' : (isOutOfStock ? 'Out of Stock' : 'Add to Cart');
           cartBtn = `<button class="btn-add-to-cart" ${isOutOfStock?'disabled':''} onclick='event.stopPropagation();shopAddToCart(${prod})'>${btnLabel}</button>`;
@@ -521,9 +545,9 @@
           <div class="product-card-name">${p.name}</div>
           ${p.description ? `<div class="product-card-desc">${p.description}</div>` : ''}
           <div class="product-card-footer">
-            <div class="product-card-price">$${Number(p.price).toFixed(2)}</div>
+            <div class="product-card-price">${priceLabel(p)}</div>
             ${p.product_type === 'subscription'
-              ? '<div class="product-card-stock" style="color:var(--green);font-weight:600;">Subscription</div>'
+              ? `<div class="product-card-stock" style="color:var(--green);font-weight:600;">${billingPeriod(p.billing_cycle).label}</div>`
               : `<div class="product-card-stock ${p.inventory===0?'out':p.inventory<5?'low':''}">${p.inventory===0?'Out of stock':`${p.inventory} in stock`}</div>`}
           </div>
           ${cartBtn}

@@ -2949,6 +2949,15 @@ document.getElementById('pm-save').addEventListener('click', async () => {
   const billing_cycle = isSubscription ? document.getElementById('pm-billing-cycle').value : null;
   const billing_anchor = isSubscription ? billingAnchor : null;
   const billing_anchor_date = isSubscription && billingAnchor === 'fixed' ? (document.getElementById('pm-billing-anchor-date').value || null) : null;
+  // A fixed billing anchor with no date would satisfy the DB constraints but
+  // leaves nothing to bill against, so catch it here with a readable message
+  // rather than letting it save incomplete.
+  if (isSubscription && billingAnchor === 'fixed' && !billing_anchor_date) {
+    errEl.textContent = 'Pick a fixed billing date, or set the billing anchor back to "From purchase date".';
+    errEl.style.display = 'block';
+    return;
+  }
+
   const payload = { name, description: document.getElementById('pm-desc').value.trim()||null, price, inventory, product_type: productType, billing_cycle, billing_anchor, billing_anchor_date, category: document.getElementById('pm-category').value.trim()||null, active: document.getElementById('pm-active').value==='true', images: uploadedImages, image_url: uploadedImages[0]?.url || null, image_url2: uploadedImages[1]?.url || null, weight: document.getElementById('pm-weight').value.trim()||null, dimensions: document.getElementById('pm-dimensions').value.trim()||null, material: document.getElementById('pm-material').value.trim()||null, sizes: document.getElementById('pm-sizes').value.trim()||null, colors: document.getElementById('pm-colors').value.trim()||null, sku: document.getElementById('pm-sku').value.trim()||null, admin_notes: document.getElementById('pm-notes').value.trim()||null, cart_enabled: document.getElementById('pm-cart-enabled').checked };
   const { error } = id ? await supabase.from('products').update(payload).eq('id',id) : await supabase.from('products').insert(payload);
   if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
