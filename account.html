@@ -381,14 +381,30 @@
         <div class="account-section-title">Notifications</div>
       </div>
       <div class="account-section-body">
-        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
-          <input type="checkbox" id="field-news-opt-in" style="margin-top:3px;width:16px;height:16px;flex-shrink:0;">
-          <span>
-            <span style="display:block;font-weight:600;font-size:14px;">Email me when news is published</span>
-            <span class="form-hint" style="display:block;margin-top:2px;">Get an email whenever MCA publishes a new article. You can turn this off anytime.</span>
-          </span>
-        </label>
-        <div class="form-error" id="news-opt-in-error"></div>
+        <!-- One independent toggle per kind of email. Each is its own
+             profiles column, so turning one off never affects the others.
+             Toggles for staff-only emails live in a pref-row that stays
+             hidden unless the account actually qualifies for them. -->
+        <div class="pref-row" id="pref-news">
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="field-news-opt-in" style="margin-top:3px;width:16px;height:16px;flex-shrink:0;">
+            <span>
+              <span style="display:block;font-weight:600;font-size:14px;">Email me when news is published</span>
+              <span class="form-hint" style="display:block;margin-top:2px;">Get an email whenever MCA publishes a new article. You can turn this off anytime.</span>
+            </span>
+          </label>
+          <div class="form-error" id="news-opt-in-error"></div>
+        </div>
+        <div class="pref-row" id="pref-task" style="display:none;margin-top:14px;">
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="field-task-opt-in" style="margin-top:3px;width:16px;height:16px;flex-shrink:0;">
+            <span>
+              <span style="display:block;font-weight:600;font-size:14px;">Email me when a task is assigned to me</span>
+              <span class="form-hint" style="display:block;margin-top:2px;">Get an email whenever someone assigns you a task on the Tasks board. You can turn this off anytime.</span>
+            </span>
+          </label>
+          <div class="form-error" id="task-opt-in-error"></div>
+        </div>
       </div>
     </div>
 
@@ -860,6 +876,9 @@ async function renderPage() {
   document.getElementById('field-display-name').value = _profile.display_name || '';
   document.getElementById('field-username').value = _profile.username || '';
   document.getElementById('field-news-opt-in').checked = !!_profile.news_email_opt_in;
+  // Task assignment emails default to on, so treat a missing value as opted in.
+  document.getElementById('field-task-opt-in').checked = _profile.task_email_opt_in !== false;
+  revealTaskEmailPref();
 
   // Connected accounts
   await renderConnectedAccounts();
@@ -1618,6 +1637,43 @@ document.getElementById('field-news-opt-in').addEventListener('change', async (e
     errEl.style.display = 'block';
   } else {
     _profile.news_email_opt_in = newVal;
+  }
+});
+
+// Task assignment emails only mean something to people who can reach the
+// Tasks board, so the toggle stays hidden for everyone else. Mirrors
+// resolveAccess() in tasks.html: any task permission, or admin/owner.
+async function revealTaskEmailPref() {
+  let allowed = false;
+  try {
+    const [{ data: manage }, { data: checkoff }, { data: test }] = await Promise.all([
+      supabase.rpc('user_has_permission', { perm: 'can_manage_tasks' }),
+      supabase.rpc('user_has_permission', { perm: 'can_check_off_tasks' }),
+      supabase.rpc('user_has_permission', { perm: 'can_test_tasks' }),
+    ]);
+    allowed = manage === true || checkoff === true || test === true;
+  } catch {}
+  if (!allowed) allowed = _profile.role === 'admin' || _profile.role === 'owner';
+  document.getElementById('pref-task').style.display = allowed ? '' : 'none';
+}
+
+document.getElementById('field-task-opt-in').addEventListener('change', async (e) => {
+  const checkbox = e.target;
+  const errEl = document.getElementById('task-opt-in-error');
+  errEl.style.display = 'none';
+  const newVal = checkbox.checked;
+  checkbox.disabled = true;
+  const { error } = await supabase
+    .from('profiles')
+    .update({ task_email_opt_in: newVal })
+    .eq('id', _user.id);
+  checkbox.disabled = false;
+  if (error) {
+    checkbox.checked = !newVal; // revert
+    errEl.textContent = 'Failed to save preference: ' + error.message;
+    errEl.style.display = 'block';
+  } else {
+    _profile.task_email_opt_in = newVal;
   }
 });
 

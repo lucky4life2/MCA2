@@ -1003,6 +1003,18 @@ document.getElementById('tk-mark-done').onclick = async () => {
   }
   document.getElementById('tk-modal').style.display = 'none'; clearShareUrlParam(); loadAll();
 };
+// Fire-and-forget: email the assignee that a task landed on their plate.
+// Never blocks or fails the save — the assignment itself already succeeded.
+async function notifyTaskAssignee(taskId, userId) {
+  try {
+    const { error } = await supabase.functions.invoke('notify-task-assignee', {
+      body: { task_id: taskId, user_id: userId },
+    });
+    if (error) console.warn('Task assignment email failed:', error.message || error);
+  } catch (e) {
+    console.warn('Task assignment email failed:', e);
+  }
+}
 document.getElementById('tk-save').onclick = async () => {
   const id = document.getElementById('tk-id').value;
   const title = document.getElementById('tk-name').value.trim();
@@ -1031,12 +1043,23 @@ document.getElementById('tk-save').onclick = async () => {
   if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
 
   // Sync the single-select assignee against the task_assignees join table.
+  const previousTask = id ? _tasks.find(t => t.id === id) : null;
+  const previousAssigneeId = previousTask?.assignee_id || null;
+  // A task that was a draft never notified anyone, so publishing it counts as
+  // a fresh assignment even when the assignee didn't change.
+  const justPublished = !!previousTask?.is_draft && !payload.is_draft;
   if (taskId) {
     ({ error } = await supabase.from('task_assignees').delete().eq('task_id', taskId));
     if (!error && assigneeId) {
       ({ error } = await supabase.from('task_assignees').insert({ task_id: taskId, user_id: assigneeId }));
     }
     if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+    // Only notify on an actual change of assignee, so re-saving a task for an
+    // unrelated edit doesn't re-email the same person. The edge function
+    // handles opt-out, missing email, self-assignment and drafts.
+    if (assigneeId && (assigneeId !== previousAssigneeId || justPublished)) {
+      notifyTaskAssignee(taskId, assigneeId);
+    }
   }
 
   document.getElementById('tk-modal').style.display = 'none'; clearShareUrlParam(); loadAll();
