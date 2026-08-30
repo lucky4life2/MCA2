@@ -72,16 +72,23 @@ const NAV_HTML = () => {
   </a>
   <ul class="nav-links" id="nav-links">
     <li><a href="index.html"      data-page="index">Home</a></li>
-    <li><a href="server.html"     data-page="server">Server</a></li>
+    <li class="nav-has-dropdown" id="nav-server-item">
+      <a href="#" class="nav-dropdown-trigger" data-page="server-hub" aria-expanded="false" onclick="return false;">Server <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></a>
+      <ul class="nav-dropdown" id="nav-server-dropdown">
+        <li><a href="server.html"  data-page="server">Server</a></li>
+        <li><a href="economy.html" data-page="economy">Economy</a></li>
+        <li><a href="stocks.html"  data-page="stocks">Stock Exchange</a></li>
+      </ul>
+    </li>
     <li class="nav-has-dropdown" id="nav-community-item">
-      <a href="#" class="nav-dropdown-trigger" data-page="community" onclick="return false;">Community <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></a>
+      <a href="#" class="nav-dropdown-trigger" data-page="community" aria-expanded="false" onclick="return false;">Community <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></a>
       <ul class="nav-dropdown" id="nav-community-dropdown">
         <li><a href="news.html"    data-page="news">News</a></li>
         <li><a href="nations.html" data-page="nations">Nations</a></li>
       </ul>
     </li>
     <li class="nav-has-dropdown" id="nav-about-item">
-      <a href="#" class="nav-dropdown-trigger" data-page="about" onclick="return false;">About <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></a>
+      <a href="#" class="nav-dropdown-trigger" data-page="about" aria-expanded="false" onclick="return false;">About <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></a>
       <ul class="nav-dropdown" id="nav-about-dropdown">
         <li><a href="leadership.html" data-page="leadership">Leadership</a></li>
         <li><a href="archive.html"    data-page="archive">Archive</a></li>
@@ -649,7 +656,12 @@ async function injectNav() {
     if (parentDropdown) parentDropdown.querySelector('.nav-dropdown-trigger').classList.add('active');
   }
 
-  // Nav dropdown toggles (Community, About) — only one open at a time
+  // Nav dropdown toggles (Server, Community, About) — only one open at a time
+  function closeDropdown(item) {
+    item.classList.remove('open');
+    const t = item.querySelector('.nav-dropdown-trigger');
+    if (t) t.setAttribute('aria-expanded', 'false');
+  }
   document.querySelectorAll('.nav-has-dropdown').forEach(item => {
     const trigger = item.querySelector('.nav-dropdown-trigger');
     if (!trigger) return;
@@ -657,13 +669,16 @@ async function injectNav() {
       e.stopPropagation();
       e.preventDefault();
       const wasOpen = item.classList.contains('open');
-      document.querySelectorAll('.nav-has-dropdown').forEach(other => other.classList.remove('open'));
-      if (!wasOpen) item.classList.add('open');
+      document.querySelectorAll('.nav-has-dropdown').forEach(closeDropdown);
+      if (!wasOpen) {
+        item.classList.add('open');
+        trigger.setAttribute('aria-expanded', 'true');
+      }
     });
   });
   document.addEventListener('click', e => {
     document.querySelectorAll('.nav-has-dropdown').forEach(item => {
-      if (!item.contains(e.target)) item.classList.remove('open');
+      if (!item.contains(e.target)) closeDropdown(item);
     });
   });
 
@@ -869,8 +884,6 @@ async function initNavAuth(_authReadyResolve) {
           <div class="nav-account-dropdown-divider"></div>
           ` : ''}
           <a class="nav-account-dropdown-item" href="account.html">Account</a>
-          <a class="nav-account-dropdown-item" href="economy.html">Economy</a>
-          <a class="nav-account-dropdown-item" href="stocks.html">Stock Exchange</a>
           <a class="nav-account-dropdown-item" href="congress.html">Congress</a>
           <a class="nav-account-dropdown-item" href="help.html">Help</a>
           <a class="nav-account-dropdown-item" href="shop.html">Shop</a>
