@@ -265,7 +265,7 @@
 
           <div class="login-consent">
             <input type="checkbox" id="signup-consent">
-            <label for="signup-consent">I agree to the <a href="terms.html" target="_blank">Terms of Service</a> and <a href="privacy.html" target="_blank">Privacy Policy</a>.</label>
+            <label for="signup-consent">I agree to the <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</label>
           </div>
           <div class="login-error" id="signup-consent-error">Please accept the Terms of Service and Privacy Policy to continue.</div>
 
@@ -354,7 +354,16 @@
   // ── Redirect destination ──────────────────────────────────────
   // If the user was sent here from another page, return them there after login.
   const params   = new URLSearchParams(window.location.search);
-  const returnTo = params.get('return') || 'account.html';
+
+  // ?return= is attacker-controllable and is fed straight to
+  // window.location.replace() and to the OAuth redirectTo. Anything but a
+  // same-site page name would turn the login page into an open redirect, so
+  // only "<page>.html" (optionally with a query/hash) is accepted.
+  function safeReturnTo(raw) {
+    const v = String(raw ?? '').trim();
+    return /^[A-Za-z0-9._~-]+\.html(?:[?#][^\s]*)?$/.test(v) ? v : 'account.html';
+  }
+  const returnTo = safeReturnTo(params.get('return'));
 
   if (params.get('deletion_scheduled') === '1') {
     const banner = document.getElementById('deletion-scheduled-banner');
@@ -792,7 +801,9 @@
     const errEl    = document.getElementById('signup-error');
     errEl.style.display = 'none';
     if (!requireSignupConsent()) return;
-    if (!email) {
+    // The message promised a *valid* address but only emptiness was checked,
+    // so a typo like "me@" reached the Edge Function and failed there instead.
+    if (!/^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(email)) {
       errEl.textContent   = 'Please enter a valid email address.';
       errEl.style.display = 'block'; return;
     }
@@ -812,12 +823,20 @@
     btn.textContent = 'Sending…'; btn.disabled = true;
     const SUPABASE_URL = supabase.supabaseUrl;
     const ANON_KEY = supabase.supabaseKey;
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/signup-with-email`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
-      body: JSON.stringify({ email, password }),
-    });
-    const json = await res.json();
+    let res, json;
+    try {
+      res = await fetch(`${SUPABASE_URL}/functions/v1/signup-with-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
+        body: JSON.stringify({ email, password }),
+      });
+      json = await res.json();
+    } catch (e) {
+      // Without this the button stayed on "Sending…" and disabled forever.
+      btn.textContent = 'Create Account'; btn.disabled = false;
+      errEl.textContent   = 'Could not reach the server. Please try again.';
+      errEl.style.display = 'block'; return;
+    }
     btn.textContent = 'Create Account'; btn.disabled = false;
     if (!res.ok || json.error) {
       errEl.textContent   = json.error || 'Sign up failed.';

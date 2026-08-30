@@ -109,7 +109,15 @@
 import { supabase } from './supabase.js';
 
 function escapeHtml(s) {
-  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// FAQ answers are author-supplied markdown. Without a scheme check a link like
+// [x](javascript:...) would render as a live javascript: href.
+function safeUrl(url) {
+  const u = String(url ?? '').trim();
+  if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return /^https?:\/\//i.test(u) ? u : '';
+  return u;
 }
 
 // Very small markdown-ish renderer for answers (bold/italic/links/paragraphs only —
@@ -119,7 +127,13 @@ function renderAnswer(md) {
   let html = escapeHtml(md)
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m, text, url) => {
+      // The URL arrives already HTML-escaped, so decode it before the scheme
+      // check, then re-escape whatever survives.
+      const raw = String(url).replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+      const u = safeUrl(raw);
+      return u ? `<a href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer">${text}</a>` : text;
+    });
   return html.split(/\n{2,}/).map(p => p.trim() ? `<p>${p.replace(/\n/g,'<br>')}</p>` : '').join('');
 }
 
@@ -187,8 +201,8 @@ function renderFaqs() {
   listEl.innerHTML = order.map(cat => `
     <div class="faq-group-title">${escapeHtml(cat)}</div>
     ${grouped[cat].map(f => `
-      <div class="faq-item" data-id="${f.id}">
-        <button class="faq-question" onclick="toggleFaq('${f.id}')">
+      <div class="faq-item" data-id="${escapeHtml(f.id)}">
+        <button class="faq-question" type="button" aria-expanded="false" onclick="toggleFaq('${escapeHtml(f.id)}')">
           <span>${escapeHtml(f.question)}</span>
           <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
@@ -202,12 +216,15 @@ window.toggleFaq = (id) => {
   if (!item) return;
   const answer = item.querySelector('.faq-answer');
   const isOpen = item.classList.contains('open');
+  const trigger = item.querySelector('.faq-question');
   if (isOpen) {
     answer.style.maxHeight = null;
     item.classList.remove('open');
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
   } else {
     item.classList.add('open');
     answer.style.maxHeight = answer.scrollHeight + 'px';
+    if (trigger) trigger.setAttribute('aria-expanded', 'true');
   }
 };
 

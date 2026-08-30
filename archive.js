@@ -6,6 +6,21 @@
 // ─────────────────────────────────────────────────────────────
 import { supabase } from './supabase.js';
 
+/* ── ESCAPING ───────────────────────────────────────────────── */
+/* Everything on an archive_documents row is author-supplied and gets written
+   straight into innerHTML below, so it has to be escaped first. */
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* Only http(s) and relative URLs may reach an href/src, so a javascript: or
+   data: URL stored in file_url (or a markdown link) can't execute. */
+function safeUrl(url) {
+  const u = String(url ?? '').trim();
+  if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return /^https?:\/\//i.test(u) ? u : '';
+  return u;
+}
+
 /* ── HELPERS ────────────────────────────────────────────────── */
 function isArchivePdf(file) {
   return (file || '').split(/[?#]/)[0].toLowerCase().endsWith('.pdf');
@@ -20,6 +35,10 @@ function getArchiveAssetName(file) {
 function parseArchiveMarkdown(md) {
   if (!md) return '';
   return md
+    // Escape before any markup is generated — this parser previously emitted
+    // the document body verbatim, so raw <script>/<img onerror> in a document
+    // ran on archive.html and document.html for every visitor.
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm,  '<h2>$1</h2>')
     .replace(/^# (.+)$/gm,   '<h1>$1</h1>')
@@ -27,7 +46,10 @@ function parseArchiveMarkdown(md) {
     .replace(/\*\*(.+?)\*\*/g,     '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g,         '<em>$1</em>')
     .replace(/^---$/gm, '<hr class="divider">')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m, text, url) => {
+      const u = safeUrl(url);
+      return u ? `<a href="${u}" target="_blank" rel="noopener noreferrer">${text}</a>` : text;
+    })
     .replace(/(^- .+$(\n^- .+$)*)/gm, match => {
       const items = match.split('\n').map(l => `<li>${l.replace(/^- /, '')}</li>`).join('');
       return `<ul>${items}</ul>`;
@@ -61,7 +83,7 @@ function renderSupporters(supporters) {
     <div class="document-supporters">
       <div class="document-supporters-label">Supporters</div>
       <div class="document-supporters-list">
-        ${supporters.map(s => `<span class="supporter-pip">${s}</span>`).join('')}
+        ${supporters.map(s => `<span class="supporter-pip">${esc(s)}</span>`).join('')}
       </div>
     </div>`;
 }
@@ -99,7 +121,7 @@ async function loadArchiveIndex() {
     if (filterEl) {
       filterEl.innerHTML = `
         <button class="archive-filter-btn active" data-cat="all">All</button>
-        ${categories.map(cat => `<button class="archive-filter-btn" data-cat="${cat}">${cat}</button>`).join('')}
+        ${categories.map(cat => `<button class="archive-filter-btn" data-cat="${esc(cat)}">${esc(cat)}</button>`).join('')}
       `;
       filterEl.querySelectorAll('.archive-filter-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -119,8 +141,8 @@ async function loadArchiveIndex() {
     });
 
     indexEl.innerHTML = categories.filter(cat => grouped[cat]).map(cat => { const catDocs = grouped[cat]; return `
-      <div class="archive-category" data-category="${cat}">
-        <div class="archive-category-header">${cat}</div>
+      <div class="archive-category" data-category="${esc(cat)}">
+        <div class="archive-category-header">${esc(cat)}</div>
         <div class="archive-category-docs">
           ${catDocs.map(doc => {
             const isPDF = isArchivePdf(doc.file_url);
@@ -128,15 +150,15 @@ async function loadArchiveIndex() {
               ? `<div class="archive-card-thumb archive-card-thumb-placeholder">📄</div>`
               : isPDF
               ? `<div class="archive-card-thumb archive-card-thumb-placeholder archive-card-thumb-pdf">PDF</div>`
-              : `<img src="${doc.file_url}" alt="${doc.title || ''}" class="archive-card-thumb">`;
+              : `<img src="${esc(safeUrl(doc.file_url))}" alt="${esc(doc.title || '')}" class="archive-card-thumb">`;
             return `
               <a class="archive-card" href="document.html?slug=${encodeURIComponent(doc.slug)}">
                 ${thumb}
                 <div class="archive-card-body">
-                  <div class="archive-card-category">${cat}</div>
-                  <div class="archive-card-title">${doc.title || 'Untitled'}</div>
-                  <div class="archive-card-summary">${doc.summary || ''}</div>
-                  <div class="archive-card-meta">${doc.published_at ? formatArchiveDate(doc.published_at) : ''} · ${doc.author_name || 'MCA'}</div>
+                  <div class="archive-card-category">${esc(cat)}</div>
+                  <div class="archive-card-title">${esc(doc.title || 'Untitled')}</div>
+                  <div class="archive-card-summary">${esc(doc.summary || '')}</div>
+                  <div class="archive-card-meta">${esc(doc.published_at ? formatArchiveDate(doc.published_at) : '')} · ${esc(doc.author_name || 'MCA')}</div>
                 </div>
               </a>`;
           }).join('')}
@@ -221,12 +243,12 @@ async function loadDocumentReader() {
       <div class="article-hero">
         <div class="article-hero-inner">
           <div class="article-meta-top">
-            <span class="news-card-category">${doc.category || 'Archive'}</span>
-            <span class="news-card-date">${doc.published_at ? formatArchiveDate(doc.published_at) : ''}</span>
+            <span class="news-card-category">${esc(doc.category || 'Archive')}</span>
+            <span class="news-card-date">${esc(doc.published_at ? formatArchiveDate(doc.published_at) : '')}</span>
           </div>
-          <h1 class="article-title">${doc.title || 'Untitled'}</h1>
-          ${doc.summary ? `<p class="article-summary">${doc.summary}</p>` : ''}
-          <div class="article-byline">Issued by <strong>${doc.author_name || 'MCA'}</strong></div>
+          <h1 class="article-title">${esc(doc.title || 'Untitled')}</h1>
+          ${doc.summary ? `<p class="article-summary">${esc(doc.summary)}</p>` : ''}
+          <div class="article-byline">Issued by <strong>${esc(doc.author_name || 'MCA')}</strong></div>
           ${renderSupporters(doc.supporters)}
         </div>
       </div>
@@ -244,13 +266,13 @@ async function loadDocumentReader() {
                   <div class="document-scan-label">Original Document</div>
                   <div class="document-pdf-wrap">
                     <div class="document-pdf-icon">📄</div>
-                    <div class="document-pdf-name">${assetName}</div>
-                    <a href="${doc.file_url}" target="_blank" rel="noopener" class="document-pdf-btn">View PDF →</a>
+                    <div class="document-pdf-name">${esc(assetName)}</div>
+                    <a href="${esc(safeUrl(doc.file_url))}" target="_blank" rel="noopener noreferrer" class="document-pdf-btn">View PDF →</a>
                   </div>
                 </div>`
               : `<div class="document-scan">
                   <div class="document-scan-label">Original Document</div>
-                  <img src="${doc.file_url}" alt="Original ${doc.title || 'document'}">
+                  <img src="${esc(safeUrl(doc.file_url))}" alt="Original ${esc(doc.title || 'document')}">
                 </div>`;
           })() : ''}
 

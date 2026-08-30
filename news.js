@@ -1,11 +1,27 @@
 // news.js — ES module, loaded via <script type="module" src="news.js">
 import { supabase } from './supabase.js';
 
+// ── Escaping ─────────────────────────────────────────────────
+// Article fields are author-supplied and land in innerHTML, so everything
+// interpolated below has to be escaped first.
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Only http(s) and relative URLs may reach an href/src, so a javascript:,
+// data: or vbscript: payload smuggled in through a markdown link, a markdown
+// image, or an article's image_url can't execute.
+function safeUrl(url) {
+  const u = String(url ?? '').trim();
+  if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return /^https?:\/\//i.test(u) ? u : '';
+  return u;
+}
+
 // ── Markdown → HTML ───────────────────────────────────────────
 function renderMarkdown(md) {
   if (!md) return '';
   let html = md
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
     .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
     .replace(/^### (.+)$/gm,  '<h3>$1</h3>')
     .replace(/^## (.+)$/gm,   '<h2>$1</h2>')
@@ -16,9 +32,18 @@ function renderMarkdown(md) {
     .replace(/\*(.+?)\*/g,         '<em>$1</em>')
     .replace(/_(.+?)_/g,           '<em>$1</em>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;border-radius:4px;">')
-    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
+    // Images must be matched before links: `![alt](url)` also matches the
+    // link pattern, so running links first turned every markdown image into
+    // a stray "!" followed by a link and no image ever rendered.
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m, alt, url) => {
+      const u = safeUrl(url);
+      return u ? `<img src="${u}" alt="${alt}" style="max-width:100%;border-radius:4px;">` : '';
+    })
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m, text, url) => {
+      const u = safeUrl(url);
+      return u ? `<a href="${u}" target="_blank" rel="noopener noreferrer">${text}</a>` : text;
+    })
+    .replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
   html = html.replace(/(^[-*] .+\n?)+/gm, match => {
     const items = match.trim().split('\n').map(l => `<li>${l.replace(/^[-*] /,'')}</li>`).join('');
     return `<ul>${items}</ul>`;
@@ -55,13 +80,13 @@ function renderFeaturedBanner(article) {
     <div class="featured-banner-inner">
       <div class="featured-banner-left">
         <span class="featured-tag">Featured</span>
-        <span class="featured-banner-title" style="white-space:normal;overflow:visible;text-overflow:unset;">${article.title}</span>
+        <span class="featured-banner-title" style="white-space:normal;overflow:visible;text-overflow:unset;">${esc(article.title)}</span>
       </div>
       <div class="featured-banner-right">
         <span class="featured-banner-meta">${formatDate(article.published_at)}</span>
         <span class="featured-banner-cta">Read more →</span>
       </div>
-      <button id="featured-banner-close" title="Dismiss" style="
+      <button id="featured-banner-close" type="button" title="Dismiss" aria-label="Dismiss featured article banner" style="
         margin-left:16px;background:rgba(255,255,255,.15);border:none;color:#fff;
         border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px;
         display:flex;align-items:center;justify-content:center;flex-shrink:0;">✕</button>
@@ -85,11 +110,25 @@ function renderFeaturedBanner(article) {
     else document.body.insertBefore(banner, document.body.firstElementChild);
   }
 
-  banner.addEventListener('click', e => {
-    if (e.target.id === 'featured-banner-close') return;
+  // The banner is a div, not a link, so keyboard users had no way to reach or
+  // activate it. Expose it as a button and honour Enter/Space.
+  banner.setAttribute('role', 'button');
+  banner.setAttribute('tabindex', '0');
+  banner.setAttribute('aria-label', `Featured article: ${article.title || ''}`);
+
+  const openFeatured = () => {
     localStorage.setItem(storageKey, '1');
     if (article.slug) location.href = `article.html?slug=${encodeURIComponent(article.slug)}`;
     else openArticleModal(article);
+  };
+
+  banner.addEventListener('click', e => {
+    if (e.target.closest('#featured-banner-close')) return;
+    openFeatured();
+  });
+  banner.addEventListener('keydown', e => {
+    if (e.target.closest('#featured-banner-close')) return;
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFeatured(); }
   });
   document.getElementById('featured-banner-close').addEventListener('click', e => {
     e.stopPropagation();
@@ -105,14 +144,14 @@ function renderCard(a) {
   const cat = a.category || 'General';
   const href = a.slug ? `article.html?slug=${encodeURIComponent(a.slug)}` : '#';
   return `
-    <a href="${href}" class="news-card" data-id="${a.id}" style="cursor:pointer;display:block;text-decoration:none;color:inherit;">
+    <a href="${esc(href)}" class="news-card" data-id="${esc(a.id)}" style="cursor:pointer;display:block;text-decoration:none;color:inherit;">
       <div class="news-card-meta">
-        <span class="news-card-category">${cat}</span>
-        <span class="news-card-date">${formatDate(a.published_at)}</span>
+        <span class="news-card-category">${esc(cat)}</span>
+        <span class="news-card-date">${esc(formatDate(a.published_at))}</span>
       </div>
-      <div class="news-card-title">${a.title}</div>
-      ${excerpt ? `<div class="news-card-summary">${excerpt}</div>` : ''}
-      ${a.author_name ? `<div class="news-card-byline">By ${a.author_name}</div>` : ''}
+      <div class="news-card-title">${esc(a.title)}</div>
+      ${excerpt ? `<div class="news-card-summary">${esc(excerpt)}</div>` : ''}
+      ${a.author_name ? `<div class="news-card-byline">By ${esc(a.author_name)}</div>` : ''}
     </a>`;
 }
 
@@ -148,6 +187,8 @@ function openArticleModal(article) {
     overlay.style.cssText = `position:fixed;inset:0;z-index:500;background:rgba(10,15,30,.6);
       display:flex;align-items:flex-start;justify-content:center;
       padding:2rem 1rem;overflow-y:auto;`;
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
     document.body.appendChild(overlay);
   }
 
@@ -156,19 +197,19 @@ function openArticleModal(article) {
     <div style="background:var(--white);border-radius:8px;border:1px solid var(--border);
       width:100%;max-width:720px;overflow:hidden;box-shadow:0 20px 60px rgba(10,15,30,.25);
       margin:auto;position:relative;">
-      ${article.image_url ? `<div style="height:280px;background:url('${article.image_url}') center/cover no-repeat;"></div>` : ''}
+      ${safeUrl(article.image_url) ? `<div style="height:280px;background:url('${encodeURI(safeUrl(article.image_url)).replace(/['"\\]/g, encodeURIComponent)}') center/cover no-repeat;"></div>` : ''}
       <button id="news-modal-close" style="position:absolute;top:16px;right:16px;
         background:rgba(10,15,30,.5);color:#fff;border:none;border-radius:50%;
         width:32px;height:32px;cursor:pointer;font-size:16px;
         display:flex;align-items:center;justify-content:center;">✕</button>
       <div style="padding:2.5rem;">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:1.25rem;flex-wrap:wrap;">
-          <span class="news-card-category">${cat}</span>
-          <span style="font-size:12px;color:var(--muted);">${formatDate(article.published_at)}</span>
-          ${article.author_name ? `<span style="font-size:12px;color:var(--muted);">By ${article.author_name}</span>` : ''}
+          <span class="news-card-category">${esc(cat)}</span>
+          <span style="font-size:12px;color:var(--muted);">${esc(formatDate(article.published_at))}</span>
+          ${article.author_name ? `<span style="font-size:12px;color:var(--muted);">By ${esc(article.author_name)}</span>` : ''}
         </div>
         <h1 style="font-family:'Times New Roman',serif;font-size:clamp(1.5rem,4vw,2.25rem);
-          color:var(--blue);font-weight:700;line-height:1.2;margin-bottom:1.5rem;">${article.title}</h1>
+          color:var(--blue);font-weight:700;line-height:1.2;margin-bottom:1.5rem;">${esc(article.title)}</h1>
         <div class="news-article-body" style="font-size:15px;line-height:1.8;color:var(--black);">
           ${renderMarkdown(article.body)}
         </div>

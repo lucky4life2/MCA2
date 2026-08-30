@@ -291,17 +291,32 @@ Any background information."></textarea>
 <script type="module">
 import { supabase } from './supabase.js';
 
+// Document metadata is author-supplied and rendered through innerHTML below.
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Keep javascript:/data: URLs out of markdown links.
+function safeUrl(url) {
+  const u = String(url ?? '').trim();
+  if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return /^https?:\/\//i.test(u) ? u : '';
+  return u;
+}
+
 const BUCKET = 'archive-files';
 
 function renderMarkdown(md) {
   if (!md) return '<em style="color:var(--muted);">Nothing to preview yet.</em>';
   let html = md
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
     .replace(/^### (.+)$/gm,'<h3>$1</h3>').replace(/^## (.+)$/gm,'<h2>$1</h2>').replace(/^# (.+)$/gm,'<h1>$1</h1>')
     .replace(/^---+$/gm,'<hr>')
     .replace(/\*\*\*(.+?)\*\*\*/g,'<strong><em>$1</em></strong>')
     .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m, text, url) => {
+      const u = safeUrl(url);
+      return u ? `<a href="${u}" target="_blank" rel="noopener noreferrer">${text}</a>` : text;
+    });
   html = html.replace(/(^[-*] .+\n?)+/gm, m => {
     const items = m.trim().split('\n').map(l=>`<li>${l.replace(/^[-*] /,'')}</li>`).join('');
     return `<ul>${items}</ul>`;
@@ -389,10 +404,10 @@ function renderMyDocs() {
       ? new Date(d.published_at + 'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
       : new Date(d.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
     return `<div class="doc-row">
-      <span class="status-pip ${d.status}"></span>
+      <span class="status-pip ${esc(d.status)}"></span>
       <div class="doc-row-info">
-        <div class="doc-row-title">${d.title}</div>
-        <div class="doc-row-meta">${d.category||'Uncategorized'} · ${capitalise(d.status)} · ${date}</div>
+        <div class="doc-row-title">${esc(d.title)}</div>
+        <div class="doc-row-meta">${esc(d.category||'Uncategorized')} · ${esc(capitalise(d.status))} · ${esc(date)}</div>
       </div>
       <div style="display:flex;gap:5px;flex-shrink:0;">
         <button class="btn btn-outline btn-sm" onclick="loadIntoEditor('${d.id}')">Edit</button>
@@ -419,8 +434,8 @@ function renderAllDocs() {
     return `<div class="doc-row">
       <span class="status-pip published"></span>
       <div class="doc-row-info">
-        <div class="doc-row-title">${d.title}</div>
-        <div class="doc-row-meta">${d.category||'Uncategorized'} · ${d.author_name||'Unknown'} · ${date}</div>
+        <div class="doc-row-title">${esc(d.title)}</div>
+        <div class="doc-row-meta">${esc(d.category||'Uncategorized')} · ${esc(d.author_name||'Unknown')} · ${esc(date)}</div>
       </div>
     </div>`;
   }).join('');

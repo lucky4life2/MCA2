@@ -22,10 +22,24 @@
 <script type="module">
 import { supabase } from './supabase.js';
 
+// Article fields are author-supplied and go through innerHTML below, so
+// anything interpolated has to be escaped first.
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Only http(s) and relative URLs may reach an href/src, so a javascript: or
+// data: payload in image_url or a markdown link can't execute.
+function safeUrl(url) {
+  const u = String(url ?? '').trim();
+  if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return /^https?:\/\//i.test(u) ? u : '';
+  return u;
+}
+
 function renderMarkdown(md) {
   if (!md) return '';
   let html = md
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
     .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
     .replace(/^### (.+)$/gm,  '<h3>$1</h3>')
     .replace(/^## (.+)$/gm,   '<h2>$1</h2>')
@@ -36,9 +50,15 @@ function renderMarkdown(md) {
     .replace(/\*(.+?)\*/g,         '<em>$1</em>')
     .replace(/_(.+?)_/g,           '<em>$1</em>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;border-radius:4px;">')
-    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m, alt, url) => {
+      const u = safeUrl(url);
+      return u ? `<img src="${u}" alt="${alt}" style="max-width:100%;border-radius:4px;">` : '';
+    })
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m, text, url) => {
+      const u = safeUrl(url);
+      return u ? `<a href="${u}" target="_blank" rel="noopener noreferrer">${text}</a>` : text;
+    })
+    .replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
   html = html.replace(/(^[-*] .+\n?)+/gm, match => {
     const items = match.trim().split('\n').map(l => `<li>${l.replace(/^[-*] /,'')}</li>`).join('');
     return `<ul>${items}</ul>`;
@@ -65,7 +85,7 @@ async function shareArticle(article) {
   const url = `${location.origin}/article.html?slug=${encodeURIComponent(article.slug)}`;
   if (navigator.share) {
     try {
-      await navigator.share({ title: article.title || article.title, url });
+      await navigator.share({ title: article.title || 'Minecraft Club of America', url });
       return;
     } catch (e) { /* fall through to clipboard */ }
   }
@@ -122,19 +142,19 @@ if (!slug) {
           <div class="article-hero-inner">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;gap:1rem;flex-wrap:wrap;">
               <a href="news.html" class="article-back">← Back to News</a>
-              <button id="share-btn" style="display:inline-flex;align-items:center;gap:8px;padding:0.45rem 1.1rem;border-radius:6px;border:1px solid var(--border);background:var(--white);color:var(--black);font-size:13px;font-weight:500;cursor:pointer;transition:background .15s,color .15s;">
+              <button id="share-btn" type="button" aria-label="Copy a link to this article" style="display:inline-flex;align-items:center;gap:8px;padding:0.45rem 1.1rem;border-radius:6px;border:1px solid var(--border);background:var(--white);color:var(--black);font-size:13px;font-weight:500;cursor:pointer;transition:background .15s,color .15s;">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
                 Share
               </button>
             </div>
-            ${article.image_url ? `<div class="article-image" style="margin-bottom:2rem;"><img src="${article.image_url}" alt="${article.title}"></div>` : ''}
+            ${safeUrl(article.image_url) ? `<div class="article-image" style="margin-bottom:2rem;"><img src="${esc(safeUrl(article.image_url))}" alt="${esc(article.title)}"></div>` : ''}
             <div class="article-meta-top">
-              <span class="news-card-category">${cat}</span>
-              <span style="font-size:12px;color:var(--muted);">${formatDate(article.published_at)}</span>
-              ${article.author_name ? `<span style="font-size:12px;color:var(--muted);">By ${article.author_name}</span>` : ''}
+              <span class="news-card-category">${esc(cat)}</span>
+              <span style="font-size:12px;color:var(--muted);">${esc(formatDate(article.published_at))}</span>
+              ${article.author_name ? `<span style="font-size:12px;color:var(--muted);">By ${esc(article.author_name)}</span>` : ''}
             </div>
-            <h1 class="article-title">${article.title}</h1>
-            ${article.summary ? `<p class="article-summary">${article.summary}</p>` : ''}
+            <h1 class="article-title">${esc(article.title)}</h1>
+            ${article.summary ? `<p class="article-summary">${esc(article.summary)}</p>` : ''}
           </div>
         </div>
         <div class="content article-content">

@@ -508,12 +508,12 @@ async function loadAll() {
 
 function fillSelects() {
   const pjSel = document.getElementById('tk-project');
-  pjSel.innerHTML = _projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  pjSel.innerHTML = _projects.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
   const asSel = document.getElementById('tk-assignee');
-  asSel.innerHTML = '<option value="">Unassigned</option>' + _members.map(m => `<option value="${m.id}">${m.display_name || m.username}</option>`).join('');
+  asSel.innerHTML = '<option value="">Unassigned</option>' + _members.map(m => `<option value="${m.id}">${escapeHtml(m.display_name || m.username)}</option>`).join('');
   const filterSel = document.getElementById('tk-project-filter');
   const prevVal = filterSel.value;
-  filterSel.innerHTML = '<option value="">All Projects</option>' + _projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  filterSel.innerHTML = '<option value="">All Projects</option>' + _projects.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
   filterSel.value = prevVal;
 }
 
@@ -537,7 +537,7 @@ function buildLegend() {
   const el = document.getElementById('tk-legend');
   el.innerHTML = _tags.map(tg => `
     <div class="tk-legend-chip${_tagFilter.has(tg.id) ? ' active' : ''}" data-tag="${tg.id}">
-      <span class="tk-swatch" style="background:${tg.color};"></span>${tg.name}
+      <span class="tk-swatch" style="background:${safeColor(tg.color)};"></span>${escapeHtml(tg.name)}
     </div>`).join('');
   el.querySelectorAll('.tk-legend-chip').forEach(chip => {
     chip.onclick = () => {
@@ -585,9 +585,9 @@ function renderCollapsedStrip() {
   strip.innerHTML = collapsed.map(p => {
     const count = visibleTasks().filter(t => t.project_id === p.id).length;
     return `
-    <div class="tk-collapsed-chip" onclick="toggleProjectCollapse('${p.id}')" title="Expand ${p.name}">
+    <div class="tk-collapsed-chip" onclick="toggleProjectCollapse('${p.id}')" title="Expand ${escapeHtml(p.name)}">
       <span class="tk-collapsed-caret">▸</span>
-      <span class="tk-collapsed-name">${p.name}</span>
+      <span class="tk-collapsed-name">${escapeHtml(p.name)}</span>
       <span class="tk-collapsed-count">${count}</span>
     </div>`;
   }).join('');
@@ -604,7 +604,7 @@ function renderList() {
     <div class="tp-group">
       <div class="tp-head">
         <button class="tp-collapse-btn" onclick="toggleProjectCollapse('${p.id}')" title="Collapse">▾</button>
-        <div class="tp-head-name">${p.name}${p.is_draft ? ' <span class="draft-badge">Draft</span>' : ''}${_access.manage && _projectAccess.some(a => a.project_id === p.id) ? ' 🔒' : ''}</div>
+        <div class="tp-head-name">${escapeHtml(p.name)}${p.is_draft ? ' <span class="draft-badge">Draft</span>' : ''}${_access.manage && _projectAccess.some(a => a.project_id === p.id) ? ' 🔒' : ''}</div>
         <div class="tp-head-actions">
           ${sortSelectHtml(p.id)}
           ${_access.manage ? `<button onclick="editProject('${p.id}')">Edit</button>` : ''}
@@ -616,15 +616,15 @@ function renderList() {
         const tg = taskTag(t);
         return `
         <div class="t-row" onclick="editTask('${t.id}')">
-          <span class="t-color-dot" style="background:${color};"></span>
-          <div class="t-title${isDoneTask(t) ? ' done' : ''}">${t.title}</div>
+          <span class="t-color-dot" style="background:${safeColor(color)};"></span>
+          <div class="t-title${isDoneTask(t) ? ' done' : ''}">${escapeHtml(t.title)}</div>
           ${t.is_draft ? '<span class="draft-badge">Draft</span>' : ''}
-          ${t.assignee_id ? `<div class="t-meta">${memberName(t.assignee_id)}</div>` : ''}
-          ${t.due_date ? `<div class="t-meta">${t.due_date}</div>` : ''}
+          ${t.assignee_id ? `<div class="t-meta">${escapeHtml(memberName(t.assignee_id))}</div>` : ''}
+          ${t.due_date ? `<div class="t-meta">${escapeHtml(t.due_date)}</div>` : ''}
           ${_commentCounts[t.id] ? `<div class="t-meta">💬 ${_commentCounts[t.id]}</div>` : ''}
-          ${t.checked_off_by ? `<div class="t-meta" style="color:#2d7d2f;">✓ ${memberName(t.checked_off_by) || 'checked'}</div>` : ''}
-          <div class="t-badge ${t.priority}">${t.priority}</div>
-          <div class="t-status" style="background:${color};color:${txt};">${tg.name}</div>
+          ${t.checked_off_by ? `<div class="t-meta" style="color:#2d7d2f;">✓ ${escapeHtml(memberName(t.checked_off_by) || 'checked')}</div>` : ''}
+          <div class="t-badge ${escapeHtml(t.priority)}">${escapeHtml(t.priority)}</div>
+          <div class="t-status" style="background:${safeColor(color)};color:${safeColor(txt)};">${escapeHtml(tg.name)}</div>
         </div>`;
       }).join('') : '<div class="t-empty">No tasks in this project.</div>'}
     </div>`;
@@ -643,7 +643,7 @@ function renderGrid() {
     <div class="tp-group">
       <div class="tp-head">
         <button class="tp-collapse-btn" onclick="toggleProjectCollapse('${p.id}')" title="Collapse">▾</button>
-        <div class="tp-head-name">${p.name}${p.is_draft ? ' <span class="draft-badge">Draft</span>' : ''}${_access.manage && _projectAccess.some(a => a.project_id === p.id) ? ' 🔒' : ''}</div>
+        <div class="tp-head-name">${escapeHtml(p.name)}${p.is_draft ? ' <span class="draft-badge">Draft</span>' : ''}${_access.manage && _projectAccess.some(a => a.project_id === p.id) ? ' 🔒' : ''}</div>
         <div class="tp-head-actions">
           ${sortSelectHtml(p.id)}
           ${_access.manage ? `<button onclick="editProject('${p.id}')">Edit</button>` : ''}
@@ -655,14 +655,14 @@ function renderGrid() {
           const txt = contrastText(color);
           const tg = taskTag(t);
           return `
-          <div class="tk-card" style="background:${color};color:${txt};" onclick="editTask('${t.id}')">
-            <div class="tk-card-title${isDoneTask(t) ? ' done' : ''}" style="color:${txt};">${t.title}${t.is_draft ? ' <span class="draft-badge">Draft</span>' : ''}</div>
+          <div class="tk-card" style="background:${safeColor(color)};color:${safeColor(txt)};" onclick="editTask('${t.id}')">
+            <div class="tk-card-title${isDoneTask(t) ? ' done' : ''}" style="color:${safeColor(txt)};">${escapeHtml(t.title)}${t.is_draft ? ' <span class="draft-badge">Draft</span>' : ''}</div>
             <div class="tk-card-foot">
-              <span class="tk-card-status" style="color:${txt};">${tg.name}</span>
-              ${t.assignee_id ? `<span class="tk-card-meta" style="color:${txt};">👤 ${memberName(t.assignee_id) || 'Unassigned'}</span>` : ''}
-              ${t.due_date ? `<span class="tk-card-meta" style="color:${txt};">${t.due_date}</span>` : ''}
-              ${_commentCounts[t.id] ? `<span class="tk-card-meta" style="color:${txt};">💬 ${_commentCounts[t.id]}</span>` : ''}
-              ${t.checked_off_by ? `<span class="tk-card-meta" style="color:${txt};">✓ ${memberName(t.checked_off_by) || 'checked'}</span>` : ''}
+              <span class="tk-card-status" style="color:${safeColor(txt)};">${escapeHtml(tg.name)}</span>
+              ${t.assignee_id ? `<span class="tk-card-meta" style="color:${safeColor(txt)};">👤 ${escapeHtml(memberName(t.assignee_id) || 'Unassigned')}</span>` : ''}
+              ${t.due_date ? `<span class="tk-card-meta" style="color:${safeColor(txt)};">${escapeHtml(t.due_date)}</span>` : ''}
+              ${_commentCounts[t.id] ? `<span class="tk-card-meta" style="color:${safeColor(txt)};">💬 ${_commentCounts[t.id]}</span>` : ''}
+              ${t.checked_off_by ? `<span class="tk-card-meta" style="color:${safeColor(txt)};">✓ ${escapeHtml(memberName(t.checked_off_by) || 'checked')}</span>` : ''}
             </div>
           </div>`;
         }).join('')}</div>` : '<div class="t-empty">No tasks in this project.</div>'}
@@ -686,18 +686,18 @@ function openProjectModal(p) {
   _pjUserPicks = rows.filter(a => a.user_id).map(a => a.user_id);
   document.getElementById('pj-roles').innerHTML = _roles.map(r => `
     <label style="font-size:12px;display:flex;align-items:center;gap:4px;">
-      <input type="checkbox" class="pj-role-cb" value="${r.id}" ${roleIds.has(r.id) ? 'checked' : ''}> ${r.label}
+      <input type="checkbox" class="pj-role-cb" value="${r.id}" ${roleIds.has(r.id) ? 'checked' : ''}> ${escapeHtml(r.label)}
     </label>`).join('');
   renderPjUsers();
   const addSel = document.getElementById('pj-user-add');
-  addSel.innerHTML = '<option value="">+ Add specific person…</option>' + _members.map(m => `<option value="${m.id}">${m.display_name || m.username}</option>`).join('');
+  addSel.innerHTML = '<option value="">+ Add specific person…</option>' + _members.map(m => `<option value="${m.id}">${escapeHtml(m.display_name || m.username)}</option>`).join('');
   document.getElementById('pj-modal').style.display = 'flex';
 }
 function renderPjUsers() {
   document.getElementById('pj-users').innerHTML = _pjUserPicks.map(uid => {
     const m = _members.find(x => x.id === uid);
     return `<div style="font-size:12px;display:flex;justify-content:space-between;align-items:center;background:var(--bg-soft,#f2f2f2);padding:3px 8px;border-radius:4px;">
-      <span>${m?.display_name || m?.username || uid}</span>
+      <span>${escapeHtml(m?.display_name || m?.username || uid)}</span>
       <button type="button" onclick="removePjUser('${uid}')" style="border:none;background:none;cursor:pointer;color:#c0392b;">✕</button>
     </div>`;
   }).join('');
@@ -759,15 +759,15 @@ function buildTagPicker(canEdit) {
     if (canEdit && _tagPickEditingIds.has(tg.id)) {
       return `
       <div class="tk-tag-edit-row" data-tag="${tg.id}">
-        <input type="color" class="tk-tagpick-color" value="${tg.color}">
-        <input type="text" class="tk-tagpick-name" value="${tg.name}">
+        <input type="color" class="tk-tagpick-color" value="${safeColor(tg.color)}">
+        <input type="text" class="tk-tagpick-name" value="${escapeHtml(tg.name)}">
         <button class="tk-tagpick-save" title="Save">✓</button>
         <button class="tk-tagpick-cancel" title="Cancel">✕</button>
       </div>`;
     }
     return `
     <div class="status-pick${_editingTag === tg.id ? ' selected' : ''}" data-tag="${tg.id}" style="${canEdit ? '' : 'cursor:default;opacity:.85;'}">
-      <span class="tk-swatch" style="background:${tg.color};"></span>${tg.name}
+      <span class="tk-swatch" style="background:${safeColor(tg.color)};"></span>${escapeHtml(tg.name)}
       ${canEdit ? `
       <span class="tk-tagpick-actions">
         <button class="tk-tagpick-edit" data-tag="${tg.id}" title="Rename or recolor">✎</button>
@@ -1096,8 +1096,8 @@ function renderTagMgrList() {
   const el = document.getElementById('tagmgr-list');
   el.innerHTML = _tags.length ? _tags.map(tg => `
     <div class="tag-mgr-row">
-      <input type="color" class="tagmgr-color-input" data-id="${tg.id}" value="${tg.color}" style="width:30px;height:30px;padding:0;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:none;flex-shrink:0;">
-      <input type="text" class="form-input tagmgr-name-input" data-id="${tg.id}" value="${tg.name}" style="flex:1;">
+      <input type="color" class="tagmgr-color-input" data-id="${tg.id}" value="${safeColor(tg.color)}" style="width:30px;height:30px;padding:0;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:none;flex-shrink:0;">
+      <input type="text" class="form-input tagmgr-name-input" data-id="${tg.id}" value="${escapeHtml(tg.name)}" style="flex:1;">
       <input type="number" class="form-input tagmgr-sort-input" data-id="${tg.id}" value="${tg.sort_order ?? 0}" title="Sort order (lower = earlier)" style="width:56px;flex-shrink:0;">
       <label style="font-size:11px;display:flex;align-items:center;gap:3px;white-space:nowrap;">
         <input type="checkbox" class="tagmgr-checkoff-input" data-id="${tg.id}" ${tg.is_checkoff ? 'checked' : ''}> Check-off
@@ -1164,6 +1164,13 @@ document.getElementById('tagmgr-add').onclick = async () => {
 };
 
 // ── Comments ──
+// Tag colours are free-text in the DB but land inside a style="" attribute,
+// where a crafted value could close the attribute or inject extra CSS.
+function safeColor(c) {
+  const v = String(c ?? '').trim();
+  return /^#[0-9a-fA-F]{3,8}$/.test(v) ? v : '#888888';
+}
+
 function escapeHtml(str) {
   return String(str ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 }

@@ -213,7 +213,7 @@
             <label class="form-label">Hero Image (optional)</label>
             <div id="np-image-dropzone" style="border:2px dashed var(--border);border-radius:6px;padding:.85rem;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;">
               <div id="np-image-preview-wrap" style="display:none;margin-bottom:8px;">
-                <img id="np-image-preview" style="max-width:100%;max-height:140px;border-radius:5px;display:block;margin:0 auto;">
+                <img id="np-image-preview" alt="Preview of the article header image" style="max-width:100%;max-height:140px;border-radius:5px;display:block;margin:0 auto;">
               </div>
               <div id="np-image-dropzone-label" style="font-size:12px;color:var(--muted);">Drag &amp; drop a photo here, or click to browse</div>
               <input type="file" id="np-image-file" accept="image/*" style="display:none;">
@@ -339,20 +339,38 @@ Regular paragraph text.
 <script type="module">
 import { supabase, getMyRolePreview } from './supabase.js';
 
+// Article metadata is author-supplied and rendered through innerHTML below.
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Keep javascript:/data: URLs out of markdown links and images.
+function safeUrl(url) {
+  const u = String(url ?? '').trim();
+  if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return /^https?:\/\//i.test(u) ? u : '';
+  return u;
+}
+
 // ── Markdown renderer (mirrors news.js) ──────────────────────
 function renderMarkdown(md) {
   if (!md) return '<em style="color:var(--muted);">Nothing to preview yet.</em>';
   let html = md
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
     .replace(/^#### (.+)$/gm,'<h4>$1</h4>').replace(/^### (.+)$/gm,'<h3>$1</h3>')
     .replace(/^## (.+)$/gm,'<h2>$1</h2>').replace(/^# (.+)$/gm,'<h1>$1</h1>')
     .replace(/^---+$/gm,'<hr>')
     .replace(/\*\*\*(.+?)\*\*\*/g,'<strong><em>$1</em></strong>')
     .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>')
     .replace(/_(.+?)_/g,'<em>$1</em>').replace(/`([^`]+)`/g,'<code>$1</code>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>')
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g,'<img src="$2" alt="$1">')
-    .replace(/^> (.+)$/gm,'<blockquote>$1</blockquote>');
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m, alt, url) => {
+      const u = safeUrl(url);
+      return u ? `<img src="${u}" alt="${alt}">` : '';
+    })
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m, text, url) => {
+      const u = safeUrl(url);
+      return u ? `<a href="${u}" target="_blank" rel="noopener noreferrer">${text}</a>` : text;
+    })
+    .replace(/^&gt; (.+)$/gm,'<blockquote>$1</blockquote>');
   html = html.replace(/(^[-*] .+\n?)+/gm, m => {
     const items = m.trim().split('\n').map(l=>`<li>${l.replace(/^[-*] /,'')}</li>`).join('');
     return `<ul>${items}</ul>`;
@@ -474,8 +492,8 @@ function renderPendingReview() {
     return `<div class="article-row">
       <span class="status-pip pending_review"></span>
       <div class="article-row-info">
-        <div class="article-row-title">${a.title}</div>
-        <div class="article-row-meta">${a.category||'General'} · By ${a.author_name||'Unknown'} · Submitted ${date}</div>
+        <div class="article-row-title">${esc(a.title)}</div>
+        <div class="article-row-meta">${esc(a.category||'General')} · By ${esc(a.author_name||'Unknown')} · Submitted ${esc(date)}</div>
       </div>
       <div class="btn-row" style="flex-shrink:0;">
         <button class="btn btn-outline btn-sm" onclick="loadIntoEditor('${a.id}')">Preview</button>
@@ -532,7 +550,7 @@ function renderMyArticles() {
       : new Date(a.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
     const statusLabel = a.status === 'pending_review' ? 'Pending Review' : capitalise(a.status);
     const noteHtml = (a.status === 'draft' && a.rejection_note)
-      ? `<div class="article-row-meta" style="color:#c0392b;margin-top:2px;">Sent back: ${a.rejection_note}</div>` : '';
+      ? `<div class="article-row-meta" style="color:#c0392b;margin-top:2px;">Sent back: ${esc(a.rejection_note)}</div>` : '';
     let actionBtn;
     if (a.status === 'published') {
       actionBtn = `<button class="btn btn-ghost btn-sm" onclick="quickUnpublish('${a.id}')">Unpublish</button>`;
@@ -544,10 +562,10 @@ function renderMyArticles() {
       actionBtn = `<button class="btn btn-success btn-sm" onclick="quickPublish('${a.id}')">${_canApprove ? 'Publish' : 'Submit for Review'}</button>`;
     }
     return `<div class="article-row">
-      <span class="status-pip ${a.status}"></span>
+      <span class="status-pip ${esc(a.status)}"></span>
       <div class="article-row-info">
-        <div class="article-row-title">${a.title}</div>
-        <div class="article-row-meta">${a.category||'General'} · ${statusLabel} · ${date}</div>
+        <div class="article-row-title">${esc(a.title)}</div>
+        <div class="article-row-meta">${esc(a.category||'General')} · ${esc(statusLabel)} · ${esc(date)}</div>
         ${noteHtml}
       </div>
       <div style="display:flex;gap:5px;flex-shrink:0;">
@@ -574,8 +592,8 @@ function renderAllArticles() {
     return `<div class="article-row">
       <span class="status-pip published"></span>
       <div class="article-row-info">
-        <div class="article-row-title">${a.title}</div>
-        <div class="article-row-meta">${a.category||'General'} · ${a.author_name||'Unknown'} · ${date}</div>
+        <div class="article-row-title">${esc(a.title)}</div>
+        <div class="article-row-meta">${esc(a.category||'General')} · ${esc(a.author_name||'Unknown')} · ${esc(date)}</div>
       </div>
     </div>`;
   }).join('');

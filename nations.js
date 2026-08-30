@@ -5,6 +5,22 @@ import { supabase, getUser } from './supabase.js';
 const SUPABASE_URL_N  = 'https://hjaywokvgdzhvsoygctc.supabase.co';
 const SUPABASE_ANON_N = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
 
+/* ── ESCAPING ──────────────────────────────────────────────────
+   Nation rows are editable by nation leaders through update_own_nation, so
+   every field below is untrusted input and has to be escaped before it goes
+   anywhere near innerHTML. */
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* Flag filenames come from the DB and are pasted straight into an <img src>
+   under images/flags/, so reject anything that could escape that folder or
+   switch the URL scheme. */
+function safeFlagFile(name) {
+  const f = String(name ?? '');
+  return /^[A-Za-z0-9._-]+\.(png|jpe?g|gif|webp|svg)$/i.test(f) ? f : '';
+}
+
 /* ── MARKDOWN RENDERER (simple) ─────────────────────────────── */
 function renderMd(text) {
   return text
@@ -32,16 +48,17 @@ function renderGrid(nations) {
   }
 
   grid.innerHTML = nations.map((n, i) => {
+    const flagFile = safeFlagFile(n.flag);
     const flagHtml = `<div class="nation-flag-box">${
-      n.flag
-        ? `<img src="images/flags/${n.flag}" alt="${n.name} flag" onload="applyFlagClass(this)">`
+      flagFile
+        ? `<img src="images/flags/${encodeURIComponent(flagFile)}" alt="${esc(n.name)} flag" onload="applyFlagClass(this)">`
         : `<span class="flag-placeholder">No flag</span>`
     }</div>`;
     return `
-      <div class="nation-flag-item" data-season="${n.season || ''}" onclick="openNationDetail(${i})" style="cursor:pointer;" title="View ${n.name}">
+      <div class="nation-flag-item" data-season="${esc(n.season || '')}" onclick="openNationDetail(${i})" style="cursor:pointer;" title="View ${esc(n.name)}">
         ${flagHtml}
-        <div class="nation-name">${n.name}</div>
-        ${n.season ? `<div class="nation-season-tag">${n.season}</div>` : ''}
+        <div class="nation-name">${esc(n.name)}</div>
+        ${n.season ? `<div class="nation-season-tag">${esc(n.season)}</div>` : ''}
       </div>`;
   }).join('');
 }
@@ -56,7 +73,7 @@ function renderSeasonFilter(nations) {
 
   filterEl.innerHTML = `
     <button class="archive-filter-btn active" data-season="all">All</button>
-    ${seasons.map(s => `<button class="archive-filter-btn" data-season="${s}">${s}</button>`).join('')}
+    ${seasons.map(s => `<button class="archive-filter-btn" data-season="${esc(s)}">${esc(s)}</button>`).join('')}
   `;
   filterEl.querySelectorAll('.archive-filter-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -110,12 +127,13 @@ function openNationDetail(i) {
 
   const extraFields = n.fields || [];
 
-  const flagHtml = n.flag
-    ? `<img src="images/flags/${n.flag}" alt="${n.name} flag" onload="applyFlagDetailClass(this)">`
+  const detailFlagFile = safeFlagFile(n.flag);
+  const flagHtml = detailFlagFile
+    ? `<img src="images/flags/${encodeURIComponent(detailFlagFile)}" alt="${esc(n.name)} flag" onload="applyFlagDetailClass(this)">`
     : '';
 
   const tableRows = [...coreFields, ...extraFields.map(f => [f.key, f.value])]
-    .map(([k, v]) => `<tr><td style="font-weight:600;padding:6px 16px 6px 0;color:var(--mid);font-size:13px;white-space:nowrap;">${k}</td><td style="padding:6px 0;font-size:14px;">${v}</td></tr>`)
+    .map(([k, v]) => `<tr><td style="font-weight:600;padding:6px 16px 6px 0;color:var(--mid);font-size:13px;white-space:nowrap;">${esc(k)}</td><td style="padding:6px 0;font-size:14px;">${esc(v)}</td></tr>`)
     .join('');
 
   const tableHtml = tableRows
@@ -128,7 +146,7 @@ function openNationDetail(i) {
   const canEdit = isOwner && isEditableSeason(n.season);
   const lockedHtml = (isOwner && !canEdit) ? `
     <div style="margin-bottom:1.5rem;padding:.9rem 1.1rem;border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--mid);">
-      This nation belongs to <strong>${n.season}</strong>, which is not the current server. Its details are part of the historical record and can only be changed by an MCA admin.
+      This nation belongs to <strong>${esc(n.season)}</strong>, which is not the current server. Its details are part of the historical record and can only be changed by an MCA admin.
     </div>` : '';
   const editHtml = canEdit ? `
     <div id="nation-owner-edit-toggle" style="margin-bottom:1.5rem;">
@@ -137,15 +155,15 @@ function openNationDetail(i) {
     <div id="nation-owner-edit-form" style="display:none;margin-bottom:1.5rem;padding:1.25rem;border:1px solid var(--border);border-radius:8px;">
       <p style="font-size:12px;color:var(--mid);margin-bottom:1rem;">You can update the fields below. Flag images and the nation name are managed by MCA admins.</p>
       <div class="col2-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <div><label class="form-label">Leader(s)</label><input type="text" id="noe-leader" class="form-input" value="${n.leader || ''}"></div>
-        <div><label class="form-label">Capital</label><input type="text" id="noe-capital" class="form-input" value="${n.capital || ''}"></div>
-        <div><label class="form-label">Government</label><input type="text" id="noe-government" class="form-input" value="${n.government || ''}"></div>
-        <div><label class="form-label">Founded</label><input type="text" id="noe-founded" class="form-input" value="${n.founded || ''}"></div>
-        <div><label class="form-label">Founder</label><input type="text" id="noe-founder" class="form-input" value="${n.founder || ''}"></div>
-        <div><label class="form-label">Population</label><input type="text" id="noe-population" class="form-input" value="${n.population || ''}"></div>
-        <div><label class="form-label">Territory</label><input type="text" id="noe-territory" class="form-input" value="${n.territory || ''}"></div>
-        <div style="grid-column:1/-1;"><label class="form-label">Status</label><input type="text" id="noe-status" class="form-input" value="${n.status || ''}"></div>
-        <div style="grid-column:1/-1;"><label class="form-label">Description</label><textarea id="noe-body" class="form-input" rows="4" style="resize:vertical;">${n.body || ''}</textarea></div>
+        <div><label class="form-label">Leader(s)</label><input type="text" id="noe-leader" class="form-input" value="${esc(n.leader || '')}"></div>
+        <div><label class="form-label">Capital</label><input type="text" id="noe-capital" class="form-input" value="${esc(n.capital || '')}"></div>
+        <div><label class="form-label">Government</label><input type="text" id="noe-government" class="form-input" value="${esc(n.government || '')}"></div>
+        <div><label class="form-label">Founded</label><input type="text" id="noe-founded" class="form-input" value="${esc(n.founded || '')}"></div>
+        <div><label class="form-label">Founder</label><input type="text" id="noe-founder" class="form-input" value="${esc(n.founder || '')}"></div>
+        <div><label class="form-label">Population</label><input type="text" id="noe-population" class="form-input" value="${esc(n.population || '')}"></div>
+        <div><label class="form-label">Territory</label><input type="text" id="noe-territory" class="form-input" value="${esc(n.territory || '')}"></div>
+        <div style="grid-column:1/-1;"><label class="form-label">Status</label><input type="text" id="noe-status" class="form-input" value="${esc(n.status || '')}"></div>
+        <div style="grid-column:1/-1;"><label class="form-label">Description</label><textarea id="noe-body" class="form-input" rows="4" style="resize:vertical;">${esc(n.body || '')}</textarea></div>
       </div>
       <div id="nation-owner-edit-error" style="display:none;color:#c0392b;font-size:13px;margin-top:8px;"></div>
       <div style="display:flex;gap:10px;margin-top:1rem;">

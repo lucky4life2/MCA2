@@ -1411,7 +1411,7 @@ function initPresenceWatcher() {
       if (named.length) {
         html += named.map(e => `
           <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
-            <span style="color:var(--black);font-weight:600;">${e.name}</span>
+            <span style="color:var(--black);font-weight:600;">${escapeHtml(e.name)}</span>
             <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">${(e.page || '').replace('.html','') || 'home'}</span>
           </div>`).join('');
       }
@@ -1583,7 +1583,7 @@ function renderMembers(members) {
 
     // Role badges + assignment button — sort highest-level first, collapse past 3 to reduce clutter
     const sortedRoles = [...memberRoles].sort((a, b) => (b.level||0) - (a.level||0));
-    const roleBadge = r => `<span class="role-badge" style="background:${r.color}22;color:${r.color};border:1px solid ${r.color}44;">${r.label}</span>`;
+    const roleBadge = r => `<span class="role-badge" style="background:${safeColor(r.color)}22;color:${safeColor(r.color)};border:1px solid ${safeColor(r.color)}44;">${escapeHtml(r.label)}</span>`;
     const VISIBLE_ROLE_COUNT = 3;
     const visibleRoles = sortedRoles.slice(0, VISIBLE_ROLE_COUNT);
     const overflowRoles = sortedRoles.slice(VISIBLE_ROLE_COUNT);
@@ -1654,8 +1654,8 @@ function renderMembers(members) {
 
     return `<tr>
       <td>
-        <div class="member-name">${name}</div>
-        ${m.username && m.display_name ? `<div class="member-email">@${m.username}</div>` : ''}
+        <div class="member-name">${escapeHtml(name)}</div>
+        ${m.username && m.display_name ? `<div class="member-email">@${escapeHtml(m.username)}</div>` : ''}
       </td>
       <td><div class="member-email">${m.email||'—'}</div></td>
       <td>${rolesCell}</td>
@@ -1698,8 +1698,8 @@ window.openRolePopup = (event, userId) => {
     return assignableRoles.map(r => {
       const has = stagedRoleIds.has(r.id);
       return `<div class="role-popup-item" data-role-id="${r.id}" onclick="event.stopPropagation();_toggleStagedRole('${r.id}')">
-        <span class="role-popup-dot" style="background:${r.color};"></span>
-        <span style="flex:1;">${r.label}</span>
+        <span class="role-popup-dot" style="background:${safeColor(r.color)};"></span>
+        <span style="flex:1;">${escapeHtml(r.label)}</span>
         ${has ? `<span class="role-popup-check">✓</span>` : ''}
       </div>`;
     }).join('');
@@ -1806,7 +1806,7 @@ function renderRoles() {
   }
   el.innerHTML = _allRoles.map(r => {
     const activePerms = ALL_PERMISSIONS.filter(p => r.permissions?.[p.key]);
-    const chips = activePerms.map(p => `<span class="perm-chip">${p.label}</span>`).join('');
+    const chips = activePerms.map(p => `<span class="perm-chip">${escapeHtml(p.label)}</span>`).join('');
     const memberCount = _allMembers.filter(m => (m.roles||[]).some(x => x.role_id === r.id)).length;
 
     const canEdit = _myPermissions.can_manage_roles &&
@@ -1823,14 +1823,14 @@ function renderRoles() {
     const canViewAs = _myPermissions.can_manage_roles && r.level <= _myLevel;
 
     return `<div class="role-card">
-      <div class="role-card-color" style="background:${r.color};"></div>
+      <div class="role-card-color" style="background:${safeColor(r.color)};"></div>
       <div class="role-card-body">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
           <div>
-            <div class="role-card-name">${r.label}
+            <div class="role-card-name">${escapeHtml(r.label)}
               ${r.is_system ? '<span style="font-size:10px;color:var(--muted);font-weight:400;margin-left:6px;">(system)</span>' : ''}
             </div>
-            <div class="role-card-meta">Level ${r.level} · <code style="font-family:monospace;font-size:11px;">${r.name}</code> · ${memberCount} member${memberCount !== 1 ? 's' : ''}</div>
+            <div class="role-card-meta">Level ${escapeHtml(r.level)} · <code style="font-family:monospace;font-size:11px;">${escapeHtml(r.name)}</code> · ${memberCount} member${memberCount !== 1 ? 's' : ''}</div>
           </div>
           <div style="display:flex;gap:6px;">
             ${canViewAs ? `<button class="btn btn-outline btn-sm" onclick="viewAsRole('${r.id}', '${r.label.replace(/'/g, "\\'")}')" title="Browse the live site with exactly this role's real permissions">View as</button>` : ''}
@@ -1849,8 +1849,8 @@ function buildPermGrid(currentPerms = {}) {
   const grid = document.getElementById('rm-perm-grid');
   grid.innerHTML = ALL_PERMISSIONS.map(p => `
     <label class="perm-toggle">
-      <input type="checkbox" name="perm" value="${p.key}" ${currentPerms[p.key] ? 'checked' : ''}>
-      <span class="perm-toggle-label">${p.label}<span class="perm-toggle-key">${p.key}</span></span>
+      <input type="checkbox" name="perm" value="${escapeHtml(p.key)}" ${currentPerms[p.key] ? 'checked' : ''}>
+      <span class="perm-toggle-label">${escapeHtml(p.label)}<span class="perm-toggle-key">${escapeHtml(p.key)}</span></span>
     </label>`).join('');
 }
 
@@ -1954,7 +1954,7 @@ async function loadNewsAdmin() {
     _newsArticles = data || [];
     renderNewsAdmin();
   } catch(e) {
-    el.innerHTML = `<div style="padding:1.5rem;color:#c0392b;font-size:13px;">Error loading articles: ${e.message}</div>`;
+    el.innerHTML = `<div style="padding:1.5rem;color:#c0392b;font-size:13px;">Error loading articles: ${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -1978,7 +1978,7 @@ function renderNewsAdmin() {
     const created = new Date(a.created_at).toLocaleDateString();
     const statusLabel = a.status === 'pending_review' ? 'Pending Review' : a.status;
     const noteHtml = (a.status === 'draft' && a.rejection_note)
-      ? `<div style="font-size:11px;color:#c0392b;margin-top:2px;">Rejection note: ${a.rejection_note}</div>` : '';
+      ? `<div style="font-size:11px;color:#c0392b;margin-top:2px;">Rejection note: ${escapeHtml(a.rejection_note)}</div>` : '';
     let actionBtns;
     if (a.status === 'pending_review') {
       actionBtns = `
@@ -1992,12 +1992,12 @@ function renderNewsAdmin() {
     return `<div class="news-article-row">
       <div style="flex:1;min-width:0;">
         <div class="news-article-title">
-          <span class="status-dot ${a.status}"></span>${a.title}
+          <span class="status-dot ${escapeHtml(a.status)}"></span>${escapeHtml(a.title)}
         </div>
         <div class="news-article-meta">
           ${a.category || 'General'} · By ${a.author_name||'Unknown'} · Created ${created}
           ${a.status === 'published' && pub ? ` · Published ${pub}` : ''}
-          ${a.status === 'pending_review' ? ` · <span style="color:#c0392b;font-weight:600;">${statusLabel}</span>` : ''}
+          ${a.status === 'pending_review' ? ` · <span style="color:#c0392b;font-weight:600;">${escapeHtml(statusLabel)}</span>` : ''}
         </div>
         ${noteHtml}
       </div>
@@ -2211,7 +2211,7 @@ async function loadArchiveAdmin() {
     _archiveDocs = data || [];
     renderArchiveAdmin();
   } catch(e) {
-    el.innerHTML = `<div style="padding:1.5rem;color:#c0392b;font-size:13px;">Error loading documents: ${e.message}</div>`;
+    el.innerHTML = `<div style="padding:1.5rem;color:#c0392b;font-size:13px;">Error loading documents: ${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -2236,7 +2236,7 @@ function renderArchiveAdmin() {
     return `<div class="news-article-row">
       <div style="flex:1;min-width:0;">
         <div class="news-article-title">
-          <span class="status-dot ${d.status}"></span>${d.title}
+          <span class="status-dot ${escapeHtml(d.status)}"></span>${escapeHtml(d.title)}
         </div>
         <div class="news-article-meta">
           ${d.category || 'Uncategorized'} · By ${d.author_name||'Unknown'} · Created ${created}
@@ -2277,7 +2277,7 @@ function openArchiveModal(doc = null) {
   _archiveCurrentFileUrl  = doc?.file_url  || null;
   _archiveCurrentFileName = doc?.file_name || null;
   document.getElementById('am2-file-current').innerHTML = _archiveCurrentFileUrl
-    ? `Current: <a href="${_archiveCurrentFileUrl}" target="_blank" rel="noopener">${_archiveCurrentFileName || 'view file'}</a>`
+    ? `Current: <a href="${escapeHtml(safeUrl(_archiveCurrentFileUrl))}" target="_blank" rel="noopener noreferrer">${escapeHtml(_archiveCurrentFileName || 'view file')}</a>`
     : '';
   document.getElementById('am2-error').style.display = 'none';
   document.getElementById('am2-title').textContent   = doc ? 'Edit Document' : 'New Document';
@@ -2394,7 +2394,7 @@ async function loadFaqAdmin() {
     _faqs = data || [];
     renderFaqAdmin();
   } catch(e) {
-    el.innerHTML = `<div style="padding:1.5rem;color:#c0392b;font-size:13px;">Error loading FAQ: ${e.message}</div>`;
+    el.innerHTML = `<div style="padding:1.5rem;color:#c0392b;font-size:13px;">Error loading FAQ: ${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -2416,9 +2416,9 @@ function renderFaqAdmin() {
   el.innerHTML = filtered.map(f => `<div class="news-article-row">
       <div style="flex:1;min-width:0;">
         <div class="news-article-title">
-          <span class="status-dot ${f.status}"></span>${f.question}
+          <span class="status-dot ${escapeHtml(f.status)}"></span>${escapeHtml(f.question)}
         </div>
-        <div class="news-article-meta">${f.category || 'General'} · Sort ${f.sort_order} · ${f.status === 'published' ? 'Published' : 'Draft'}</div>
+        <div class="news-article-meta">${f.category || 'General'} · Sort ${escapeHtml(f.sort_order)} · ${f.status === 'published' ? 'Published' : 'Draft'}</div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;">
         ${f.status !== 'published' ? `<button class="btn btn-success btn-sm" onclick="publishFaq('${f.id}')">Publish</button>` : `<button class="btn btn-outline btn-sm" onclick="unpublishFaq('${f.id}')">Unpublish</button>`}
@@ -2563,8 +2563,8 @@ function verifyCard(m, isVerified) {
   const name = m.display_name || m.username || m.email || m.id;
   return `<div class="verify-card">
     <div class="verify-card-info">
-      <div class="verify-card-name">${name}</div>
-      <div class="verify-card-detail">MC username: <span class="verify-card-mc">${m.minecraft_username}</span><br>${m.email||'No email'}</div>
+      <div class="verify-card-name">${escapeHtml(name)}</div>
+      <div class="verify-card-detail">MC username: <span class="verify-card-mc">${escapeHtml(m.minecraft_username)}</span><br>${m.email||'No email'}</div>
     </div>
     <div class="btn-actions">
       ${!isVerified ? `<button class="btn btn-success btn-sm" onclick="approveMC('${m.id}')">Approve</button>` : ''}
@@ -2791,14 +2791,14 @@ let _products = [];
 async function loadAdminProducts() {
   const list = document.getElementById('shop-product-list');
   const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
-  if (error) { list.innerHTML = `<div style="padding:1.5rem;color:#c0392b;font-size:13px;">Error: ${error.message}</div>`; return; }
+  if (error) { list.innerHTML = `<div style="padding:1.5rem;color:#c0392b;font-size:13px;">Error: ${escapeHtml(error.message)}</div>`; return; }
   _products = data || [];
   if (!_products.length) { list.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">No products yet.</div>`; return; }
   list.innerHTML = _products.map(p => `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);gap:12px;">
       <div style="display:flex;align-items:center;gap:12px;min-width:0;">
-        ${p.image_url ? `<img src="${p.image_url}" alt="${p.name}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;flex-shrink:0;">` : `<div style="width:40px;height:40px;background:var(--bg);border:1px solid var(--border);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;">📦</div>`}
-        <div><div style="font-weight:600;font-size:14px;color:var(--black);">${p.name}</div>
+        ${p.image_url ? `<img src="${escapeHtml(safeUrl(p.image_url))}" alt="${escapeHtml(p.name)}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;flex-shrink:0;">` : `<div style="width:40px;height:40px;background:var(--bg);border:1px solid var(--border);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;">📦</div>`}
+        <div><div style="font-weight:600;font-size:14px;color:var(--black);">${escapeHtml(p.name)}</div>
         <div style="font-size:12px;color:var(--muted);">$${Number(p.price).toFixed(2)} · ${p.product_type === 'subscription' ? '<span style="color:#7c5cbf">Subscription</span>' : p.inventory + ' in stock'} · <span style="color:${p.active?'#2d7d2f':'#c0392b'}">${p.active?'Active':'Inactive'}</span></div></div>
       </div>
       <div style="display:flex;gap:8px;flex-shrink:0;">
@@ -3070,7 +3070,7 @@ async function loadNationsAdmin() {
     const owners = (_nationOwnersById[n.id] || []).map(p => p?.display_name || p?.username).filter(Boolean);
     return `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 1.5rem;border-bottom:1px solid var(--border);">
-      <div><div style="font-weight:600;font-size:14px;">${n.name}${n.season ? ` <span style="font-weight:600;font-size:11px;color:var(--blue);border:1px solid var(--blue);border-radius:20px;padding:1px 8px;vertical-align:middle;">${n.season}</span>` : ''}</div><div style="font-size:12px;color:var(--muted);">${[n.government,n.leader?'Led by '+n.leader:'',n.founded].filter(Boolean).join(' · ')}</div><div style="font-size:12px;color:var(--muted);">${owners.length?'Leader(s): '+owners.join(', '):'No leader assigned'}</div></div>
+      <div><div style="font-weight:600;font-size:14px;">${escapeHtml(n.name)}${n.season ? ` <span style="font-weight:600;font-size:11px;color:var(--blue);border:1px solid var(--blue);border-radius:20px;padding:1px 8px;vertical-align:middle;">${escapeHtml(n.season)}</span>` : ''}</div><div style="font-size:12px;color:var(--muted);">${[n.government,n.leader?'Led by '+n.leader:'',n.founded].filter(Boolean).join(' · ')}</div><div style="font-size:12px;color:var(--muted);">${owners.length?'Leader(s): '+owners.join(', '):'No leader assigned'}</div></div>
       <div style="display:flex;gap:8px;"><button class="btn btn-outline btn-sm" onclick="openNationModal('${n.id}')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteNation('${n.id}')">Delete</button></div>
     </div>`;
   }).join('')
@@ -3082,7 +3082,7 @@ function renderOwnerChips() {
   box.innerHTML = _nmOwnerIds.map(id => {
     const m = _allMembers.find(x => x.id === id);
     const label = m?.display_name || m?.username || 'Unknown user';
-    return `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--light-blue,#eef3fb);color:var(--blue);font-size:12px;font-weight:600;padding:4px 8px;border-radius:20px;">${label}<button type="button" onclick="toggleNationOwner('${id}')" style="background:none;border:none;cursor:pointer;color:inherit;font-size:14px;line-height:1;padding:0;">✕</button></span>`;
+    return `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--light-blue,#eef3fb);color:var(--blue);font-size:12px;font-weight:600;padding:4px 8px;border-radius:20px;">${escapeHtml(label)}<button type="button" onclick="toggleNationOwner('${id}')" style="background:none;border:none;cursor:pointer;color:inherit;font-size:14px;line-height:1;padding:0;">✕</button></span>`;
   }).join('');
   const labelEl = document.getElementById('nm-owner-dropdown-label');
   labelEl.textContent = _nmOwnerIds.length
@@ -3143,7 +3143,7 @@ async function loadLeadershipAdmin() {
         <div class="leadership-branch-heading">${BRANCH_LABEL[branch]} <span class="leadership-branch-count">${rows.length}</span></div>
         ${rows.map(l => `
           <div class="leadership-row" style="display:flex;align-items:center;justify-content:space-between;padding:10px 1.5rem;border-bottom:1px solid var(--border);">
-            <div><div style="font-weight:600;font-size:14px;">${l.name}</div><div style="font-size:12px;color:var(--muted);">${l.title}${l.subtitle?' · '+l.subtitle:''} · Order ${l.sort_order}${l.show_in_team?' · Team grid':''}</div></div>
+            <div><div style="font-weight:600;font-size:14px;">${escapeHtml(l.name)}</div><div style="font-size:12px;color:var(--muted);">${escapeHtml(l.title)}${l.subtitle?' · '+l.subtitle:''} · Order ${escapeHtml(l.sort_order)}${l.show_in_team?' · Team grid':''}</div></div>
             <div style="display:flex;gap:8px;"><button class="btn btn-outline btn-sm" onclick="openLeaderModal('${l.id}')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteLeader('${l.id}')">Delete</button></div>
           </div>`).join('')}
       </div>`;
@@ -3244,12 +3244,12 @@ let _historyServersAdmin = [];
 async function loadHistoryServersAdmin() {
   const el = document.getElementById('history-servers-admin-list');
   const { data, error } = await supabase.from('history_servers').select('*').order('sort_order', { ascending: true });
-  if (error) { el.innerHTML = `<div style="text-align:center;padding:2rem;color:#c0392b;font-size:13px;">Error: ${error.message}</div>`; return; }
+  if (error) { el.innerHTML = `<div style="text-align:center;padding:2rem;color:#c0392b;font-size:13px;">Error: ${escapeHtml(error.message)}</div>`; return; }
   _historyServersAdmin = data || [];
   el.innerHTML = _historyServersAdmin.length
     ? _historyServersAdmin.map(s => `
         <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 1.5rem;border-bottom:1px solid var(--border);">
-          <div><div style="font-weight:600;font-size:14px;">${s.name}${s.is_current ? ' <span style="color:var(--green);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Current</span>' : ''}</div><div style="font-size:12px;color:var(--muted);">${s.period} · Order ${s.sort_order}</div></div>
+          <div><div style="font-weight:600;font-size:14px;">${escapeHtml(s.name)}${s.is_current ? ' <span style="color:var(--green);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Current</span>' : ''}</div><div style="font-size:12px;color:var(--muted);">${escapeHtml(s.period)} · Order ${escapeHtml(s.sort_order)}</div></div>
           <div style="display:flex;gap:8px;"><button class="btn btn-outline btn-sm" onclick="openHistoryServerModal('${s.id}')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteHistoryServer('${s.id}')">Delete</button></div>
         </div>`).join('')
     : '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">No servers yet.</div>';
@@ -3292,7 +3292,7 @@ async function loadClubPresidentsAdmin() {
   const el = document.getElementById('club-presidents-admin-list');
   const { data, error } = await supabase.from('club_presidents').select('*').order('region', { ascending: true });
   if (error) {
-    el.innerHTML = `<div style="text-align:center;padding:2rem;color:#c0392b;font-size:13px;">Error: ${error.message}</div>`;
+    el.innerHTML = `<div style="text-align:center;padding:2rem;color:#c0392b;font-size:13px;">Error: ${escapeHtml(error.message)}</div>`;
     return;
   }
   _clubPresidents = data || [];
@@ -3300,8 +3300,8 @@ async function loadClubPresidentsAdmin() {
     ? _clubPresidents.map(p => `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 1.5rem;border-bottom:1px solid var(--border);">
         <div>
-          <div style="font-weight:600;font-size:14px;">${p.name}${p.username ? ` <span style="font-size:12px;color:var(--muted);font-weight:400;">@${p.username}</span>` : ''}</div>
-          <div style="font-size:12px;color:var(--muted);">${p.club_name}${p.region ? ' · ' + p.region : ''}</div>
+          <div style="font-weight:600;font-size:14px;">${escapeHtml(p.name)}${p.username ? ` <span style="font-size:12px;color:var(--muted);font-weight:400;">@${escapeHtml(p.username)}</span>` : ''}</div>
+          <div style="font-size:12px;color:var(--muted);">${escapeHtml(p.club_name)}${p.region ? ' · ' + p.region : ''}</div>
         </div>
         <div style="display:flex;gap:8px;">
           <button class="btn btn-outline btn-sm" onclick="openCPModal('${p.id}')">Edit</button>
@@ -3458,9 +3458,18 @@ document.querySelectorAll('.admin-tab-group-trigger').forEach(trigger => {
 document.addEventListener('click', closeAllGroupMenus);
 window.addEventListener('resize', closeAllGroupMenus);
 
+// The hash and the saved tab both feed a querySelector template below; a value
+// containing a quote produces an invalid selector and throws, which used to
+// abort the whole admin bootstrap. Tab names are plain slugs, so anything else
+// is discarded.
+const isTabName = (v) => /^[a-z0-9-]{1,40}$/i.test(String(v ?? ''));
 let _hashTab = window.location.hash.replace('#','');
+if (!isTabName(_hashTab)) _hashTab = '';
 if (!_hashTab) {
-  try { _hashTab = localStorage.getItem('admin-active-tab') || ''; } catch (e) {}
+  try {
+    const saved = localStorage.getItem('admin-active-tab') || '';
+    _hashTab = isTabName(saved) ? saved : '';
+  } catch (e) {}
 }
 // NOTE: switchTab(_hashTab) is intentionally NOT called here. At this point
 // in the script, init() (called at the bottom of the file) hasn't run yet —
@@ -3491,6 +3500,20 @@ async function getMyDisplayName() {
   const { data: profile } = await supabase.from('profiles').select('display_name,username').eq('id', user.id).single();
   _myDisplayName = profile?.display_name || profile?.username || 'An admin';
   return _myDisplayName;
+}
+
+// Role/tag colours land inside style="" attributes, where a crafted value
+// could close the attribute or inject extra CSS.
+function safeColor(c) {
+  const v = String(c ?? '').trim();
+  return /^#[0-9a-fA-F]{3,8}$/.test(v) ? v : '#888888';
+}
+
+// Only http(s) and relative URLs may reach an href/src.
+function safeUrl(url) {
+  const u = String(url ?? '').trim();
+  if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return /^https?:\/\//i.test(u) ? u : '';
+  return u;
 }
 
 function isSafeAttachmentUrl(url) {
@@ -3526,7 +3549,7 @@ function renderFilePreview(fileInput, previewEl) {
   previewEl.innerHTML = '';
   [...(fileInput.files || [])].forEach(f => {
     const url = URL.createObjectURL(f);
-    previewEl.insertAdjacentHTML('beforeend', `<img src="${url}" alt="${f.name}" style="width:56px;height:56px;object-fit:cover;border-radius:5px;border:1px solid var(--border);">`);
+    previewEl.insertAdjacentHTML('beforeend', `<img src="${escapeHtml(safeUrl(url))}" alt="${escapeHtml(f.name)}" style="width:56px;height:56px;object-fit:cover;border-radius:5px;border:1px solid var(--border);">`);
   });
 }
 document.getElementById('messages-inbox').addEventListener('change', (e) => {
@@ -3546,7 +3569,7 @@ async function loadMessages() {
     .order('last_message_at', { ascending: false });
 
   if (error) {
-    inbox.innerHTML = `<div class="msg-empty">Failed to load messages: ${error.message}</div>`;
+    inbox.innerHTML = `<div class="msg-empty">Failed to load messages: ${escapeHtml(error.message)}</div>`;
     return;
   }
   _messages = data || [];
@@ -3599,12 +3622,12 @@ function renderMessages() {
       const body = escapeHtml(it.body);
       return it.sender_type === 'admin'
         ? `<div style="margin-top:8px;padding:10px 12px;background:var(--bg);border-left:3px solid var(--blue);border-radius:4px;">
-             <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--blue);margin-bottom:4px;">${adminLabel} · ${t}</div>
+             <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--blue);margin-bottom:4px;">${adminLabel} · ${escapeHtml(t)}</div>
              <div style="font-size:13px;white-space:pre-wrap;">${body}</div>
              ${renderMsgAttachments(it.attachments)}
            </div>`
         : `<div style="margin-top:8px;padding:10px 12px;background:var(--card,var(--bg));border-left:3px solid var(--border);border-radius:4px;">
-             <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;">${sender} · ${t}</div>
+             <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;">${sender} · ${escapeHtml(t)}</div>
              <div style="font-size:13px;white-space:pre-wrap;">${body}</div>
              ${renderMsgAttachments(it.attachments)}
            </div>`;
@@ -3861,7 +3884,12 @@ async function loadAuditLog(reset = true) {
     if (_auditFilter.actor)     q = q.eq('actor_id', _auditFilter.actor);
     if (_auditFilter.from)      q = q.gte('created_at', _auditFilter.from + 'T00:00:00');
     if (_auditFilter.to)        q = q.lte('created_at', _auditFilter.to + 'T23:59:59');
-    if (_auditFilter.search)    q = q.or(`summary.ilike.%${_auditFilter.search}%,actor_name.ilike.%${_auditFilter.search}%`);
+    if (_auditFilter.search) {
+    // .or() takes a comma-separated filter grammar, so a search containing
+    // , ( ) . or * either broke the query outright (400) or widened it.
+    const term = String(_auditFilter.search).replace(/[,()*.\\]/g, ' ').trim();
+    if (term) q = q.or(`summary.ilike.%${term}%,actor_name.ilike.%${term}%`);
+  }
 
     const { data, error } = await withTimeout(q, 10000);
     if (error) throw error;
@@ -3874,7 +3902,7 @@ async function loadAuditLog(reset = true) {
     moreBtn.style.display = _auditDone ? 'none' : 'inline-block';
     endLabel.style.display = (_auditDone && _auditLog.length) ? 'inline' : 'none';
   } catch (e) {
-    el.innerHTML = `<div style="padding:1.5rem;color:#c0392b;font-size:13px;">Error loading audit log: ${e.message}</div>`;
+    el.innerHTML = `<div style="padding:1.5rem;color:#c0392b;font-size:13px;">Error loading audit log: ${escapeHtml(e.message)}</div>`;
   } finally {
     _auditLoading = false;
   }
@@ -3940,7 +3968,7 @@ function resolveAuditValue(key, value) {
   const table = AUDIT_REF_FIELDS[key];
   if (table && typeof value === 'string' && UUID_RE.test(value)) {
     const name = _auditRefCache[table][value];
-    return name ? `${name} (${value.slice(0, 8)}…)` : value;
+    return name ? `${escapeHtml(name)} (${value.slice(0, 8)}…)` : value;
   }
   if (value === null || value === undefined) return '—';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
@@ -3976,7 +4004,7 @@ async function renderAuditLog() {
       <div class="audit-row-top" ${hasDetail ? `onclick="toggleAuditDetail(${idx})"` : ''}>
         <div class="audit-row-main">
           <div class="audit-summary">
-            <span class="audit-actor-badge audit-actor-${actorType}">${actorType}</span><span class="audit-action-badge audit-action-${r.action}">${r.action}</span>${escapeHtml(r.summary || auditTableLabel(r.table_name))}
+            <span class="audit-actor-badge audit-actor-${escapeHtml(actorType)}">${escapeHtml(actorType)}</span><span class="audit-action-badge audit-action-${escapeHtml(r.action)}">${escapeHtml(r.action)}</span>${escapeHtml(r.summary || auditTableLabel(r.table_name))}
           </div>
           <div class="audit-meta">${escapeHtml(when)} · ${escapeHtml(actor)}${r.actor_role ? ' (' + escapeHtml(r.actor_role) + ')' : ''} · ${auditTableLabel(r.table_name)}${r.table_name === 'tasks' && r.record_id ? ` · Task ID: <span title="${escapeHtml(r.record_id)}">${escapeHtml(r.record_id.slice(0, 8))}…</span>` : ''}</div>
         </div>

@@ -820,6 +820,19 @@ async function loadProfile() {
   _profile = data || {};
 }
 
+// Role colours come from the roles table and land inside style="" attributes,
+// where a crafted value could close the attribute or inject extra CSS.
+function safeColor(c) {
+  const v = String(c ?? '').trim();
+  return /^#[0-9a-fA-F]{3,8}$/.test(v) ? v : '#888888';
+}
+
+// Attachment URLs are stored with the message row; only an https URL may reach
+// an href/src, matching the check admin.html already applies.
+function safeAttachmentUrl(u) {
+  return /^https:\/\//i.test(String(u ?? '')) ? String(u) : '';
+}
+
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str == null ? '' : String(str);
@@ -838,7 +851,7 @@ async function loadMyRoles() {
     .order('granted_at', { ascending: true });
 
   if (error) {
-    body.innerHTML = `<div style="padding:0.5rem 0;color:var(--muted);font-size:13px;">Couldn't load roles: ${error.message}</div>`;
+    body.innerHTML = `<div style="padding:0.5rem 0;color:var(--muted);font-size:13px;">Couldn't load roles: ${escapeHtml(error.message)}</div>`;
     return;
   }
 
@@ -856,8 +869,8 @@ async function loadMyRoles() {
   body.innerHTML = `
     <div style="display:flex;flex-wrap:wrap;gap:8px;">
       ${rows.map(r => `
-        <span style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;background:${r.roles.color || '#888'}1a;color:${r.roles.color || '#888'};border:1px solid ${r.roles.color || '#888'}55;">
-          <span style="width:8px;height:8px;border-radius:50%;background:${r.roles.color || '#888'};flex-shrink:0;"></span>
+        <span style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;background:${safeColor(r.roles.color)}1a;color:${safeColor(r.roles.color)};border:1px solid ${safeColor(r.roles.color)}55;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${safeColor(r.roles.color)};flex-shrink:0;"></span>
           ${escapeHtml(r.roles.label || r.roles.name)}
         </span>
       `).join('')}
@@ -1025,7 +1038,7 @@ async function renderConnectedAccounts(skipFetch = false) {
         </div>
         <div class="connected-provider-info">
           <div class="connected-provider-name">Email</div>
-          <div class="connected-provider-detail">${hasEmail ? _user.email : 'Not connected'}</div>
+          <div class="connected-provider-detail">${hasEmail ? escapeHtml(_user.email) : 'Not connected'}</div>
         </div>
       </div>
       ${!hasEmail
@@ -1042,7 +1055,7 @@ async function renderConnectedAccounts(skipFetch = false) {
         </div>
         <div class="connected-provider-info">
           <div class="connected-provider-name">Discord</div>
-          <div class="connected-provider-detail">${hasDiscord ? (_profile.discord_id ? `ID: ${_profile.discord_id}` : 'Connected') : 'Not connected'}</div>
+          <div class="connected-provider-detail">${hasDiscord ? (_profile.discord_id ? `ID: ${escapeHtml(_profile.discord_id)}` : 'Connected') : 'Not connected'}</div>
         </div>
       </div>
       ${!hasDiscord
@@ -1059,7 +1072,7 @@ async function renderConnectedAccounts(skipFetch = false) {
         </div>
         <div class="connected-provider-info">
           <div class="connected-provider-name">Google</div>
-          <div class="connected-provider-detail">${hasGoogle ? (_profile.google_id ? `ID: ${_profile.google_id}` : 'Connected') : 'Not connected'}</div>
+          <div class="connected-provider-detail">${hasGoogle ? (_profile.google_id ? `ID: ${escapeHtml(_profile.google_id)}` : 'Connected') : 'Not connected'}</div>
         </div>
       </div>
       ${!hasGoogle
@@ -1338,7 +1351,7 @@ function renderMinecraft() {
         <div class="connected-provider-icon icon-minecraft" style="width:32px;height:32px;border-radius:6px;">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
         </div>
-        <div class="mc-username-display">${_profile.minecraft_username}</div>
+        <div class="mc-username-display">${escapeHtml(_profile.minecraft_username)}</div>
       </div>
       <p class="form-hint">Your Minecraft account is verified.</p>
       <button class="btn btn-danger" id="btn-remove-mc" style="margin-top:8px;">Remove Verification</button>
@@ -1360,7 +1373,7 @@ function renderMinecraft() {
     badge.textContent = 'Pending';
     badge.className = 'account-section-badge badge-pending';
     body.innerHTML = `
-      <p class="mc-unverified-note">Username <strong>${_profile.minecraft_username}</strong> is pending verification.</p>
+      <p class="mc-unverified-note">Username <strong>${escapeHtml(_profile.minecraft_username)}</strong> is pending verification.</p>
       ${renderVerifyCodeSection()}`;
     bindCodeButtons(body);
     return;
@@ -2053,7 +2066,11 @@ let _myItems = {}; // thread_id -> [items]
 function renderMsgAttachments(attachments) {
   if (!attachments || !attachments.length) return '';
   return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">
-    ${attachments.map(a => `<a href="${a.url}" target="_blank" rel="noopener"><img src="${a.url}" alt="${a.name||'attachment'}" style="width:56px;height:56px;object-fit:cover;border-radius:5px;border:1px solid var(--border);"></a>`).join('')}
+    ${attachments.map(a => {
+      const url = safeAttachmentUrl(a.url);
+      if (!url) return '';
+      return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"><img src="${escapeHtml(url)}" alt="${escapeHtml(a.name || 'attachment')}" style="width:56px;height:56px;object-fit:cover;border-radius:5px;border:1px solid var(--border);"></a>`;
+    }).join('')}
   </div>`;
 }
 
@@ -2078,7 +2095,7 @@ function renderFilePreview(fileInput, previewEl) {
   previewEl.innerHTML = '';
   [...(fileInput.files || [])].forEach(f => {
     const url = URL.createObjectURL(f);
-    previewEl.insertAdjacentHTML('beforeend', `<img src="${url}" alt="${f.name}" style="width:56px;height:56px;object-fit:cover;border-radius:5px;border:1px solid var(--border);">`);
+    previewEl.insertAdjacentHTML('beforeend', `<img src="${url}" alt="${escapeHtml(f.name)}" style="width:56px;height:56px;object-fit:cover;border-radius:5px;border:1px solid var(--border);">`);
   });
 }
 document.getElementById('contact-files').addEventListener('change', function() {
@@ -2142,23 +2159,23 @@ function renderMyMessages() {
       const adminLabel = it.sender_display_name ? `Admin Reply · ${it.sender_display_name}` : 'Admin Reply';
       return it.sender_type === 'admin' ? `
       <div style="margin-top:8px;padding:10px 12px;background:var(--bg);border-left:3px solid var(--blue);border-radius:4px;">
-        <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--blue);margin-bottom:4px;">${adminLabel} · ${t}</div>
-        <div style="font-size:13px;white-space:pre-wrap;">${it.body}</div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--blue);margin-bottom:4px;">${escapeHtml(adminLabel)} · ${escapeHtml(t)}</div>
+        <div style="font-size:13px;white-space:pre-wrap;">${escapeHtml(it.body)}</div>
         ${renderMsgAttachments(it.attachments)}
       </div>` : `
       <div style="margin-top:8px;font-size:13px;color:var(--mid);white-space:pre-wrap;">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:2px;">${t}</div>
-        ${it.body}
+        <div style="font-size:11px;color:var(--muted);margin-bottom:2px;">${escapeHtml(t)}</div>
+        ${escapeHtml(it.body)}
         ${renderMsgAttachments(it.attachments)}
       </div>`;
     }).join('');
     const hasReply = items.some(it => it.sender_type === 'admin');
     return `<div style="border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:10px;">
       <div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="toggleMyThreadExpand('${m.id}')">
-        <span style="flex:1;">${m.subject}</span>
+        <span style="flex:1;">${escapeHtml(m.subject)}</span>
         <span style="font-size:11px;color:var(--muted);font-weight:400;">${expanded ? '▲' : '▼'}</span>
       </div>
-      ${expanded ? '' : `<div style="font-size:12px;color:var(--muted);margin-top:4px;cursor:pointer;" onclick="toggleMyThreadExpand('${m.id}')">${lastPreview} ${lastPreview ? '· ' + lastTime : ''}</div>`}
+      ${expanded ? '' : `<div style="font-size:12px;color:var(--muted);margin-top:4px;cursor:pointer;" onclick="toggleMyThreadExpand('${m.id}')">${escapeHtml(lastPreview)} ${lastPreview ? '· ' + escapeHtml(lastTime) : ''}</div>`}
       ${expanded ? `
       ${itemsHtml}
       ${hasReply ? '' : '<div style="font-size:12px;color:var(--muted);margin-top:6px;font-style:italic;">Awaiting reply...</div>'}
