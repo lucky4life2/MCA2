@@ -1,5 +1,9 @@
 // ── Supabase Client ──────────────────────────────────────────
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+// Pinned to an exact version rather than the "@2" tag: an unpinned tag lets
+// esm.sh silently serve whatever the newest 2.x release is on every page
+// load, with no code change or review here — a supply-chain drift risk.
+// Bump this deliberately when upgrading.
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
 
 const SUPABASE_URL = 'https://hjaywokvgdzhvsoygctc.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNzA2NTQsImV4cCI6MjA5NTg0NjY1NH0.nFqlc20iUDwE1sXLRi2Pev181v2RJKx_S6UcTkGgPWU';

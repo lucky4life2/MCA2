@@ -1478,6 +1478,12 @@ function show(which) {
   document.getElementById('admin-main').style.display    = which === 'main'   ? 'block' : 'none';
 }
 
+// Columns actually needed by the member list, excluding credential/token
+// fields (password_reset_token, pending_email_token, mc_verify_code, etc.)
+// that are no longer selectable by any client role — see the profiles
+// column-select-allowlist migration.
+const PROFILES_SAFE_COLUMNS = 'id, username, display_name, minecraft_username, role, created_at, discord_id, minecraft_verified, email, minecraft_uuid, email_access_revoked, account_status, deletion_scheduled_at, google_id, news_email_opt_in, deactivated_at, task_email_opt_in';
+
 async function loadAll() {
   // Load members with stacked roles via RPC
   try {
@@ -1485,11 +1491,11 @@ async function loadAll() {
     if (!error) _allMembers = data || [];
     else {
       // Fallback to profiles table if RPC doesn't exist yet
-      const { data: pd } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+      const { data: pd } = await supabase.from('profiles').select(PROFILES_SAFE_COLUMNS).order('created_at', { ascending: false });
       _allMembers = (pd || []).map(p => ({ ...p, roles: [] }));
     }
   } catch(e) {
-    const { data: pd } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+    const { data: pd } = await supabase.from('profiles').select(PROFILES_SAFE_COLUMNS).order('created_at', { ascending: false });
     _allMembers = (pd || []).map(p => ({ ...p, roles: [] }));
   }
 

@@ -6,6 +6,10 @@
   <title>Sign In — Minecraft Club of America</title>
   <link rel="stylesheet" href="style.css">
   <link rel="icon" type="image/x-icon" href="images/icon.ico">
+  <!-- Cloudflare Turnstile widget script (renders the challenge on the
+       Create Account form below). Client-side only — see the widget markup
+       and the signup submit handler for the server-verification TODO. -->
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <style>
     .login-wrap {
       min-height: calc(100vh - 58px);
@@ -268,6 +272,19 @@
             <label for="signup-consent">I agree to the <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</label>
           </div>
           <div class="login-error" id="signup-consent-error">Please accept the Terms of Service and Privacy Policy to continue.</div>
+
+          <!--
+            Cloudflare Turnstile widget — CLIENT SIDE ONLY.
+            This alone does NOT block bots. It only becomes real bot
+            protection once the signup-with-email Edge Function (deployed
+            outside this repo) verifies the submitted token server-side:
+            POST it + your Turnstile SECRET key to
+            https://challenges.cloudflare.com/turnstile/v0/siteverify and
+            reject the signup unless the response's "success" is true.
+            Until that server-side check is added, this widget is cosmetic.
+          -->
+          <!-- TODO: replace with your real Turnstile site key from the Cloudflare dashboard (dash.cloudflare.com > Turnstile) before this provides real protection. This test key always passes. -->
+          <div class="cf-turnstile" data-sitekey="1x00000000000000000000AA" data-theme="light" style="margin-bottom: 14px;"></div>
 
           <button class="btn-login-submit" id="btn-email-signup">Create Account</button>
         </div>
@@ -819,6 +836,21 @@
       errEl.textContent   = 'Password must contain at least one lowercase letter.';
       errEl.style.display = 'block'; return;
     }
+    // Cloudflare Turnstile — CLIENT-SIDE CHECK ONLY. Blocking an empty token
+    // here is just a UX safeguard (catches someone who skipped/closed the
+    // widget); it does nothing to stop a scripted request that hits the
+    // Edge Function directly with a fake or empty token. Real bot-blocking
+    // requires signup-with-email (outside this repo) to verify the token
+    // against https://challenges.cloudflare.com/turnstile/v0/siteverify
+    // with the secret key before creating the account — see the widget
+    // markup above for the full TODO.
+    const turnstileToken = (window.turnstile && document.querySelector('.cf-turnstile'))
+      ? window.turnstile.getResponse()
+      : '';
+    if (!turnstileToken) {
+      errEl.textContent   = 'Please complete the verification challenge.';
+      errEl.style.display = 'block'; return;
+    }
     const btn = document.getElementById('btn-email-signup');
     btn.textContent = 'Sending…'; btn.disabled = true;
     const SUPABASE_URL = supabase.supabaseUrl;
@@ -828,17 +860,20 @@
       res = await fetch(`${SUPABASE_URL}/functions/v1/signup-with-email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, turnstileToken }),
       });
       json = await res.json();
     } catch (e) {
       // Without this the button stayed on "Sending…" and disabled forever.
       btn.textContent = 'Create Account'; btn.disabled = false;
+      // Reset the widget so a retry doesn't resend an already-spent token.
+      if (window.turnstile) window.turnstile.reset();
       errEl.textContent   = 'Could not reach the server. Please try again.';
       errEl.style.display = 'block'; return;
     }
     btn.textContent = 'Create Account'; btn.disabled = false;
     if (!res.ok || json.error) {
+      if (window.turnstile) window.turnstile.reset();
       errEl.textContent   = json.error || 'Sign up failed.';
       errEl.style.display = 'block'; return;
     }
