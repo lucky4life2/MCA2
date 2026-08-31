@@ -405,6 +405,7 @@
         </button>
         <div class="admin-tab-group-menu">
           <button class="admin-tab-group-item" data-tab="members">All Members</button>
+          <button class="admin-tab-group-item" data-tab="minecraft">Verification</button>
           <button class="admin-tab-group-item" data-tab="roles" id="tab-btn-roles">Roles</button>
           <button class="admin-tab-group-item" data-tab="messages" id="tab-btn-messages">Messages <span id="messages-unread-badge" style="display:none" class="admin-tab-group-badge"></span></button>
         </div>
@@ -435,15 +436,23 @@
         </div>
       </div>
 
+      <!-- Economy group -->
+      <div class="admin-tab-group" id="tabgrp-economy">
+        <button class="admin-tab admin-tab-group-trigger" id="tabgrp-economy-trigger">
+          Economy <span id="economy-group-badge" style="display:none" class="admin-tab-group-badge"></span> <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="admin-tab-group-menu">
+          <button class="admin-tab-group-item" data-tab="economy" id="tab-btn-economy">Companies <span id="economy-pending-badge" style="display:none" class="admin-tab-group-badge"></span></button>
+          <button class="admin-tab-group-item" data-tab="shop">Shop</button>
+        </div>
+      </div>
+
       <!-- Site group -->
       <div class="admin-tab-group" id="tabgrp-site">
         <button class="admin-tab admin-tab-group-trigger" id="tabgrp-site-trigger">
-          Site <span id="site-group-badge" style="display:none" class="admin-tab-group-badge"></span> <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          Site <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="admin-tab-group-menu">
-          <button class="admin-tab-group-item" data-tab="minecraft">Minecraft</button>
-          <button class="admin-tab-group-item" data-tab="economy" id="tab-btn-economy">Economy <span id="economy-pending-badge" style="display:none" class="admin-tab-group-badge"></span></button>
-          <button class="admin-tab-group-item" data-tab="shop">Shop</button>
           <button class="admin-tab-group-item" data-tab="config">Config</button>
           <button class="admin-tab-group-item" data-tab="legal-notice">Legal Notices</button>
           <button class="admin-tab-group-item" data-tab="audit-log" id="tab-btn-audit-log">Audit Log</button>
@@ -2681,7 +2690,7 @@ async function loadPendingCompanyCount() {
     .select('id', { count: 'exact', head: true })
     .eq('approval_status', 'pending');
   const tabBadge  = document.getElementById('economy-pending-badge');
-  const grpBadge  = document.getElementById('site-group-badge');
+  const grpBadge  = document.getElementById('economy-group-badge');
   const statCell  = document.getElementById('stat-company-pending-cell');
   const statValue = document.getElementById('stat-company-pending');
   if (count) {
