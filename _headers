@@ -1,3 +1,24 @@
+# Two CSP tiers.
+#
+# The /* policy below still allows 'unsafe-inline' for scripts, because
+# admin.html, shop.html, tasks.html, news-publish.html, archive-publish.html,
+# account.html, nations.html, login.html, help.html, privacy.html and
+# terms.html still build inline on* handler attributes (admin.html alone has
+# ~63, most of them generated inside template literals with a row id). CSP
+# hashes cannot cover generated handler attributes, so those pages need the
+# handlers rewritten as delegated listeners before they can drop it.
+#
+# Every page that has NO inline script and NO inline handler gets the strict
+# policy further down, with 'unsafe-inline' removed from script-src. Those are
+# the pages that render member- and author-supplied content, so they are where
+# a CSP is worth the most. Their scripts live in real .js files loaded via
+# 'self' rather than inline hashes, so editing them does not silently break
+# the page.
+#
+# MAINTENANCE: adding an inline <script> block or an inline on* handler to any
+# page listed in the strict section will stop that code from running. Put the
+# code in a .js file and bind events with addEventListener instead.
+
 /*
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://esm.sh https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://hjaywokvgdzhvsoygctc.supabase.co; connect-src 'self' https://hjaywokvgdzhvsoygctc.supabase.co wss://hjaywokvgdzhvsoygctc.supabase.co https://esm.sh https://api.mcstatus.io https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
   X-Content-Type-Options: nosniff
@@ -8,3 +29,49 @@
   Cross-Origin-Opener-Policy: same-origin-allow-popups
   Cross-Origin-Resource-Policy: same-site
   X-Permitted-Cross-Domain-Policies: none
+
+# ── Strict tier: no 'unsafe-inline' for scripts ──────────────────────────
+# Keep this list in sync with the pages that are free of inline script and
+# inline handlers.
+
+/
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://hjaywokvgdzhvsoygctc.supabase.co; connect-src 'self' https://hjaywokvgdzhvsoygctc.supabase.co wss://hjaywokvgdzhvsoygctc.supabase.co https://esm.sh https://api.mcstatus.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+
+/index.html
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://hjaywokvgdzhvsoygctc.supabase.co; connect-src 'self' https://hjaywokvgdzhvsoygctc.supabase.co wss://hjaywokvgdzhvsoygctc.supabase.co https://esm.sh https://api.mcstatus.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+
+/news.html
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://hjaywokvgdzhvsoygctc.supabase.co; connect-src 'self' https://hjaywokvgdzhvsoygctc.supabase.co wss://hjaywokvgdzhvsoygctc.supabase.co https://esm.sh https://api.mcstatus.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+
+/article.html
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://hjaywokvgdzhvsoygctc.supabase.co; connect-src 'self' https://hjaywokvgdzhvsoygctc.supabase.co wss://hjaywokvgdzhvsoygctc.supabase.co https://esm.sh https://api.mcstatus.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+
+/archive.html
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://hjaywokvgdzhvsoygctc.supabase.co; connect-src 'self' https://hjaywokvgdzhvsoygctc.supabase.co wss://hjaywokvgdzhvsoygctc.supabase.co https://esm.sh https://api.mcstatus.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+
+/document.html
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://hjaywokvgdzhvsoygctc.supabase.co; connect-src 'self' https://hjaywokvgdzhvsoygctc.supabase.co wss://hjaywokvgdzhvsoygctc.supabase.co https://esm.sh https://api.mcstatus.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+
+/congress.html
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://hjaywokvgdzhvsoygctc.supabase.co; connect-src 'self' https://hjaywokvgdzhvsoygctc.supabase.co wss://hjaywokvgdzhvsoygctc.supabase.co https://esm.sh https://api.mcstatus.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+
+/economy.html
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://hjaywokvgdzhvsoygctc.supabase.co; connect-src 'self' https://hjaywokvgdzhvsoygctc.supabase.co wss://hjaywokvgdzhvsoygctc.supabase.co https://esm.sh https://api.mcstatus.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+
+/stocks.html
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://hjaywokvgdzhvsoygctc.supabase.co; connect-src 'self' https://hjaywokvgdzhvsoygctc.supabase.co wss://hjaywokvgdzhvsoygctc.supabase.co https://esm.sh https://api.mcstatus.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+
+/history.html
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://hjaywokvgdzhvsoygctc.supabase.co; connect-src 'self' https://hjaywokvgdzhvsoygctc.supabase.co wss://hjaywokvgdzhvsoygctc.supabase.co https://esm.sh https://api.mcstatus.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+
+/leadership.html
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://hjaywokvgdzhvsoygctc.supabase.co; connect-src 'self' https://hjaywokvgdzhvsoygctc.supabase.co wss://hjaywokvgdzhvsoygctc.supabase.co https://esm.sh https://api.mcstatus.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+
+/server.html
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://hjaywokvgdzhvsoygctc.supabase.co; connect-src 'self' https://hjaywokvgdzhvsoygctc.supabase.co wss://hjaywokvgdzhvsoygctc.supabase.co https://esm.sh https://api.mcstatus.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+
+/parental-consent.html
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://hjaywokvgdzhvsoygctc.supabase.co; connect-src 'self' https://hjaywokvgdzhvsoygctc.supabase.co wss://hjaywokvgdzhvsoygctc.supabase.co https://esm.sh https://api.mcstatus.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+
+/404.html
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://hjaywokvgdzhvsoygctc.supabase.co; connect-src 'self' https://hjaywokvgdzhvsoygctc.supabase.co wss://hjaywokvgdzhvsoygctc.supabase.co https://esm.sh https://api.mcstatus.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
