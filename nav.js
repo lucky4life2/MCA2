@@ -85,6 +85,7 @@ const NAV_HTML = () => {
       <ul class="nav-dropdown" id="nav-community-dropdown">
         <li><a href="news.html"    data-page="news">News</a></li>
         <li><a href="nations.html" data-page="nations">Nations</a></li>
+        <li><a href="congress.html" data-page="congress">Congress</a></li>
       </ul>
     </li>
     <li class="nav-has-dropdown" id="nav-about-item">
@@ -884,7 +885,6 @@ async function initNavAuth(_authReadyResolve) {
           <div class="nav-account-dropdown-divider"></div>
           ` : ''}
           <a class="nav-account-dropdown-item" href="account.html">Account</a>
-          <a class="nav-account-dropdown-item" href="congress.html">Congress</a>
           <a class="nav-account-dropdown-item" href="help.html">Help</a>
           <a class="nav-account-dropdown-item" href="shop.html">Shop</a>
           <div class="nav-account-dropdown-divider"></div>
