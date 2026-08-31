@@ -617,6 +617,24 @@
       });
       const json = await res.json();
       if (!res.ok) {
+        // The account exists and the password is correct, but the email was
+        // never confirmed via the signup code (e.g. the tab was closed right
+        // after signup). Reuse the same code-entry panel signup uses instead
+        // of just failing, since sign-in-with-email already emailed a code
+        // that's likely still valid.
+        if (json.needsVerification && json.userId) {
+          _pendingSignupUserId = json.userId;
+          document.getElementById('signup-code').value = '';
+          document.getElementById('confirm-error').style.display = 'none';
+          tabs.forEach(t => t.classList.remove('active'));
+          panels.forEach(p => p.classList.remove('active'));
+          document.getElementById('panel-confirm').classList.add('active');
+          document.getElementById('login-tabs').style.display = 'none';
+          document.getElementById('login-card-footer').style.display = 'none';
+          cardTitle.textContent = 'Almost there';
+          btn.textContent = 'Sign In'; btn.disabled = false;
+          return;
+        }
         errEl.textContent = json.error || 'Sign in failed.';
         errEl.style.display = 'block';
         btn.textContent = 'Sign In'; btn.disabled = false;
