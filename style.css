@@ -103,6 +103,8 @@
 /* Checkout/primary buttons keep bg but adjust for dark */
 [data-theme="dark"] .btn-checkout { background: var(--blue); color: #111620; }
 [data-theme="dark"] .btn-checkout:hover { background: var(--blue-dark); }
+[data-theme="dark"] .btn-primary { background: var(--blue); color: #111620; }
+[data-theme="dark"] .btn-primary:hover { background: var(--blue-dark); }
 [data-theme="dark"] .document-pdf-btn { background: var(--blue); color: #111620; }
 [data-theme="dark"] .document-pdf-btn:hover { background: var(--blue-dark); }
 /* Slideshow controls */
