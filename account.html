@@ -1473,9 +1473,16 @@ function bindCodeButtons(body) {
 }
 
 function generateCode() {
+  // This code is what proves to the in-game plugin that the person running
+  // /mcaverify owns this website account, so it needs a real CSPRNG —
+  // Math.random() is an xorshift128+ stream whose future output can be
+  // recovered from a few observed values. The alphabet is 32 characters and
+  // 256 is a multiple of 32, so masking a random byte stays unbiased.
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
   let code = '';
-  for (let i = 0; i < 8; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < 8; i++) code += chars[bytes[i] % chars.length];
   // Store code + expiry in profiles so the edge function can validate it
   const expiry = Date.now() + 10 * 60 * 1000;
   supabase.from('profiles').update({
