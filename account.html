@@ -182,7 +182,20 @@
     .del-verified-tag { font-size:12px; color:#1a7f37; font-weight:600; display:flex; align-items:center; gap:5px; margin-top:6px; }
     .del-step-progress { font-size:12px; color:var(--muted); margin-bottom:1rem; }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+  <!--
+    Vendored qrcode 1.4.4 (vendor/qrcode.min.js), served from our own origin.
+
+    This used to load https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js,
+    which was broken as well as risky. The URL was unpinned, so it resolved to
+    the latest release — and qrcode stopped publishing build/qrcode.min.js at
+    1.5.0, so that path 404s on every version from 1.5.0 on. With QRCode
+    undefined, the 2FA setup handler threw and enrolment failed. 1.4.4 is the
+    last release that ships the prebuilt browser bundle.
+
+    Serving it ourselves also keeps a third-party script off the page that
+    handles TOTP secrets, and lets the CSP drop cdn.jsdelivr.net entirely.
+  -->
+  <script src="vendor/qrcode.min.js"></script>
 </head>
 <body>
 <script type="module" src="nav.js"></script>
@@ -1473,9 +1486,16 @@ function bindCodeButtons(body) {
 }
 
 function generateCode() {
+  // This code is what proves to the in-game plugin that the person running
+  // /mcaverify owns this website account, so it needs a real CSPRNG —
+  // Math.random() is an xorshift128+ stream whose future output can be
+  // recovered from a few observed values. The alphabet is 32 characters and
+  // 256 is a multiple of 32, so masking a random byte stays unbiased.
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
   let code = '';
-  for (let i = 0; i < 8; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < 8; i++) code += chars[bytes[i] % chars.length];
   // Store code + expiry in profiles so the edge function can validate it
   const expiry = Date.now() + 10 * 60 * 1000;
   supabase.from('profiles').update({

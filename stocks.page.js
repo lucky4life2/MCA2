@@ -1,0 +1,1404 @@
+import { supabase, hasPermission } from './supabase.js';
+import {
+  fmtMarks, fmtShares, fmtPrice, fmtDate, fmtRelative, escapeHtml,
+  showError, showSuccess, clearMessages, confirmAction, newToken, previewOrder,
+  loadMyAccounts, loadExchangeSettings, loadCompanies, loadMarketSummary,
+  loadOrderBook, loadRecentTrades, loadMyOrders, loadMyHoldings,
+  loadOpenOfferings, loadMyCompanyRoles
+} from './economy.js';
+
+const view = document.getElementById('view');
+
+let _session = null;
+let _accounts = [];
+let _companies = [];
+let _settings = null;
+let _myRoles = [];
+let _isEconAdmin = false;
+let _isTreasury = false;
+
+// ── Boot ─────────────────────────────────────────────────────
+const { data: { session } } = await supabase.auth.getSession();
+_session = session;
+
+_settings = await loadExchangeSettings();
+try { _companies = await loadCompanies(); } catch (e) { _companies = []; }
+
+if (_session) {
+  try { _accounts = await loadMyAccounts(); } catch (e) { _accounts = []; }
+  _myRoles = await loadMyCompanyRoles();
+  _isEconAdmin = await hasPermission('can_manage_economy');
+  _isTreasury = await hasPermission('can_manage_treasury');
+  document.getElementById('tab-manage').style.display = '';
+  if (_isEconAdmin || _isTreasury) document.getElementById('tab-admin').style.display = '';
+}
+
+renderExchangeStatus();
+document.querySelectorAll('#tabs .econ-tab').forEach(function (b) {
+  b.addEventListener('click', function () { location.hash = b.getAttribute('data-route'); });
+});
+window.addEventListener('hashchange', route);
+route();
+
+// ── Exchange-wide status banner ──────────────────────────────
+function renderExchangeStatus() {
+  const el = document.getElementById('exchange-status');
+  if (_settings && _settings.trading_enabled === false) {
+    el.innerHTML = '<div class="econ-halt"><strong>Trading is halted across the exchange.</strong>' +
+      escapeHtml(_settings.halt_reason || 'No reason was recorded.') + '</div>';
+  } else {
+    el.innerHTML = '';
+  }
+}
+
+function setTab(r) {
+  document.querySelectorAll('#tabs .econ-tab').forEach(function (b) {
+    b.classList.toggle('active', b.getAttribute('data-route') === r);
+  });
+}
+
+// ── Member name directory ────────────────────────────────────
+// profiles holds emails and verification tokens, so it is readable only by
+// yourself or staff. Names come from public_profiles, a view exposing just
+// id/username/display_name.
+let _directory = null;
+
+async function loadDirectory() {
+  if (_directory) return _directory;
+  const { data, error } = await supabase
+    .from('public_profiles').select('id, username, display_name');
+  if (error) { console.error('loadDirectory failed:', error.message); return new Map(); }
+  _directory = new Map((data || []).map(function (p) {
+    return [p.id, p.display_name || p.username];
+  }));
+  return _directory;
+}
+
+function nameOf(userId, fallback) {
+  const f = fallback || 'Member';
+  if (!userId || !_directory) return f;
+  return _directory.get(userId) || f;
+}
+
+function statusBadge(status) {
+  return '<span class="econ-badge econ-badge-' + escapeHtml(status) + '">' + escapeHtml(status) + '</span>';
+}
+
+function requireSignIn() {
+  view.innerHTML = '<div class="econ-section"><div class="econ-section-body">' +
+    '<p class="econ-muted">Sign in to use this part of the exchange.</p>' +
+    '<p style="margin-top:1rem;"><a class="btn btn-primary" href="login.html">Sign In</a></p>' +
+    '</div></div>';
+}
+
+function statBlock(label, value) {
+  return '<div class="econ-stat"><div class="econ-stat-label">' + label + '</div>' +
+    '<div class="econ-stat-value" style="font-size:1rem;">' + value + '</div></div>';
+}
+
+function accountOptions() {
+  if (!_accounts.length) return '<option value="">No wallet — create one first</option>';
+  return _accounts.map(function (a) {
+    return '<option value="' + a.id + '">' + escapeHtml(a.name) + ' — ' + fmtMarks(a.balance) + '</option>';
+  }).join('');
+}
+
+async function refreshState() {
+  try { _companies = await loadCompanies(); } catch (e) { /* keep previous */ }
+  if (_session) {
+    try { _accounts = await loadMyAccounts(); } catch (e) { /* keep previous */ }
+    try { _myRoles = await loadMyCompanyRoles(); } catch (e) { /* keep previous */ }
+  }
+}
+
+// ── Router ───────────────────────────────────────────────────
+async function route() {
+  const hash = location.hash || '#/';
+  if (hash.indexOf('#/c/') === 0) { setTab('#/'); return renderCompany(hash.slice(4)); }
+  if (hash.indexOf('#/manage/') === 0) { setTab('#/manage'); return renderManageCompany(hash.slice(9)); }
+  if (hash === '#/offerings') { setTab(hash); return renderOfferings(); }
+  if (hash === '#/portfolio') { setTab(hash); return renderPortfolio(); }
+  if (hash === '#/found') { setTab('#/manage'); return renderFoundCompany(); }
+  if (hash === '#/manage') { setTab(hash); return renderManageList(); }
+  if (hash === '#/admin') { setTab(hash); return renderAdmin(); }
+  setTab('#/');
+  return renderDiscovery();
+}
+
+// ── Exchange home: discovery, not speculation ────────────────
+async function renderDiscovery() {
+  document.getElementById('page-title').textContent = 'MCA Companies';
+  document.getElementById('page-sub').textContent = 'Businesses built by club members, funded in Marks.';
+
+  // Ordered by name. Deliberately NOT ordered by price movement — this page
+  // is for finding businesses, not for chasing whatever moved most today.
+  const listed = _companies.filter(function (c) {
+    return c.status === 'public' || c.status === 'private' || c.status === 'suspended';
+  });
+
+  view.innerHTML =
+    '<div class="econ-section">' +
+      '<div class="econ-section-header">' +
+        '<div class="econ-section-title">Browse Companies</div>' +
+        '<input id="search" class="form-input" style="max-width:260px;" placeholder="Search name, ticker or industry">' +
+      '</div>' +
+      '<div class="econ-section-body">' +
+        '<div id="company-grid" class="econ-grid"></div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="econ-section">' +
+      '<div class="econ-section-header"><div class="econ-section-title">Start a Company</div></div>' +
+      '<div class="econ-section-body">' +
+        '<p class="econ-muted">Founding a company creates its own account, separate from your wallet. ' +
+        'You raise Marks by opening an offering — and the company is paid only as shares are actually bought, ' +
+        'never for simply being listed.</p>' +
+        (_session
+          ? '<p style="margin-top:1rem;"><a class="btn btn-primary" href="#/found">Found a company</a>' +
+            '<a class="btn btn-outline" href="#/manage" style="margin-left:8px;">Company tools</a></p>'
+          : '<p style="margin-top:1rem;"><a class="btn btn-primary" href="login.html">Sign in to found a company</a></p>') +
+      '</div>' +
+    '</div>';
+
+  function paint(filter) {
+    const q = (filter || '').trim().toLowerCase();
+    const rows = listed.filter(function (c) {
+      if (!q) return true;
+      return (c.name + ' ' + c.ticker + ' ' + (c.industry || '')).toLowerCase().indexOf(q) !== -1;
+    });
+    const grid = document.getElementById('company-grid');
+    if (!rows.length) { grid.innerHTML = '<div class="econ-muted">No companies match that search.</div>'; return; }
+    grid.innerHTML = rows.map(function (c) {
+      return '<a class="econ-card" href="#/c/' + encodeURIComponent(c.ticker) + '" style="text-decoration:none;color:inherit;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
+          '<span class="econ-card-ticker">' + escapeHtml(c.ticker) + '</span>' + statusBadge(c.status) +
+        '</div>' +
+        '<div class="econ-card-name">' + escapeHtml(c.name) + '</div>' +
+        (c.industry ? '<div class="econ-card-desc">' + escapeHtml(c.industry) + '</div>' : '') +
+        '<div class="econ-card-desc">' + escapeHtml(String(c.description || 'No description yet.').slice(0, 130)) + '</div>' +
+        '<div class="econ-card-foot">' +
+          '<span class="econ-muted">' + fmtShares(c.shares_issued) + ' shares issued</span>' +
+          '<span>' + escapeHtml(fmtPrice(c.last_trade_price)) + '</span>' +
+        '</div>' +
+      '</a>';
+    }).join('');
+  }
+  paint('');
+  document.getElementById('search').addEventListener('input', function (e) { paint(e.target.value); });
+}
+
+// ── Offerings ────────────────────────────────────────────────
+async function renderOfferings() {
+  document.getElementById('page-title').textContent = 'Open Offerings';
+  document.getElementById('page-sub').textContent = 'Invest directly in a company raising Marks.';
+  view.innerHTML = '<div class="econ-muted">Loading…</div>';
+
+  const offerings = await loadOpenOfferings();
+  if (!offerings.length) {
+    view.innerHTML = '<div class="econ-section"><div class="econ-section-body">' +
+      '<p class="econ-muted">No companies are raising Marks right now.</p></div></div>';
+    return;
+  }
+
+  view.innerHTML = offerings.map(function (o) {
+    const c = o.economy_companies || {};
+    const remaining = o.share_count - o.shares_sold;
+    return '<div class="econ-section">' +
+      '<div class="econ-section-header">' +
+        '<div class="econ-section-title">' + escapeHtml(c.ticker || '?') + ' — ' + escapeHtml(c.name || '') + '</div>' +
+        '<a class="btn btn-outline" href="#/c/' + encodeURIComponent(c.ticker || '') + '">About this company</a>' +
+      '</div>' +
+      '<div class="econ-section-body">' +
+        '<div class="econ-stat-row" style="margin-bottom:1rem;">' +
+          statBlock('Price per share', fmtMarks(o.price)) +
+          statBlock('Shares left', fmtShares(remaining) + ' of ' + fmtShares(o.share_count)) +
+          statBlock('Raised so far', fmtMarks(o.proceeds)) +
+          (o.funding_goal ? statBlock('Goal', fmtMarks(o.funding_goal)) : '') +
+        '</div>' +
+        '<p class="econ-caveat">This is what the company is asking in this offering. It is a reference price, not a market price — buying here is not a trade and does not set the share price.</p>' +
+        (o.percent_of_company ? '<p class="econ-muted" style="margin-top:.75rem;">This offering is about ' +
+          escapeHtml(String(o.percent_of_company)) + '% of the company’s authorized shares.</p>' : '') +
+        (o.use_of_funds ? '<p style="margin-top:.75rem;font-size:13.5px;"><strong>Use of funds:</strong> ' +
+          escapeHtml(o.use_of_funds) + '</p>' : '') +
+        '<p style="margin-top:.75rem;font-size:13.5px;"><strong>Risks:</strong> ' + escapeHtml(o.risk_disclosure) + '</p>' +
+        (o.is_new_issuance && o.dilution_note
+          ? '<p style="margin-top:.75rem;font-size:13.5px;"><strong>Dilution:</strong> ' + escapeHtml(o.dilution_note) + '</p>'
+          : '') +
+        (o.lockup_days > 0 ? '<p class="econ-caveat">Shares bought here cannot be sold for ' +
+          escapeHtml(String(o.lockup_days)) + ' days after purchase.</p>' : '') +
+        (o.closes_at ? '<p class="econ-caveat">Closes ' + escapeHtml(fmtDate(o.closes_at)) + '.</p>' : '') +
+        (_session
+          ? '<div style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--border);">' +
+              '<div class="econ-two-col">' +
+                '<div class="form-group"><label class="form-label" for="off-acct-' + o.id + '">Pay from</label>' +
+                  '<select id="off-acct-' + o.id + '" class="form-input">' + accountOptions() + '</select></div>' +
+                '<div class="form-group"><label class="form-label" for="off-qty-' + o.id + '">Shares</label>' +
+                  '<input type="number" min="1" step="1" id="off-qty-' + o.id + '" class="form-input" value="1"></div>' +
+              '</div>' +
+              '<div class="form-error" id="off-err-' + o.id + '"></div>' +
+              '<div class="form-success" id="off-ok-' + o.id + '"></div>' +
+              '<button class="btn btn-primary" id="buy-off-' + o.id + '">Review purchase</button>' +
+            '</div>'
+          : '<p style="margin-top:1rem;"><a class="btn btn-primary" href="login.html">Sign in to invest</a></p>') +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  if (_session) {
+    offerings.forEach(function (o) {
+      const btn = document.getElementById('buy-off-' + o.id);
+      if (btn) btn.addEventListener('click', function () { buyOffering(o); });
+    });
+  }
+}
+
+async function buyOffering(o) {
+  const errEl = document.getElementById('off-err-' + o.id);
+  const okEl = document.getElementById('off-ok-' + o.id);
+  clearMessages(errEl, okEl);
+
+  const accountId = document.getElementById('off-acct-' + o.id).value;
+  const qty = Math.floor(Number(document.getElementById('off-qty-' + o.id).value));
+  if (!accountId) { showError(errEl, { message: 'You need a wallet to invest.' }); return; }
+  if (!(qty > 0)) { showError(errEl, { message: 'Buy at least one whole share.' }); return; }
+
+  const total = qty * Number(o.price);
+  const c = o.economy_companies || {};
+  const ok = await confirmAction({
+    title: 'Invest in ' + (c.ticker || 'this company') + '?',
+    lines: [
+      { label: 'Shares', value: fmtShares(qty) },
+      { label: 'Price each', value: fmtMarks(o.price) },
+      { label: 'Total cost', value: fmtMarks(total) },
+      { label: 'Lockup', value: o.lockup_days > 0 ? o.lockup_days + ' days' : 'None' }
+    ],
+    note: 'Your Marks go to the company account. You may lose everything you put in — the Treasury never reimburses investment losses.',
+    confirmLabel: 'Buy shares'
+  });
+  if (!ok) return;
+
+  const btn = document.getElementById('buy-off-' + o.id);
+  btn.disabled = true;
+  const { error } = await supabase.rpc('economy_buy_offering_shares', {
+    p_account_id: accountId, p_offering_id: o.id, p_shares: qty, p_client_token: newToken()
+  });
+  btn.disabled = false;
+
+  if (error) { showError(errEl, error); return; }
+  showSuccess(okEl, 'Bought ' + fmtShares(qty) + ' shares for ' + fmtMarks(total) + '.');
+  await refreshState();
+  setTimeout(renderOfferings, 900);
+}
+
+// ── Company page: business first, trading second ─────────────
+async function renderCompany(tickerRaw) {
+  const ticker = decodeURIComponent(tickerRaw);
+  const c = _companies.find(function (x) { return x.ticker === ticker; });
+  if (!c) {
+    view.innerHTML = '<div class="econ-section"><div class="econ-section-body"><p class="econ-muted">No such company.</p></div></div>';
+    return;
+  }
+
+  document.getElementById('page-title').textContent = c.name;
+  document.getElementById('page-sub').textContent = c.ticker + (c.industry ? ' · ' + c.industry : '');
+  view.innerHTML = '<div class="econ-muted">Loading…</div>';
+
+  const summary = await loadMarketSummary(c.id);
+  const book = await loadOrderBook(c.id, 8);
+  const trades = await loadRecentTrades(c.id, 15);
+  const { data: register } = await supabase.rpc('economy_shareholder_register', { p_company_id: c.id });
+  const { data: reports } = await supabase.from('economy_company_reports')
+    .select('*').eq('company_id', c.id).order('period_end', { ascending: false }).limit(4);
+  const { data: dividends } = await supabase.from('economy_dividends')
+    .select('*').eq('company_id', c.id).eq('status', 'paid').order('paid_at', { ascending: false }).limit(6);
+
+  const bids = book.filter(function (r) { return r.side === 'buy'; });
+  const asks = book.filter(function (r) { return r.side === 'sell'; });
+  const halted = c.trading_halted || (_settings && _settings.trading_enabled === false);
+
+  view.innerHTML =
+    // 1. The business, before any trading interface.
+    '<div class="econ-section">' +
+      '<div class="econ-section-header">' +
+        '<div class="econ-section-title">About ' + escapeHtml(c.name) + '</div>' + statusBadge(c.status) +
+      '</div>' +
+      '<div class="econ-section-body">' +
+        '<p style="font-size:14px;line-height:1.65;">' +
+          escapeHtml(c.description || 'This company has not written a description yet.') + '</p>' +
+        '<div class="econ-stat-row" style="margin-top:1.25rem;">' +
+          (c.industry ? statBlock('Industry', escapeHtml(c.industry)) : '') +
+          (c.headquarters ? statBlock('Headquarters', escapeHtml(c.headquarters)) : '') +
+          statBlock('Founded', escapeHtml(fmtDate(c.created_at))) +
+          statBlock('Shares issued', fmtShares(c.shares_issued) + ' of ' + fmtShares(c.total_shares) + ' authorized') +
+        '</div>' +
+        (c.charter ? '<p style="margin-top:1rem;font-size:13.5px;"><strong>Charter:</strong> ' + escapeHtml(c.charter) + '</p>' : '') +
+      '</div>' +
+    '</div>' +
+
+    (halted ? '<div class="econ-halt"><strong>Trading in ' + escapeHtml(c.ticker) + ' is halted.</strong>' +
+      escapeHtml(c.halt_reason || (_settings && _settings.halt_reason) || 'No reason was recorded.') + '</div>' : '') +
+
+    // 2. Market data — last completed trade only.
+    '<div class="econ-section">' +
+      '<div class="econ-section-header"><div class="econ-section-title">Market</div></div>' +
+      '<div class="econ-section-body">' +
+        '<div class="econ-stat-row">' +
+          '<div class="econ-stat"><div class="econ-stat-label">Last traded price</div>' +
+            (summary && summary.last_price !== null && summary.last_price !== undefined
+              ? '<div class="econ-stat-value">' + fmtMarks(summary.last_price) + '</div>'
+              : '<div class="econ-stat-value is-unknown">No trades yet</div>') +
+          '</div>' +
+          statBlock('Last trade', summary && summary.last_trade_at ? escapeHtml(fmtRelative(summary.last_trade_at)) : 'never') +
+          '<div class="econ-stat"><div class="econ-stat-label">Best bid</div>' +
+            (summary && summary.best_bid !== null && summary.best_bid !== undefined
+              ? '<div class="econ-stat-value">' + fmtMarks(summary.best_bid) + '</div>'
+              : '<div class="econ-stat-value is-unknown">None</div>') + '</div>' +
+          '<div class="econ-stat"><div class="econ-stat-label">Best ask</div>' +
+            (summary && summary.best_ask !== null && summary.best_ask !== undefined
+              ? '<div class="econ-stat-value">' + fmtMarks(summary.best_ask) + '</div>'
+              : '<div class="econ-stat-value is-unknown">None</div>') + '</div>' +
+          statBlock('Volume today', fmtShares(summary ? summary.volume_today : 0) + ' shares') +
+          '<div class="econ-stat"><div class="econ-stat-label">Market cap</div>' +
+            (summary && summary.market_cap !== null && summary.market_cap !== undefined
+              ? '<div class="econ-stat-value">' + fmtMarks(summary.market_cap) + '</div>'
+              : '<div class="econ-stat-value is-unknown">Not meaningful yet</div>') + '</div>' +
+        '</div>' +
+        '<p class="econ-caveat">Price shown is the last completed trade. Market cap is simply that last price multiplied by shares issued — it is not a valuation, and before any trade has happened there is no price at all.</p>' +
+      '</div>' +
+    '</div>' +
+
+    // 3. Order book
+    '<div class="econ-section">' +
+      '<div class="econ-section-header"><div class="econ-section-title">Order Book</div></div>' +
+      '<div class="econ-section-body"><div class="econ-book">' +
+        '<div class="econ-book-side econ-book-bid"><h4>Bids (buyers)</h4>' + bookTable(bids) + '</div>' +
+        '<div class="econ-book-side econ-book-ask"><h4>Asks (sellers)</h4>' + bookTable(asks) + '</div>' +
+      '</div></div>' +
+    '</div>' +
+
+    // 4. Trade form
+    (_session && c.status === 'public' && !halted ? tradeForm() : '') +
+
+    // 5. Recent trades
+    '<div class="econ-section">' +
+      '<div class="econ-section-header"><div class="econ-section-title">Recent Trades</div></div>' +
+      '<div class="econ-section-body">' +
+        (trades.length
+          ? '<table class="econ-table"><thead><tr><th>When</th><th class="econ-num">Shares</th><th class="econ-num">Price</th><th class="econ-num">Total</th></tr></thead><tbody>' +
+            trades.map(function (t) {
+              return '<tr><td>' + escapeHtml(fmtDate(t.created_at)) + '</td>' +
+                '<td class="econ-num">' + fmtShares(t.quantity) + '</td>' +
+                '<td class="econ-num">' + fmtMarks(t.price) + '</td>' +
+                '<td class="econ-num">' + fmtMarks(t.total) + '</td></tr>';
+            }).join('') + '</tbody></table>'
+          : '<p class="econ-muted">No trades yet.</p>') +
+      '</div>' +
+    '</div>' +
+
+    // 6. Shareholders at or above the disclosure threshold
+    '<div class="econ-section">' +
+      '<div class="econ-section-header"><div class="econ-section-title">Major Shareholders</div></div>' +
+      '<div class="econ-section-body">' + majorHolders(register) + '</div>' +
+    '</div>' +
+
+    // 7. Reports and dividends
+    '<div class="econ-section">' +
+      '<div class="econ-section-header"><div class="econ-section-title">Reports &amp; Dividends</div></div>' +
+      '<div class="econ-section-body">' + reportsBlock(reports) + dividendsBlock(dividends) + '</div>' +
+    '</div>';
+
+  if (_session && c.status === 'public' && !halted) {
+    document.getElementById('btn-buy').addEventListener('click', function () { placeOrder(c, 'buy'); });
+    document.getElementById('btn-sell').addEventListener('click', function () { placeOrder(c, 'sell'); });
+  }
+}
+
+function bookTable(rows) {
+  if (!rows.length) return '<div class="econ-book-empty">Nothing resting on this side.</div>';
+  return '<table class="econ-table"><thead><tr><th class="econ-num">Price</th><th class="econ-num">Shares</th><th class="econ-num">Orders</th></tr></thead><tbody>' +
+    rows.map(function (r) {
+      return '<tr><td class="econ-num">' + fmtMarks(r.price) + '</td>' +
+        '<td class="econ-num">' + fmtShares(r.shares) + '</td>' +
+        '<td class="econ-num">' + r.orders + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+
+function majorHolders(register) {
+  const rows = (register || []).filter(function (r) { return r.must_disclose; });
+  if (!rows.length) {
+    return '<p class="econ-muted">No shareholder currently holds enough to require disclosure' +
+      (_settings ? ' (' + escapeHtml(String(_settings.large_holder_disclosure_pct)) + '% or more)' : '') + '.</p>';
+  }
+  return '<table class="econ-table"><thead><tr><th>Holder</th><th class="econ-num">Shares</th><th class="econ-num">Stake</th></tr></thead><tbody>' +
+    rows.map(function (r) {
+      return '<tr><td>' + escapeHtml(r.holder_name || r.account_name || 'Unknown') + '</td>' +
+        '<td class="econ-num">' + fmtShares(r.shares) + '</td>' +
+        '<td class="econ-num">' + escapeHtml(String(r.pct)) + '%</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+
+function reportsBlock(reports) {
+  if (!reports || !reports.length) return '<p class="econ-muted">No financial reports published yet.</p>';
+  return '<h4 style="font-size:11px;letter-spacing:1.3px;text-transform:uppercase;color:var(--muted);margin-bottom:.5rem;">Reports</h4>' +
+    reports.map(function (r) {
+      return '<div class="econ-row"><div>' +
+        '<div class="econ-row-main">' + escapeHtml(r.period_start) + ' to ' + escapeHtml(r.period_end) + '</div>' +
+        '<div class="econ-row-detail">' + escapeHtml(r.narrative || 'No commentary.') + '</div>' +
+        '<div class="econ-caveat">Figures in this report are self-reported by the company and are not verified against the ledger. They never affect the share price.</div>' +
+      '</div></div>';
+    }).join('');
+}
+
+function dividendsBlock(dividends) {
+  if (!dividends || !dividends.length) return '<p class="econ-muted" style="margin-top:1rem;">No dividends paid yet.</p>';
+  return '<h4 style="font-size:11px;letter-spacing:1.3px;text-transform:uppercase;color:var(--muted);margin:1.25rem 0 .5rem;">Dividend history</h4>' +
+    '<table class="econ-table"><thead><tr><th>Paid</th><th class="econ-num">Declared</th><th class="econ-num">Distributed</th></tr></thead><tbody>' +
+    dividends.map(function (d) {
+      return '<tr><td>' + escapeHtml(fmtDate(d.paid_at)) + '</td>' +
+        '<td class="econ-num">' + fmtMarks(d.total_amount) + '</td>' +
+        '<td class="econ-num">' + fmtMarks(d.amount_paid) + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+
+function tradeForm() {
+  return '<div class="econ-section">' +
+    '<div class="econ-section-header"><div class="econ-section-title">Place an Order</div></div>' +
+    '<div class="econ-section-body">' +
+      '<p class="econ-muted" style="margin-bottom:1rem;">Limit orders only, in whole shares. Your order rests on the book until it matches or you cancel it.</p>' +
+      '<div class="econ-two-col">' +
+        '<div class="form-group"><label class="form-label" for="ord-acct">Wallet</label>' +
+          '<select id="ord-acct" class="form-input">' + accountOptions() + '</select></div>' +
+        '<div class="form-group"><label class="form-label" for="ord-qty">Shares</label>' +
+          '<input type="number" min="1" step="1" id="ord-qty" class="form-input" value="1"></div>' +
+      '</div>' +
+      '<div class="form-group"><label class="form-label" for="ord-price">Limit price per share (Marks)</label>' +
+        '<input type="number" min="0.01" step="0.01" id="ord-price" class="form-input" placeholder="0.00">' +
+        '<div class="form-hint">Buying: the most you will pay. Selling: the least you will accept.</div></div>' +
+      '<div class="form-error" id="ord-err"></div>' +
+      '<div class="form-success" id="ord-ok"></div>' +
+      '<button class="btn btn-primary" id="btn-buy">Review buy order</button>' +
+      '<button class="btn btn-outline" id="btn-sell" style="margin-left:8px;">Review sell order</button>' +
+    '</div>' +
+  '</div>';
+}
+
+async function placeOrder(c, side) {
+  const errEl = document.getElementById('ord-err');
+  const okEl = document.getElementById('ord-ok');
+  clearMessages(errEl, okEl);
+
+  const accountId = document.getElementById('ord-acct').value;
+  const qty = Math.floor(Number(document.getElementById('ord-qty').value));
+  const price = Number(document.getElementById('ord-price').value);
+
+  if (!accountId) { showError(errEl, { message: 'You need a wallet to trade.' }); return; }
+  if (!(qty > 0)) { showError(errEl, { message: 'Order at least one whole share.' }); return; }
+  if (!(price > 0)) { showError(errEl, { message: 'Enter a limit price above zero.' }); return; }
+
+  const p = previewOrder({ side: side, quantity: qty, limitPrice: price });
+  const ok = await confirmAction({
+    title: (side === 'buy' ? 'Buy' : 'Sell') + ' ' + fmtShares(qty) + ' ' + c.ticker + '?',
+    lines: [
+      { label: 'Side', value: side === 'buy' ? 'Buy' : 'Sell' },
+      { label: 'Shares', value: fmtShares(p.quantity) },
+      { label: 'Limit price', value: fmtMarks(p.price) },
+      { label: side === 'buy' ? 'Maximum cost' : 'Minimum proceeds', value: fmtMarks(p.maxTotal) },
+      { label: 'Reserved now', value: p.reserves }
+    ],
+    note: side === 'buy'
+      ? 'You may fill at a better price than your limit. Anything reserved but not spent is returned to you immediately.'
+      : 'Your shares are held while the order rests. Cancel the order to release them.',
+    confirmLabel: side === 'buy' ? 'Place buy order' : 'Place sell order',
+    danger: side === 'sell'
+  });
+  if (!ok) return;
+
+  const btn = document.getElementById(side === 'buy' ? 'btn-buy' : 'btn-sell');
+  btn.disabled = true;
+  const { data, error } = await supabase.rpc('economy_place_order', {
+    p_account_id: accountId, p_company_id: c.id, p_side: side,
+    p_quantity: qty, p_limit_price: price, p_expires_at: null, p_client_token: newToken()
+  });
+  btn.disabled = false;
+
+  if (error) { showError(errEl, error); return; }
+  const filled = data ? data.filled_quantity : 0;
+  showSuccess(okEl, filled >= qty
+    ? 'Order filled completely.'
+    : (filled > 0
+        ? 'Filled ' + fmtShares(filled) + ' of ' + fmtShares(qty) + '. The rest is resting on the book.'
+        : 'Order placed and resting on the book.'));
+  await refreshState();
+  setTimeout(function () { renderCompany(encodeURIComponent(c.ticker)); }, 900);
+}
+
+// ── Portfolio ────────────────────────────────────────────────
+async function renderPortfolio() {
+  document.getElementById('page-title').textContent = 'My Portfolio';
+  document.getElementById('page-sub').textContent = 'Your Marks, holdings and open orders.';
+  if (!_session) return requireSignIn();
+
+  view.innerHTML = '<div class="econ-muted">Loading…</div>';
+  const ids = _accounts.map(function (a) { return a.id; });
+  const holdings = await loadMyHoldings(ids);
+  const orders = await loadMyOrders(ids);
+  const openOrders = orders.filter(function (o) { return o.status === 'open'; });
+
+  const avail = _accounts.reduce(function (s, a) { return s + Number(a.balance || 0); }, 0);
+  const held = _accounts.reduce(function (s, a) { return s + Number(a.reserved_balance || 0); }, 0);
+
+  // Only holdings that have actually traded contribute to the estimate.
+  let estimate = 0;
+  let unpriced = 0;
+  holdings.forEach(function (h) {
+    const price = h.economy_companies ? h.economy_companies.last_trade_price : null;
+    if (price === null || price === undefined) { unpriced++; }
+    else { estimate += Number(price) * (h.shares + h.reserved_shares); }
+  });
+
+  view.innerHTML =
+    '<div class="econ-section"><div class="econ-section-header"><div class="econ-section-title">Summary</div></div>' +
+      '<div class="econ-section-body"><div class="econ-stat-row">' +
+        statBlock('Available Marks', fmtMarks(avail)) +
+        statBlock('Reserved Marks', fmtMarks(held)) +
+        statBlock('Holdings value (estimate)', fmtMarks(estimate)) +
+      '</div>' +
+      '<p class="econ-caveat">Holdings value is an estimate only: it multiplies each holding by that company’s last traded price. ' +
+      'It is not what you would receive if you sold — that depends on who is actually bidding.' +
+      (unpriced ? ' ' + unpriced + ' holding(s) have never traded and are excluded entirely.' : '') + '</p>' +
+      '</div></div>' +
+
+    '<div class="econ-section"><div class="econ-section-header"><div class="econ-section-title">Holdings</div></div>' +
+      '<div class="econ-section-body">' + holdingsTable(holdings) + '</div></div>' +
+
+    '<div class="econ-section"><div class="econ-section-header"><div class="econ-section-title">Open Orders</div></div>' +
+      '<div class="econ-section-body">' + ordersTable(openOrders, true) + '</div></div>' +
+
+    '<div class="econ-section"><div class="econ-section-header"><div class="econ-section-title">Order History</div></div>' +
+      '<div class="econ-section-body">' + ordersTable(orders.filter(function (o) { return o.status !== 'open'; }), false) + '</div></div>';
+
+  view.querySelectorAll('[data-cancel]').forEach(function (b) {
+    b.addEventListener('click', function () { cancelOrder(b.getAttribute('data-cancel')); });
+  });
+}
+
+function companyTicker(id) {
+  const c = _companies.find(function (x) { return x.id === id; });
+  return c ? c.ticker : '—';
+}
+
+function holdingsTable(holdings) {
+  if (!holdings.length) return '<p class="econ-muted">You do not own any shares yet.</p>';
+  return '<table class="econ-table"><thead><tr><th>Company</th><th class="econ-num">Available</th><th class="econ-num">Reserved</th><th class="econ-num">Last price</th></tr></thead><tbody>' +
+    holdings.map(function (h) {
+      const c = h.economy_companies || {};
+      return '<tr><td><a href="#/c/' + encodeURIComponent(c.ticker || '') + '">' + escapeHtml(c.ticker || '?') + '</a> — ' + escapeHtml(c.name || '') + '</td>' +
+        '<td class="econ-num">' + fmtShares(h.shares) + '</td>' +
+        '<td class="econ-num">' + fmtShares(h.reserved_shares) + '</td>' +
+        '<td class="econ-num">' + escapeHtml(fmtPrice(c.last_trade_price)) + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+
+function ordersTable(orders, cancellable) {
+  if (!orders.length) return '<p class="econ-muted">Nothing here.</p>';
+  return '<table class="econ-table"><thead><tr><th>Company</th><th>Side</th><th class="econ-num">Filled</th>' +
+    '<th class="econ-num">Limit</th><th class="econ-num">Reserved</th><th>Status</th>' +
+    (cancellable ? '<th></th>' : '') + '</tr></thead><tbody>' +
+    orders.map(function (o) {
+      return '<tr><td>' + escapeHtml(companyTicker(o.company_id)) + '</td>' +
+        '<td>' + escapeHtml(o.side) + '</td>' +
+        '<td class="econ-num">' + fmtShares(o.filled_quantity) + ' / ' + fmtShares(o.quantity) + '</td>' +
+        '<td class="econ-num">' + fmtMarks(o.limit_price) + '</td>' +
+        '<td class="econ-num">' + (o.side === 'buy' ? fmtMarks(o.reserved_amount) : fmtShares(o.reserved_shares) + ' sh') + '</td>' +
+        '<td>' + escapeHtml(o.status) + '</td>' +
+        (cancellable ? '<td class="econ-num"><button class="btn btn-outline" data-cancel="' + o.id + '">Cancel</button></td>' : '') +
+        '</tr>';
+    }).join('') + '</tbody></table>';
+}
+
+async function cancelOrder(id) {
+  const ok = await confirmAction({
+    title: 'Cancel this order?',
+    lines: [{ label: 'Effect', value: 'Reservation released in full' }],
+    note: 'Cancelling releases whatever is still reserved. It does not create or destroy any Marks or shares.',
+    confirmLabel: 'Cancel order',
+    danger: true
+  });
+  if (!ok) return;
+  const { error } = await supabase.rpc('economy_cancel_order', { p_order_id: id });
+  if (error) { window.alert(error.message); return; }
+  await refreshState();
+  renderPortfolio();
+}
+
+// ── Company management ───────────────────────────────────────
+async function renderManageList() {
+  document.getElementById('page-title').textContent = 'Company Tools';
+  document.getElementById('page-sub').textContent = 'Companies you help run, and companies you hold shares in.';
+  if (!_session) return requireSignIn();
+
+  view.innerHTML = '<div class="econ-muted">Loading…</div>';
+
+  // Shares and officer roles are different things, and conflating them is how
+  // a 100% shareholder ends up staring at "you are not an officer of any
+  // company yet" and reading it as "you own nothing". List both, and say
+  // plainly which is which.
+  const holdings = await loadMyHoldings(_accounts.map(function (a) { return a.id; }));
+  const roleCompanyIds = _myRoles.map(function (m) { return m.company_id; });
+  const investorOnly = holdings.filter(function (h) {
+    return roleCompanyIds.indexOf(h.company_id) === -1;
+  });
+
+  view.innerHTML =
+    '<div class="econ-section"><div class="econ-section-header">' +
+      '<div class="econ-section-title">Companies You Run</div></div><div class="econ-section-body">' +
+      (_myRoles.length
+        ? _myRoles.map(function (m) {
+            const c = m.economy_companies || {};
+            return '<div class="econ-row"><div>' +
+              '<div class="econ-row-main">' + escapeHtml(c.ticker || '?') + ' — ' + escapeHtml(c.name || '') + '</div>' +
+              '<div class="econ-row-detail">' + escapeHtml(m.role) + ' · ' + escapeHtml(c.status || '') + '</div>' +
+            '</div><div class="econ-row-actions">' +
+              '<a class="btn btn-outline" href="#/manage/' + encodeURIComponent(c.ticker || '') + '">Open</a>' +
+            '</div></div>';
+          }).join('')
+        : '<p class="econ-muted">You are not an officer of any company yet. Found one below to become its founder, ' +
+          'or ask an officer of an existing company to add you.</p>') +
+      '<p style="margin-top:1rem;"><a class="btn btn-primary" href="#/found">Found a company</a></p>' +
+    '</div></div>' +
+
+    (investorOnly.length
+      ? '<div class="econ-section"><div class="econ-section-header">' +
+          '<div class="econ-section-title">Companies You Hold Shares In</div></div><div class="econ-section-body">' +
+          investorOnly.map(function (h) {
+            const c = h.economy_companies || {};
+            return '<div class="econ-row"><div>' +
+              '<div class="econ-row-main">' + escapeHtml(c.ticker || '?') + ' — ' + escapeHtml(c.name || '') + '</div>' +
+              '<div class="econ-row-detail">' + fmtShares(h.shares + h.reserved_shares) + ' shares held · ' +
+                escapeHtml(c.status || '') + '</div>' +
+            '</div><div class="econ-row-actions">' +
+              '<a class="btn btn-outline" href="#/c/' + encodeURIComponent(c.ticker || '') + '">View</a>' +
+            '</div></div>';
+          }).join('') +
+          '<p class="econ-caveat">Shares are property, not authority. Holding shares — even every share — does not ' +
+          'by itself hand you a company’s tools: an officer of that company adds officers, and an economy admin can ' +
+          'do it if no officer is reachable. What shares do give you is a vote on company decisions and a share of ' +
+          'any dividend it pays.</p>' +
+        '</div></div>'
+      : '');
+}
+
+// ── Founding a company ───────────────────────────────────────
+// economy_create_company has existed since the exchange launched, but nothing
+// on the site ever called it, which is why founding a company was a dead end.
+async function renderFoundCompany() {
+  document.getElementById('page-title').textContent = 'Found a Company';
+  document.getElementById('page-sub').textContent = 'Register a business on the exchange.';
+  if (!_session) return requireSignIn();
+
+  if (!_accounts.length) {
+    view.innerHTML = '<div class="econ-section"><div class="econ-section-body">' +
+      '<p class="econ-muted">You need a wallet first — a company is registered from an account you own.</p>' +
+      '<p style="margin-top:1rem;"><a class="btn btn-primary" href="economy.html">Open a wallet</a></p>' +
+      '</div></div>';
+    return;
+  }
+
+  view.innerHTML =
+    '<div class="econ-section"><div class="econ-section-header"><div class="econ-section-title">Company Details</div></div>' +
+      '<div class="econ-section-body">' +
+        '<p class="econ-muted" style="margin-bottom:1rem;">Founding gives the company its own account, separate from ' +
+        'your wallet. It moves no Marks and issues no shares: authorized shares are only a ceiling, and the company ' +
+        'is paid only as an offering actually sells. An economy admin reviews the registration before the company ' +
+        'is listed.</p>' +
+        '<div class="econ-two-col">' +
+          '<div class="form-group"><label class="form-label" for="co-name">Company name</label>' +
+            '<input type="text" id="co-name" class="form-input" maxlength="80" placeholder="Redstone Logistics"></div>' +
+          '<div class="form-group"><label class="form-label" for="co-ticker">Ticker</label>' +
+            '<input type="text" id="co-ticker" class="form-input" maxlength="6" placeholder="RSL">' +
+            '<div class="form-hint">1–6 letters, and not already taken.</div></div>' +
+        '</div>' +
+        '<div class="form-group"><label class="form-label" for="co-desc">What does it do?</label>' +
+          '<textarea id="co-desc" class="form-input" rows="4" maxlength="600" ' +
+            'placeholder="What the business actually does, in plain words."></textarea></div>' +
+        '<div class="form-group"><label class="form-label" for="co-account">Register from</label>' +
+          '<select id="co-account" class="form-input">' + accountOptions() + '</select>' +
+          '<div class="form-hint">Must be an account you own. This records who founded the company — it is not ' +
+          'where offering proceeds land.</div></div>' +
+        '<div class="econ-two-col">' +
+          '<div class="form-group"><label class="form-label" for="co-shares">Authorized shares</label>' +
+            '<input type="number" min="1" step="1" id="co-shares" class="form-input" value="1000">' +
+            '<div class="form-hint">The ceiling on shares that can ever exist. None are issued today.</div></div>' +
+          '<div class="form-group"><label class="form-label" for="co-price">Reference price (Marks)</label>' +
+            '<input type="number" min="0" step="0.01" id="co-price" class="form-input" value="10.00">' +
+            '<div class="form-hint">A starting figure for your first offering, not a market price. There is no ' +
+            'price until shares actually trade.</div></div>' +
+        '</div>' +
+        '<div class="form-error" id="co-err"></div><div class="form-success" id="co-ok"></div>' +
+        '<button class="btn btn-primary" id="btn-found">Found company</button>' +
+      '</div></div>';
+
+  document.getElementById('btn-found').addEventListener('click', foundCompany);
+}
+
+async function foundCompany() {
+  const errEl = document.getElementById('co-err');
+  const okEl = document.getElementById('co-ok');
+  clearMessages(errEl, okEl);
+
+  const name = document.getElementById('co-name').value.trim();
+  const ticker = document.getElementById('co-ticker').value.trim().toUpperCase();
+  const desc = document.getElementById('co-desc').value.trim();
+  const accountId = document.getElementById('co-account').value;
+  const shares = Math.floor(Number(document.getElementById('co-shares').value));
+  const price = Number(document.getElementById('co-price').value);
+
+  if (!name) { showError(errEl, { message: 'Give the company a name.' }); return; }
+  if (!/^[A-Z]{1,6}$/.test(ticker)) {
+    showError(errEl, { message: 'A ticker is 1–6 letters — no spaces, digits or symbols.' }); return;
+  }
+  if (!accountId) { showError(errEl, { message: 'Choose an account to register from.' }); return; }
+  if (!(shares > 0)) { showError(errEl, { message: 'Authorized shares must be a positive whole number.' }); return; }
+  if (!(price >= 0)) { showError(errEl, { message: 'Reference price cannot be negative.' }); return; }
+
+  const ok = await confirmAction({
+    title: 'Found ' + name + '?',
+    lines: [
+      { label: 'Ticker', value: ticker },
+      { label: 'Authorized shares', value: fmtShares(shares) },
+      { label: 'Shares issued today', value: 'None' },
+      { label: 'Reference price', value: fmtMarks(price) },
+      { label: 'Cost to you', value: 'Nothing — founding moves no Marks' }
+    ],
+    note: 'The registration goes to an economy admin for review. Until it is approved the company is not listed, ' +
+          'cannot raise Marks and cannot trade.',
+    confirmLabel: 'Found company'
+  });
+  if (!ok) return;
+
+  const btn = document.getElementById('btn-found');
+  btn.disabled = true;
+  const { error } = await supabase.rpc('economy_create_company', {
+    p_name: name,
+    p_ticker: ticker,
+    p_description: desc || null,
+    p_treasury_account_id: accountId,
+    p_total_shares: shares,
+    p_initial_price: price
+  });
+  btn.disabled = false;
+  if (error) { showError(errEl, error); return; }
+
+  showSuccess(okEl, name + ' registered as ' + ticker + '. It is awaiting admin review.');
+  await refreshState();
+  setTimeout(function () { location.hash = '#/manage'; }, 1200);
+}
+
+async function renderManageCompany(tickerRaw) {
+  const ticker = decodeURIComponent(tickerRaw);
+  const c = _companies.find(function (x) { return x.ticker === ticker; });
+  const role = _myRoles.find(function (m) {
+    return m.economy_companies && m.economy_companies.ticker === ticker;
+  });
+  if (!c || (!role && !_isEconAdmin)) {
+    view.innerHTML = '<div class="econ-section"><div class="econ-section-body">' +
+      '<p class="econ-muted">You do not have access to this company’s tools.</p></div></div>';
+    return;
+  }
+
+  document.getElementById('page-title').textContent = 'Manage ' + c.name;
+  document.getElementById('page-sub').textContent = c.ticker;
+
+  const can = function (perm) { return _isEconAdmin || (role && role[perm]); };
+  const { data: offerings } = await supabase.from('economy_offerings')
+    .select('*').eq('company_id', c.id).order('created_at', { ascending: false });
+  const { data: officers } = await supabase.from('economy_company_members')
+    .select('*').eq('company_id', c.id);
+  await loadDirectory();
+
+  view.innerHTML =
+    '<div class="econ-section"><div class="econ-section-header"><div class="econ-section-title">Company Account</div></div>' +
+      '<div class="econ-section-body"><div class="econ-stat-row">' +
+        statBlock('Status', statusBadge(c.status)) +
+        statBlock('Shares issued', fmtShares(c.shares_issued) + ' of ' + fmtShares(c.total_shares)) +
+        statBlock('Unissued', fmtShares(c.total_shares - c.shares_issued)) +
+      '</div>' +
+      '<p class="econ-caveat">The company account is separate from your personal wallet. Offering proceeds land there, not in your own Marks.</p>' +
+      '</div></div>' +
+    (can('can_issue_shares') ? offeringPanel(offerings) : '') +
+    (can('can_pay_dividends') ? dividendPanel() : '') +
+    (can('can_manage_members') ? officerPanel(officers) : '');
+
+  if (can('can_issue_shares')) {
+    document.getElementById('btn-create-offering').addEventListener('click', function () { createOffering(c); });
+    view.querySelectorAll('[data-submit-offering]').forEach(function (b) {
+      b.addEventListener('click', function () { submitOffering(b.getAttribute('data-submit-offering'), c); });
+    });
+    view.querySelectorAll('[data-close-offering]').forEach(function (b) {
+      b.addEventListener('click', function () { closeOffering(b.getAttribute('data-close-offering'), c); });
+    });
+  }
+  if (can('can_pay_dividends')) {
+    document.getElementById('btn-propose-dividend').addEventListener('click', function () { proposeDividend(c); });
+  }
+  if (can('can_manage_members')) {
+    document.getElementById('btn-add-officer').addEventListener('click', function () { addOfficer(c); });
+  }
+}
+
+function offeringPanel(offerings) {
+  return '<div class="econ-section"><div class="econ-section-header"><div class="econ-section-title">Raise Capital</div></div>' +
+    '<div class="econ-section-body">' +
+      '<p class="econ-muted" style="margin-bottom:1rem;">An offering sells shares to investors. The company receives Marks only as shares are actually bought — never for listing. Unsold shares are never issued.</p>' +
+      ((offerings || []).length
+        ? '<table class="econ-table"><thead><tr><th>Status</th><th class="econ-num">Shares</th><th class="econ-num">Price</th><th class="econ-num">Sold</th><th class="econ-num">Raised</th><th></th></tr></thead><tbody>' +
+          offerings.map(function (o) {
+            return '<tr><td>' + escapeHtml(o.status) + '</td>' +
+              '<td class="econ-num">' + fmtShares(o.share_count) + '</td>' +
+              '<td class="econ-num">' + fmtMarks(o.price) + '</td>' +
+              '<td class="econ-num">' + fmtShares(o.shares_sold) + '</td>' +
+              '<td class="econ-num">' + fmtMarks(o.proceeds) + '</td>' +
+              '<td class="econ-num">' +
+                (o.status === 'draft' ? '<button class="btn btn-outline" data-submit-offering="' + o.id + '">Submit for review</button>' : '') +
+                (o.status === 'open' ? '<button class="btn btn-outline" data-close-offering="' + o.id + '">Close</button>' : '') +
+              '</td></tr>';
+          }).join('') + '</tbody></table>'
+        : '<p class="econ-muted">No offerings yet.</p>') +
+      '<div style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--border);">' +
+        '<div class="econ-two-col">' +
+          '<div class="form-group"><label class="form-label" for="of-shares">Shares to offer</label>' +
+            '<input type="number" min="1" step="1" id="of-shares" class="form-input" value="100"></div>' +
+          '<div class="form-group"><label class="form-label" for="of-price">Price per share (Marks)</label>' +
+            '<input type="number" min="0.01" step="0.01" id="of-price" class="form-input" value="10.00"></div>' +
+        '</div>' +
+        '<div class="econ-two-col">' +
+          '<div class="form-group"><label class="form-label" for="of-goal">Funding goal (optional)</label>' +
+            '<input type="number" min="0" step="0.01" id="of-goal" class="form-input"></div>' +
+          '<div class="form-group"><label class="form-label" for="of-lockup">Insider lockup (days)</label>' +
+            '<input type="number" min="0" step="1" id="of-lockup" class="form-input" value="30"></div>' +
+        '</div>' +
+        '<div class="econ-two-col">' +
+          '<div class="form-group"><label class="form-label" for="of-opens">Opens</label>' +
+            '<input type="datetime-local" id="of-opens" class="form-input"></div>' +
+          '<div class="form-group"><label class="form-label" for="of-closes">Closes</label>' +
+            '<input type="datetime-local" id="of-closes" class="form-input"></div>' +
+        '</div>' +
+        '<div class="form-group"><label class="form-label" for="of-use">Use of funds</label>' +
+          '<input type="text" id="of-use" class="form-input" placeholder="What will the Marks be spent on?"></div>' +
+        '<div class="form-group"><label class="form-label" for="of-risk">Risk disclosure (required)</label>' +
+          '<input type="text" id="of-risk" class="form-input" placeholder="What could go wrong for investors?"></div>' +
+        '<div class="form-group"><label class="form-label" for="of-dilution">Dilution note (required once shares are already issued)</label>' +
+          '<input type="text" id="of-dilution" class="form-input" placeholder="How this affects existing shareholders"></div>' +
+        '<div class="form-error" id="of-err"></div><div class="form-success" id="of-ok"></div>' +
+        '<button class="btn btn-primary" id="btn-create-offering">Create draft offering</button>' +
+      '</div>' +
+    '</div></div>';
+}
+
+async function createOffering(c) {
+  const errEl = document.getElementById('of-err');
+  const okEl = document.getElementById('of-ok');
+  clearMessages(errEl, okEl);
+
+  const shares = Math.floor(Number(document.getElementById('of-shares').value));
+  const price = Number(document.getElementById('of-price').value);
+  const goalRaw = document.getElementById('of-goal').value;
+  const goal = goalRaw ? Number(goalRaw) : null;
+  const lockup = Math.floor(Number(document.getElementById('of-lockup').value) || 0);
+  const opens = document.getElementById('of-opens').value || null;
+  const closes = document.getElementById('of-closes').value || null;
+  const use = document.getElementById('of-use').value.trim() || null;
+  const risk = document.getElementById('of-risk').value.trim();
+  const dilution = document.getElementById('of-dilution').value.trim() || null;
+
+  if (!(shares > 0)) { showError(errEl, { message: 'Offer at least one share.' }); return; }
+  if (!(price > 0)) { showError(errEl, { message: 'Set a price above zero.' }); return; }
+  if (!risk) { showError(errEl, { message: 'A risk disclosure is required.' }); return; }
+
+  const { error } = await supabase.rpc('economy_create_offering', {
+    p_company_id: c.id, p_share_count: shares, p_price: price,
+    p_funding_goal: goal,
+    p_opens_at: opens ? new Date(opens).toISOString() : null,
+    p_closes_at: closes ? new Date(closes).toISOString() : null,
+    p_lockup_days: lockup, p_risk_disclosure: risk,
+    p_use_of_funds: use, p_dilution_note: dilution
+  });
+  if (error) { showError(errEl, error); return; }
+  showSuccess(okEl, 'Draft offering created. Submit it for admin review when ready.');
+  setTimeout(function () { renderManageCompany(encodeURIComponent(c.ticker)); }, 900);
+}
+
+async function submitOffering(id, c) {
+  const { error } = await supabase.rpc('economy_submit_offering', { p_offering_id: id });
+  if (error) { window.alert(error.message); return; }
+  renderManageCompany(encodeURIComponent(c.ticker));
+}
+
+async function closeOffering(id, c) {
+  const ok = await confirmAction({
+    title: 'Close this offering?',
+    lines: [{ label: 'Unsold shares', value: 'Stay unissued permanently' }],
+    note: 'Closing stops new investment. The company keeps only what was actually raised.',
+    confirmLabel: 'Close offering',
+    danger: true
+  });
+  if (!ok) return;
+  const { error } = await supabase.rpc('economy_close_offering', { p_offering_id: id });
+  if (error) { window.alert(error.message); return; }
+  await refreshState();
+  renderManageCompany(encodeURIComponent(c.ticker));
+}
+
+function dividendPanel() {
+  return '<div class="econ-section"><div class="econ-section-header"><div class="econ-section-title">Dividends</div></div>' +
+    '<div class="econ-section-body">' +
+      '<p class="econ-muted" style="margin-bottom:1rem;">Dividends are paid out of Marks the company already holds, split in proportion to shares held. If the company cannot cover it, the payment is refused rather than part-paid.</p>' +
+      '<div class="form-group"><label class="form-label" for="div-amount">Total to distribute (Marks)</label>' +
+        '<input type="number" min="0.01" step="0.01" id="div-amount" class="form-input"></div>' +
+      '<div class="form-group"><label class="form-label" for="div-note">Note</label>' +
+        '<input type="text" id="div-note" class="form-input" placeholder="Why this dividend?"></div>' +
+      '<div class="form-error" id="div-err"></div><div class="form-success" id="div-ok"></div>' +
+      '<button class="btn btn-primary" id="btn-propose-dividend">Propose dividend</button>' +
+    '</div></div>';
+}
+
+async function proposeDividend(c) {
+  const errEl = document.getElementById('div-err');
+  const okEl = document.getElementById('div-ok');
+  clearMessages(errEl, okEl);
+  const amount = Number(document.getElementById('div-amount').value);
+  const note = document.getElementById('div-note').value.trim() || null;
+  if (!(amount > 0)) { showError(errEl, { message: 'Enter an amount above zero.' }); return; }
+
+  const { data, error } = await supabase.rpc('economy_propose_dividend', {
+    p_company_id: c.id, p_total_amount: amount, p_note: note
+  });
+  if (error) { showError(errEl, error); return; }
+
+  const ok = await confirmAction({
+    title: 'Pay this dividend now?',
+    lines: [
+      { label: 'Total', value: fmtMarks(amount) },
+      { label: 'Split', value: 'In proportion to shares held' }
+    ],
+    note: 'This moves Marks from the company account to shareholders. It never creates new Marks.',
+    confirmLabel: 'Pay dividend'
+  });
+  if (!ok) { showSuccess(okEl, 'Dividend proposed but not paid.'); return; }
+
+  const { error: payErr } = await supabase.rpc('economy_pay_dividend', { p_dividend_id: data.id });
+  if (payErr) { showError(errEl, payErr); return; }
+  showSuccess(okEl, 'Dividend paid.');
+}
+
+function officerPanel(officers) {
+  return '<div class="econ-section"><div class="econ-section-header"><div class="econ-section-title">Officers</div></div>' +
+    '<div class="econ-section-body">' +
+      ((officers || []).length
+        ? officers.map(function (m) {
+            const perms = ['can_manage_profile', 'can_manage_funds', 'can_manage_members',
+                           'can_issue_shares', 'can_pay_dividends', 'can_publish_reports']
+              .filter(function (k) { return m[k]; })
+              .map(function (k) { return k.replace('can_', '').replace(/_/g, ' '); });
+            return '<div class="econ-row"><div>' +
+              '<div class="econ-row-main">' + escapeHtml(nameOf(m.user_id, 'Unknown')) + '</div>' +
+              '<div class="econ-row-detail">' + escapeHtml(m.role) + ' · ' +
+                escapeHtml(perms.join(', ') || 'no permissions') + '</div>' +
+            '</div></div>';
+          }).join('')
+        : '<p class="econ-muted">No officers listed.</p>') +
+      '<div style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--border);">' +
+        '<div class="form-group"><label class="form-label" for="off-username">Add officer by username</label>' +
+          '<input type="text" id="off-username" class="form-input" placeholder="username"></div>' +
+        '<div class="form-group"><label class="form-label" for="off-role">Role</label>' +
+          '<select id="off-role" class="form-input"><option value="manager">Manager</option><option value="officer">Officer</option></select></div>' +
+        '<div class="form-group"><label class="form-label">Permissions</label>' +
+          '<label style="font-size:13px;display:block;"><input type="checkbox" id="perm-profile"> Manage profile</label>' +
+          '<label style="font-size:13px;display:block;"><input type="checkbox" id="perm-funds"> Manage funds</label>' +
+          '<label style="font-size:13px;display:block;"><input type="checkbox" id="perm-members"> Manage officers</label>' +
+          '<label style="font-size:13px;display:block;"><input type="checkbox" id="perm-shares"> Issue shares</label>' +
+          '<label style="font-size:13px;display:block;"><input type="checkbox" id="perm-div"> Pay dividends</label>' +
+          '<label style="font-size:13px;display:block;"><input type="checkbox" id="perm-reports"> Publish reports</label>' +
+        '</div>' +
+        '<p class="econ-caveat">These permissions apply to this company only. An officer here has no access to any other company’s tools.</p>' +
+        '<div class="form-error" id="off-err2"></div><div class="form-success" id="off-ok2"></div>' +
+        '<button class="btn btn-primary" id="btn-add-officer">Add officer</button>' +
+      '</div>' +
+    '</div></div>';
+}
+
+async function addOfficer(c) {
+  const errEl = document.getElementById('off-err2');
+  const okEl = document.getElementById('off-ok2');
+  clearMessages(errEl, okEl);
+
+  const username = document.getElementById('off-username').value.trim();
+  if (!username) { showError(errEl, { message: 'Enter a username.' }); return; }
+
+  const { data: profile } = await supabase.from('public_profiles')
+    .select('id,username').ilike('username', username).limit(1).maybeSingle();
+  if (!profile) { showError(errEl, { message: 'No player called "' + username + '".' }); return; }
+
+  const { error } = await supabase.rpc('economy_add_company_member', {
+    p_company_id: c.id, p_user_id: profile.id,
+    p_role: document.getElementById('off-role').value,
+    p_can_manage_profile: document.getElementById('perm-profile').checked,
+    p_can_manage_funds: document.getElementById('perm-funds').checked,
+    p_can_manage_members: document.getElementById('perm-members').checked,
+    p_can_issue_shares: document.getElementById('perm-shares').checked,
+    p_can_pay_dividends: document.getElementById('perm-div').checked,
+    p_can_publish_reports: document.getElementById('perm-reports').checked
+  });
+  if (error) { showError(errEl, error); return; }
+  showSuccess(okEl, 'Added ' + username + '.');
+  setTimeout(function () { renderManageCompany(encodeURIComponent(c.ticker)); }, 900);
+}
+
+// ── Admin ────────────────────────────────────────────────────
+async function renderAdmin() {
+  document.getElementById('page-title').textContent = 'Exchange Admin';
+  document.getElementById('page-sub').textContent = 'Approvals, halts, Treasury and reconciliation.';
+  if (!_session) return requireSignIn();
+  if (!_isEconAdmin && !_isTreasury) {
+    view.innerHTML = '<div class="econ-section"><div class="econ-section-body">' +
+      '<p class="econ-muted">Not available to your account.</p></div></div>';
+    return;
+  }
+
+  const haltedCompanies = _companies.filter(function (co) { return co.trading_halted; });
+
+  // Treasury issuance targets any account, not just the admin's own, so this
+  // reads the full list rather than reusing _accounts.
+  let _allAccounts = [];
+  if (_isTreasury) {
+    const { data: everyAccount } = await supabase.from('economy_accounts')
+      .select('id,name,type,balance').is('closed_at', null).order('name');
+    _allAccounts = everyAccount || [];
+  }
+
+  const { data: pendingCompanies } = await supabase.from('economy_companies')
+    .select('id,name,ticker,description,total_shares,created_at')
+    .eq('approval_status', 'pending').order('created_at');
+  const { data: pendingOfferings } = await supabase.from('economy_offerings')
+    .select('*,economy_companies(ticker,name)').eq('status', 'pending');
+  const { data: flags } = await supabase.from('economy_trade_flags')
+    .select('*').is('reviewed_at', null).order('created_at', { ascending: false }).limit(20);
+  const { data: recon } = await supabase.rpc('economy_treasury_reconciliation');
+  const r = Array.isArray(recon) ? recon[0] : recon;
+
+  view.innerHTML =
+    (r ? '<div class="econ-section"><div class="econ-section-header"><div class="econ-section-title">Currency Reconciliation</div></div>' +
+      '<div class="econ-section-body"><div class="econ-stat-row">' +
+        statBlock('In accounts', fmtMarks(r.total_in_accounts)) +
+        statBlock('Issued by Treasury', fmtMarks(r.total_issued)) +
+        statBlock('Discrepancy', fmtMarks(r.discrepancy)) +
+      '</div>' +
+      (r.is_balanced
+        ? '<p class="econ-caveat" style="color:#2d7d2f;">Balanced — every Mark in circulation traces to a Treasury issuance record.</p>'
+        : '<div class="econ-halt" style="margin-top:1rem;"><strong>Reconciliation mismatch.</strong>' +
+          'Marks in accounts do not match Treasury issuance. Investigate before allowing further trading.</div>') +
+      '</div></div>' : '') +
+
+    // A founded company sits at 'pending' until an admin reviews it. Without
+    // this panel nothing would ever leave that state.
+    (_isEconAdmin ? '<div class="econ-section"><div class="econ-section-header"><div class="econ-section-title">Companies Awaiting Review</div></div>' +
+      '<div class="econ-section-body">' +
+        ((pendingCompanies || []).length
+          ? pendingCompanies.map(function (co) {
+              return '<div class="econ-row"><div>' +
+                '<div class="econ-row-main">' + escapeHtml(co.ticker) + ' — ' + escapeHtml(co.name) + '</div>' +
+                '<div class="econ-row-detail">' + fmtShares(co.total_shares) + ' authorized shares · registered ' +
+                  escapeHtml(fmtDate(co.created_at)) + '</div>' +
+                (co.description
+                  ? '<div class="econ-row-detail">' + escapeHtml(co.description) + '</div>' : '') +
+              '</div><div class="econ-row-actions">' +
+                '<button class="btn btn-primary" data-approve-co="' + co.id + '">Approve</button>' +
+                '<button class="btn btn-danger" data-reject-co="' + co.id + '">Reject</button>' +
+              '</div></div>';
+            }).join('')
+          : '<p class="econ-muted">No companies awaiting review.</p>') +
+      '</div></div>' : '') +
+
+    (_isEconAdmin ? '<div class="econ-section"><div class="econ-section-header"><div class="econ-section-title">Offerings Awaiting Review</div></div>' +
+      '<div class="econ-section-body">' +
+        ((pendingOfferings || []).length
+          ? pendingOfferings.map(function (o) {
+              const cc = o.economy_companies || {};
+              return '<div class="econ-row"><div>' +
+                '<div class="econ-row-main">' + escapeHtml(cc.ticker || '?') + ' — ' +
+                  fmtShares(o.share_count) + ' shares at ' + fmtMarks(o.price) + '</div>' +
+                '<div class="econ-row-detail">' + escapeHtml(o.risk_disclosure) + '</div>' +
+              '</div><div class="econ-row-actions">' +
+                '<button class="btn btn-primary" data-approve-off="' + o.id + '">Approve</button>' +
+                '<button class="btn btn-danger" data-reject-off="' + o.id + '">Send back</button>' +
+              '</div></div>';
+            }).join('')
+          : '<p class="econ-muted">Nothing awaiting review.</p>') +
+      '</div></div>' : '') +
+
+    (_isEconAdmin ? '<div class="econ-section"><div class="econ-section-header"><div class="econ-section-title">Exchange Controls</div></div>' +
+      '<div class="econ-section-body">' +
+        '<div class="form-group"><label class="form-label" for="halt-reason">Reason (required to halt)</label>' +
+          '<input type="text" id="halt-reason" class="form-input" placeholder="Why is trading being halted?"></div>' +
+        '<button class="btn btn-danger" id="btn-halt">Halt all trading</button>' +
+        '<button class="btn btn-outline" id="btn-resume" style="margin-left:8px;">Resume trading</button>' +
+        '<div class="form-error" id="halt-err"></div><div class="form-success" id="halt-ok"></div>' +
+        '<div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--border);">' +
+          '<div class="econ-two-col">' +
+            '<div class="form-group"><label class="form-label" for="set-breaker">Circuit breaker (%)</label>' +
+              '<input type="number" min="1" step="0.5" id="set-breaker" class="form-input" value="' +
+                escapeHtml(String(_settings ? _settings.circuit_breaker_pct : 25)) + '"></div>' +
+            '<div class="form-group"><label class="form-label" for="set-maxorder">Max order size (shares)</label>' +
+              '<input type="number" min="1" step="1" id="set-maxorder" class="form-input" value="' +
+                escapeHtml(String(_settings ? _settings.max_order_shares : 1000000)) + '"></div>' +
+          '</div>' +
+          '<div class="econ-two-col">' +
+            '<div class="form-group"><label class="form-label" for="set-disclose">Disclosure threshold (%)</label>' +
+              '<input type="number" min="0.1" step="0.1" id="set-disclose" class="form-input" value="' +
+                escapeHtml(String(_settings ? _settings.large_holder_disclosure_pct : 10)) + '"></div>' +
+            '<div class="form-group"><label class="form-label" for="set-lockup">Default lockup (days)</label>' +
+              '<input type="number" min="0" step="1" id="set-lockup" class="form-input" value="' +
+                escapeHtml(String(_settings ? _settings.default_lockup_days : 30)) + '"></div>' +
+          '</div>' +
+          '<button class="btn btn-primary" id="btn-save-settings">Save limits</button>' +
+        '</div>' +
+      '</div></div>' : '') +
+
+    // A circuit-breaker halt sets trading_halted on the company itself, which
+    // the exchange-wide resume above does not touch. Without this panel a
+    // tripped breaker halts a company permanently, because nothing else on the
+    // site can call economy_set_company_halt.
+    (_isEconAdmin ? '<div class="econ-section"><div class="econ-section-header">' +
+      '<div class="econ-section-title">Halted Companies</div></div>' +
+      '<div class="econ-section-body">' +
+        (haltedCompanies.length
+          ? haltedCompanies.map(function (co) {
+              return '<div class="econ-row"><div>' +
+                '<div class="econ-row-main">' + escapeHtml(co.ticker) + ' — ' + escapeHtml(co.name) + '</div>' +
+                '<div class="econ-row-detail">' + escapeHtml(co.halt_reason || 'No reason was recorded.') + '</div>' +
+              '</div><div class="econ-row-actions">' +
+                '<button class="btn btn-primary" data-resume-co="' + co.id + '">Resume trading</button>' +
+              '</div></div>';
+            }).join('')
+          : '<p class="econ-muted">No company is individually halted.</p>') +
+        '<p class="econ-caveat">Resuming lets orders be placed again, but it does not re-run matching on orders ' +
+        'already resting in the book. Two orders that crossed at the moment the breaker tripped stay open until ' +
+        'someone places a new crossing order or cancels them.</p>' +
+        '<div style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--border);">' +
+          '<div class="econ-two-col">' +
+            '<div class="form-group"><label class="form-label" for="halt-co">Company</label>' +
+              '<select id="halt-co" class="form-input">' +
+                _companies.map(function (co) {
+                  return '<option value="' + co.id + '">' + escapeHtml(co.ticker) + ' — ' +
+                    escapeHtml(co.name) + '</option>';
+                }).join('') + '</select></div>' +
+            '<div class="form-group"><label class="form-label" for="halt-co-reason">Reason (required to halt)</label>' +
+              '<input type="text" id="halt-co-reason" class="form-input" placeholder="Why is this company being halted?"></div>' +
+          '</div>' +
+          '<div class="form-error" id="halt-co-err"></div><div class="form-success" id="halt-co-ok"></div>' +
+          '<button class="btn btn-danger" id="btn-halt-co">Halt this company</button>' +
+        '</div>' +
+      '</div></div>' : '') +
+
+    (_isTreasury ? '<div class="econ-section"><div class="econ-section-header"><div class="econ-section-title">Treasury</div></div>' +
+      '<div class="econ-section-body">' +
+        '<p class="econ-muted" style="margin-bottom:1rem;">The only way Marks enter or leave circulation. Every action is recorded permanently with your name, the amount and the reason.</p>' +
+        '<div class="form-group"><label class="form-label" for="tr-account">Account</label>' +
+          '<select id="tr-account" class="form-input">' +
+            (_allAccounts.length
+              ? _allAccounts.map(function (a) {
+                  return '<option value="' + a.id + '">' + escapeHtml(a.name) + ' (' + escapeHtml(a.type) +
+                    ') — ' + fmtMarks(a.balance) + '</option>';
+                }).join('')
+              : '<option value="">No accounts found</option>') +
+          '</select>' +
+          '<div class="form-hint">Issuing credits this account and records the same amount in the Treasury ledger, ' +
+          'so reconciliation stays balanced.</div></div>' +
+        '<div class="econ-two-col">' +
+          '<div class="form-group"><label class="form-label" for="tr-amount">Amount (Marks)</label>' +
+            '<input type="number" min="0.01" step="0.01" id="tr-amount" class="form-input"></div>' +
+          '<div class="form-group"><label class="form-label" for="tr-reason">Reason (required)</label>' +
+            '<input type="text" id="tr-reason" class="form-input" placeholder="Why?"></div>' +
+        '</div>' +
+        '<div class="form-error" id="tr-err"></div><div class="form-success" id="tr-ok"></div>' +
+        '<button class="btn btn-primary" id="btn-issue">Issue Marks</button>' +
+        '<button class="btn btn-danger" id="btn-remove" style="margin-left:8px;">Remove Marks</button>' +
+      '</div></div>' : '') +
+
+    (_isEconAdmin ? '<div class="econ-section"><div class="econ-section-header"><div class="econ-section-title">Suspicious Activity</div></div>' +
+      '<div class="econ-section-body">' +
+        '<p class="econ-caveat">Flagged patterns for a human to look at. A flag is a question, not an accusation.</p>' +
+        ((flags || []).length
+          ? flags.map(function (f) {
+              return '<div class="econ-row"><div>' +
+                '<div class="econ-row-main">' + escapeHtml(f.reason) + '</div>' +
+                '<div class="econ-row-detail">' + escapeHtml(fmtDate(f.created_at)) + '</div>' +
+              '</div></div>';
+            }).join('')
+          : '<p class="econ-muted">Nothing flagged.</p>') +
+      '</div></div>' : '');
+
+  if (_isEconAdmin) {
+    view.querySelectorAll('[data-approve-co]').forEach(function (b) {
+      b.addEventListener('click', function () { reviewCompany(b.getAttribute('data-approve-co'), true); });
+    });
+    view.querySelectorAll('[data-reject-co]').forEach(function (b) {
+      b.addEventListener('click', function () { reviewCompany(b.getAttribute('data-reject-co'), false); });
+    });
+    view.querySelectorAll('[data-approve-off]').forEach(function (b) {
+      b.addEventListener('click', function () { reviewOffering(b.getAttribute('data-approve-off'), true); });
+    });
+    view.querySelectorAll('[data-reject-off]').forEach(function (b) {
+      b.addEventListener('click', function () { reviewOffering(b.getAttribute('data-reject-off'), false); });
+    });
+    document.getElementById('btn-halt').addEventListener('click', function () { setHalt(false); });
+    document.getElementById('btn-resume').addEventListener('click', function () { setHalt(true); });
+    document.getElementById('btn-save-settings').addEventListener('click', saveSettings);
+    view.querySelectorAll('[data-resume-co]').forEach(function (b) {
+      b.addEventListener('click', function () { setCompanyHalt(b.getAttribute('data-resume-co'), false); });
+    });
+    document.getElementById('btn-halt-co').addEventListener('click', function () {
+      setCompanyHalt(document.getElementById('halt-co').value, true);
+    });
+  }
+  if (_isTreasury) {
+    document.getElementById('btn-issue').addEventListener('click', function () { treasury('issue'); });
+    document.getElementById('btn-remove').addEventListener('click', function () { treasury('remove'); });
+  }
+}
+
+async function setCompanyHalt(companyId, halt) {
+  const errEl = document.getElementById('halt-co-err');
+  const okEl = document.getElementById('halt-co-ok');
+  clearMessages(errEl, okEl);
+
+  const co = _companies.find(function (x) { return x.id === companyId; });
+  if (!co) { showError(errEl, { message: 'Choose a company.' }); return; }
+
+  const reason = halt ? document.getElementById('halt-co-reason').value.trim() : '';
+  if (halt && !reason) { showError(errEl, { message: 'A halt has to state a reason.' }); return; }
+
+  const ok = await confirmAction({
+    title: (halt ? 'Halt trading in ' : 'Resume trading in ') + co.ticker + '?',
+    lines: [
+      { label: 'Company', value: co.ticker + ' — ' + co.name },
+      { label: 'Reason', value: halt ? reason : (co.halt_reason || 'No reason was recorded.') }
+    ],
+    note: halt
+      ? 'No new orders can be placed in this company until it is resumed. Orders already resting stay where they are.'
+      : 'Resuming allows new orders again. It does not re-run matching on orders already in the book, so anything ' +
+        'that crossed while the company was halted stays open until a new crossing order arrives or it is cancelled.',
+    confirmLabel: halt ? 'Halt company' : 'Resume company',
+    danger: halt
+  });
+  if (!ok) return;
+
+  const { error } = await supabase.rpc('economy_set_company_halt', {
+    p_company_id: companyId, p_halted: halt, p_reason: halt ? reason : null
+  });
+  if (error) { showError(errEl, error); return; }
+
+  showSuccess(okEl, (halt ? 'Halted ' : 'Resumed ') + co.ticker + '.');
+  await refreshState();
+  setTimeout(renderAdmin, 900);
+}
+
+async function reviewCompany(id, approve) {
+  const note = window.prompt(approve
+    ? 'Approval note (optional):'
+    : 'Why is this registration being rejected?');
+  if (note === null) return;
+  if (!approve && !note.trim()) { window.alert('A rejection has to state a reason.'); return; }
+
+  const { error } = await supabase.rpc(
+    approve ? 'economy_approve_company' : 'economy_reject_company',
+    { p_company_id: id, p_note: note || null }
+  );
+  if (error) { window.alert(error.message); return; }
+  await refreshState();
+  renderAdmin();
+}
+
+async function reviewOffering(id, approve) {
+  const note = window.prompt(approve ? 'Approval note (optional):' : 'Why is this being sent back?');
+  if (note === null) return;
+  const { error } = await supabase.rpc('economy_review_offering', {
+    p_offering_id: id, p_approve: approve, p_note: note || null
+  });
+  if (error) { window.alert(error.message); return; }
+  renderAdmin();
+}
+
+async function setHalt(enabled) {
+  const errEl = document.getElementById('halt-err');
+  const okEl = document.getElementById('halt-ok');
+  clearMessages(errEl, okEl);
+  const reason = document.getElementById('halt-reason').value.trim();
+  if (!enabled && !reason) { showError(errEl, { message: 'A halt has to state a reason.' }); return; }
+
+  const ok = await confirmAction({
+    title: enabled ? 'Resume all trading?' : 'Halt all trading?',
+    lines: [
+      { label: 'Scope', value: 'Every company on the exchange' },
+      { label: 'Reason', value: reason || 'Trading resumed' }
+    ],
+    confirmLabel: enabled ? 'Resume' : 'Halt',
+    danger: !enabled
+  });
+  if (!ok) return;
+
+  const { error } = await supabase.rpc('economy_set_exchange_halt', {
+    p_enabled: enabled, p_reason: reason || null
+  });
+  if (error) { showError(errEl, error); return; }
+  _settings = await loadExchangeSettings();
+  renderExchangeStatus();
+  showSuccess(okEl, enabled ? 'Trading resumed.' : 'Trading halted.');
+}
+
+async function saveSettings() {
+  const { error } = await supabase.rpc('economy_update_exchange_settings', {
+    p_circuit_breaker_pct: Number(document.getElementById('set-breaker').value),
+    p_max_order_shares: Math.floor(Number(document.getElementById('set-maxorder').value)),
+    p_large_holder_disclosure_pct: Number(document.getElementById('set-disclose').value),
+    p_default_lockup_days: Math.floor(Number(document.getElementById('set-lockup').value))
+  });
+  if (error) { window.alert(error.message); return; }
+  _settings = await loadExchangeSettings();
+  window.alert('Limits saved.');
+}
+
+async function treasury(action) {
+  const errEl = document.getElementById('tr-err');
+  const okEl = document.getElementById('tr-ok');
+  clearMessages(errEl, okEl);
+
+  const accountId = document.getElementById('tr-account').value.trim();
+  const amount = Number(document.getElementById('tr-amount').value);
+  const reason = document.getElementById('tr-reason').value.trim();
+  if (!accountId) { showError(errEl, { message: 'Enter the account id.' }); return; }
+  if (!(amount > 0)) { showError(errEl, { message: 'Enter an amount above zero.' }); return; }
+  if (!reason) { showError(errEl, { message: 'A reason is required.' }); return; }
+
+  const ok = await confirmAction({
+    title: action === 'issue' ? 'Create new Marks?' : 'Destroy Marks?',
+    lines: [
+      { label: 'Account', value: accountId },
+      { label: 'Amount', value: fmtMarks(amount) },
+      { label: 'Reason', value: reason }
+    ],
+    note: action === 'issue'
+      ? 'This increases the total Marks in existence. It is recorded permanently against your name.'
+      : 'This permanently removes Marks from circulation. It is recorded against your name.',
+    confirmLabel: action === 'issue' ? 'Issue Marks' : 'Remove Marks',
+    danger: action === 'remove'
+  });
+  if (!ok) return;
+
+  const fn = action === 'issue' ? 'economy_treasury_issue' : 'economy_treasury_remove';
+  const { error } = await supabase.rpc(fn, {
+    p_account_id: accountId, p_amount: amount, p_reason: reason
+  });
+  if (error) { showError(errEl, error); return; }
+  showSuccess(okEl, action === 'issue' ? 'Marks issued.' : 'Marks removed.');
+  renderAdmin();
+}

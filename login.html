@@ -274,16 +274,24 @@
           <div class="login-error" id="signup-consent-error">Please accept the Terms of Service and Privacy Policy to continue.</div>
 
           <!--
-            Cloudflare Turnstile widget — CLIENT SIDE ONLY.
-            This alone does NOT block bots. It only becomes real bot
-            protection once the signup-with-email Edge Function (deployed
-            outside this repo) verifies the submitted token server-side:
-            POST it + your Turnstile SECRET key to
+            Cloudflare Turnstile widget.
+
+            The server-side half now exists: signup-with-email (deployed
+            outside this repo) POSTs the submitted token to
             https://challenges.cloudflare.com/turnstile/v0/siteverify and
-            reject the signup unless the response's "success" is true.
-            Until that server-side check is added, this widget is cosmetic.
+            rejects the signup unless "success" is true. That check is gated
+            on the TURNSTILE_SECRET_KEY secret being set on the function, so
+            it stays dormant until the keys below are real.
+
+            TO TURN IT ON, both halves have to change TOGETHER:
+              1. data-sitekey below -> your real site key
+                 (dash.cloudflare.com > Turnstile)
+              2. TURNSTILE_SECRET_KEY -> the matching secret, set on the
+                 signup-with-email Edge Function
+            Setting only the secret breaks signup: the test sitekey below
+            issues tokens that will not validate against a live secret.
           -->
-          <!-- TODO: replace with your real Turnstile site key from the Cloudflare dashboard (dash.cloudflare.com > Turnstile) before this provides real protection. This test key always passes. -->
+          <!-- This is Cloudflare's always-passes TEST site key, so signup is not bot-protected yet. -->
           <div class="cf-turnstile" data-sitekey="1x00000000000000000000AA" data-theme="light" style="margin-bottom: 14px;"></div>
 
           <button class="btn-login-submit" id="btn-email-signup">Create Account</button>
@@ -854,14 +862,14 @@
       errEl.textContent   = 'Password must contain at least one lowercase letter.';
       errEl.style.display = 'block'; return;
     }
-    // Cloudflare Turnstile — CLIENT-SIDE CHECK ONLY. Blocking an empty token
-    // here is just a UX safeguard (catches someone who skipped/closed the
-    // widget); it does nothing to stop a scripted request that hits the
-    // Edge Function directly with a fake or empty token. Real bot-blocking
-    // requires signup-with-email (outside this repo) to verify the token
-    // against https://challenges.cloudflare.com/turnstile/v0/siteverify
-    // with the secret key before creating the account — see the widget
-    // markup above for the full TODO.
+    // Cloudflare Turnstile. Blocking an empty token here is only a UX
+    // safeguard (it catches someone who skipped or closed the widget) — a
+    // scripted request can still POST to the Edge Function directly with a
+    // fake or empty token. The check that actually matters runs server-side
+    // in signup-with-email, which verifies this token against
+    // https://challenges.cloudflare.com/turnstile/v0/siteverify before
+    // creating the account. That verification only engages once real keys
+    // are configured — see the widget markup above.
     const turnstileToken = (window.turnstile && document.querySelector('.cf-turnstile'))
       ? window.turnstile.getResponse()
       : '';
