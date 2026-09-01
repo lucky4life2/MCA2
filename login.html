@@ -274,25 +274,20 @@
           <div class="login-error" id="signup-consent-error">Please accept the Terms of Service and Privacy Policy to continue.</div>
 
           <!--
-            Cloudflare Turnstile widget.
+            Cloudflare Turnstile widget — real site key as of 2026-09-01.
 
-            The server-side half now exists: signup-with-email (deployed
+            The server-side half already exists: signup-with-email (deployed
             outside this repo) POSTs the submitted token to
             https://challenges.cloudflare.com/turnstile/v0/siteverify and
             rejects the signup unless "success" is true. That check is gated
             on the TURNSTILE_SECRET_KEY secret being set on the function, so
-            it stays dormant until the keys below are real.
-
-            TO TURN IT ON, both halves have to change TOGETHER:
-              1. data-sitekey below -> your real site key
-                 (dash.cloudflare.com > Turnstile)
-              2. TURNSTILE_SECRET_KEY -> the matching secret, set on the
-                 signup-with-email Edge Function
-            Setting only the secret breaks signup: the test sitekey below
-            issues tokens that will not validate against a live secret.
+            it stays dormant — accepting every signup, real widget or not —
+            until that secret is set to the value matching this site key
+            (dash.cloudflare.com > Turnstile > this widget > secret key).
+            Setting the secret to a mismatched value breaks signup instead,
+            so verify the pair together in a real signup before relying on it.
           -->
-          <!-- This is Cloudflare's always-passes TEST site key, so signup is not bot-protected yet. -->
-          <div class="cf-turnstile" data-sitekey="1x00000000000000000000AA" data-theme="light" style="margin-bottom: 14px;"></div>
+          <div class="cf-turnstile" data-sitekey="0x4AAAAAAEkQfLOaNciyMxZ5" data-theme="light" style="margin-bottom: 14px;"></div>
 
           <button class="btn-login-submit" id="btn-email-signup">Create Account</button>
         </div>
