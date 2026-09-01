@@ -14,6 +14,15 @@ const POSITIONS = ['support', 'oppose', 'neutral', 'question', 'sponsor_statemen
 
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+// Allow-lists http(s) and relative URLs before anything navigates the page to
+// them; blocks javascript: and other schemes. Needed because dataset reads
+// back HTML-entity-decoded values, so esc() alone doesn't protect a nav sink.
+function safeUrl(url) {
+  const u = String(url ?? '').trim();
+  if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return /^https?:\/\//i.test(u) ? u : '';
+  return u;
+}
+
 // ── Member name directory ────────────────────────────────────
 // profiles is readable only by yourself or staff — it holds emails and
 // verification tokens — so embedding profiles(display_name, username) came
@@ -504,7 +513,10 @@ function renderDashboard() {
   grid.querySelectorAll('a[data-measure]').forEach(a => a.onclick = (e) => { e.preventDefault(); openMeasure(a.dataset.measure); });
   grid.querySelectorAll('a[data-dismiss-notif]').forEach(a => a.onclick = (e) => {
     e.preventDefault();
-    if (a.dataset.notifLink) window.location.href = a.dataset.notifLink;
+    if (a.dataset.notifLink) {
+      const target = safeUrl(a.dataset.notifLink);
+      if (target) window.location.href = target;
+    }
     dismissNotification(a.dataset.dismissNotif);
   });
   const qaMeasure = document.getElementById('qa-new-measure');
