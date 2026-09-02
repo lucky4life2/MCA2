@@ -1023,16 +1023,54 @@ document.getElementById('tk-mark-done').onclick = async () => {
   }
   document.getElementById('tk-modal').style.display = 'none'; clearShareUrlParam(); loadAll();
 };
-// Fire-and-forget: email the assignee that a task landed on their plate.
-// Never blocks or fails the save — the assignment itself already succeeded.
+// Shows a page-level toast (reuses the fixed #toast element nav.js injects
+// into every page) that outlives the task modal, which closes immediately
+// on save — so this is the only feedback left once notifyTaskAssignee's
+// fire-and-forget call actually resolves.
+function showTaskToast(msg) {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._hideTimer);
+  t._hideTimer = setTimeout(() => t.classList.remove('show'), 4000);
+}
+
+const NOTIFY_SKIP_REASON = {
+  opted_out: name => `${name} has task emails turned off, so nothing was sent.`,
+  no_email: name => `${name} has no email on file, so nothing was sent.`,
+  inactive_account: name => `${name}'s account isn't active, so nothing was sent.`,
+  draft: name => `Saved as a draft — ${name} won't be emailed until it's published.`,
+  draft_project: name => `That project is a draft — ${name} won't be emailed until it's published.`,
+  self_assigned: () => null, // assigning yourself a task needs no email, and no toast either
+};
+
+// Fire-and-forget from the caller's perspective (never blocks or fails the
+// save — the assignment itself already succeeded), but always surfaces what
+// actually happened via a toast, since silently doing nothing is what made
+// this look broken in the first place.
 async function notifyTaskAssignee(taskId, userId) {
+  const name = memberName(userId) || 'the assignee';
   try {
-    const { error } = await supabase.functions.invoke('notify-task-assignee', {
+    const { data, error } = await supabase.functions.invoke('notify-task-assignee', {
       body: { task_id: taskId, user_id: userId },
     });
-    if (error) console.warn('Task assignment email failed:', error.message || error);
+    if (error) {
+      console.warn('Task assignment email failed:', error.message || error);
+      showTaskToast(`Couldn't email ${name} about this task. They can still see it on the board.`);
+      return;
+    }
+    if (data?.sent) {
+      showTaskToast(`📧 Emailed ${name} about this assignment.`);
+      return;
+    }
+    const reason = data?.reason;
+    const describe = NOTIFY_SKIP_REASON[reason];
+    const msg = describe ? describe(name) : null;
+    if (msg) showTaskToast(msg);
   } catch (e) {
     console.warn('Task assignment email failed:', e);
+    showTaskToast(`Couldn't email ${name} about this task. They can still see it on the board.`);
   }
 }
 document.getElementById('tk-save').onclick = async () => {
