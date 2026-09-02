@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>World Court — Minecraft Club of America</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" type="image/x-icon" href="images/icon.ico">
+<style>
+    /* Offset for the fixed 58px nav bar */
+    body { padding-top: 58px; }
+  .btn { font-size: 11px; font-weight: 600; letter-spacing: .5px; padding: 6px 14px; border-radius: 3px; cursor: pointer; transition: background .15s, color .15s, border-color .15s; border: none; white-space: nowrap; }
+  .btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .btn-primary { background: var(--blue); color: #fff; }
+  .btn-primary:hover { background: var(--blue-dark); }
+  .btn-primary:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+  .btn-outline { background: transparent; color: var(--blue); border: 1px solid var(--border); }
+  .btn-outline:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .btn-outline.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .btn-danger { background: transparent; color: #c0392b; border: 1px solid var(--border); }
+  .btn-danger:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
+  .form-input, .form-select, .form-textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-family: 'Open Sans', sans-serif; font-size: 13px; background: var(--white); color: var(--black); box-sizing: border-box; }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { outline: none; border-color: var(--blue); }
+  .form-group { margin-bottom: 1rem; }
+  .form-label { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .5px; }
+  .form-error { font-size: 12px; color: #c0392b; margin-top: 6px; }
+
+  .admin-wrap { max-width: 1140px; margin: 0 auto; padding: 4rem 2.5rem 6rem; }
+  .admin-hero { border-bottom: 1px solid var(--border); padding-bottom: 2.5rem; margin-bottom: 1.75rem; display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .admin-hero-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 2.5px; text-transform: uppercase; color: var(--green); margin-bottom: 1rem; }
+  .admin-hero h1 { font-family: 'Times New Roman', serif; font-size: clamp(28px, 4vw, 42px); font-weight: 700; color: var(--blue); line-height: 1.15; }
+  .admin-loading { display: flex; align-items: center; justify-content: center; min-height: 60vh; flex-direction: column; gap: 12px; color: var(--muted); font-size: 14px; }
+  .admin-loading-spinner { width: 28px; height: 28px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .admin-denied { text-align: center; padding: 6rem 2rem; }
+  .admin-denied h2 { font-family: 'Times New Roman', serif; font-size: 1.6rem; color: var(--blue); font-weight: normal; margin-bottom: .75rem; }
+  .admin-denied p { font-size: 14px; color: var(--muted); }
+
+  .cg-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+  .cg-tab { background: none; border: none; padding: 10px 6px; margin-right: 18px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
+  .cg-tab:hover { color: var(--black); }
+  .cg-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+  .cg-tab[aria-selected="true"] { color: var(--blue); border-bottom-color: var(--blue); }
+
+  .cg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-bottom: 2rem; }
+  .cg-card { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; background: var(--white); }
+  .cg-card h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 8px; }
+  .cg-card .cg-empty { font-size: 12px; color: var(--muted); }
+  .cg-card ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .cg-card li a { font-size: 13px; font-weight: 600; color: var(--blue); text-decoration: none; }
+  .cg-card li a:hover { text-decoration: underline; }
+  .cg-card li .cg-sub { display: block; font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 2px; }
+
+  .cg-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 1.25rem; }
+  .cg-filters { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .cg-list { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .cg-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--border); cursor: pointer; }
+  .cg-list .cg-row:first-child { border-top: none; }
+  .cg-row:hover { background: var(--bg); }
+  .cg-row:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+  .cg-row-number { font-size: 11px; font-weight: 700; color: var(--muted); width: 76px; flex-shrink: 0; }
+  .cg-row-title { flex: 1; font-size: 13px; font-weight: 600; color: var(--black); }
+  .cg-row-meta { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .cg-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; padding: 2px 9px; border-radius: 10px; white-space: nowrap; }
+  .cg-badge.filed { background: var(--bg); color: var(--muted); }
+  .cg-badge.docketed, .cg-badge.hearing_scheduled { background: #eef1f8; color: var(--blue); }
+  .cg-badge.deliberation { background: #fdf3df; color: #8a6d1a; }
+  .cg-badge.decided { background: #e8f8e8; color: #2d7d2f; }
+  .cg-badge.dismissed, .cg-badge.withdrawn { background: #fdecea; color: #c0392b; }
+  .cg-badge.appealed { background: #fde8e0; color: #b5691c; }
+  .cg-empty-state { padding: 2.5rem 1rem; text-align: center; color: var(--muted); font-size: 13px; }
+
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(10,15,30,.5); z-index: 400; align-items: center; justify-content: center; padding: 1rem; }
+  .modal-overlay.open { display: flex; }
+  .modal-box { background: var(--white); border-radius: 8px; border: 1px solid var(--border); width: 100%; max-width: 760px; max-height: 90vh; overflow-y: auto; box-shadow: 0 16px 48px rgba(10,15,30,.2); }
+  .modal-head { padding: 1.5rem 1.5rem 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .modal-title { font-family: 'Times New Roman', serif; font-size: 1.3rem; color: var(--blue); font-weight: normal; }
+  .modal-close { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 20px; line-height: 1; padding: 4px; }
+  .modal-body { padding: 1.5rem; }
+  .modal-foot { padding: 0 1.5rem 1.5rem; display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+
+  .cg-section-label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 700; margin: 1.25rem 0 .5rem; }
+  .cg-fulltext { white-space: pre-wrap; font-size: 13px; line-height: 1.6; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; }
+
+  .cg-vote-options { display: flex; gap: 8px; flex-wrap: wrap; margin: .75rem 0; }
+  .cg-vote-status { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .cg-tally { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-top: 10px; }
+  .cg-tally-cell { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; text-align: center; }
+  .cg-tally-cell .n { font-size: 18px; font-weight: 700; color: var(--blue); }
+  .cg-tally-cell .l { font-size: 10px; text-transform: uppercase; color: var(--muted); }
+
+  .cg-debate-post { border-top: 1px solid var(--border); padding: 10px 0; font-size: 13px; }
+  .cg-debate-post:first-child { border-top: none; }
+  .cg-debate-meta { font-size: 11px; color: var(--muted); margin-bottom: 4px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .cg-pos-tag { font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 1px 7px; border-radius: 8px; background: var(--bg); color: var(--mid); }
+  .cg-debate-archived { font-style: italic; color: var(--muted); }
+  .cg-debate-actions { margin-left: auto; display: flex; gap: 8px; }
+  .cg-debate-actions button { background: none; border: none; padding: 0; font-size: 11px; color: var(--blue); cursor: pointer; text-decoration: underline; }
+  .cg-debate-actions button.danger { color: #c0392b; }
+  .cg-post-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .cg-post-row select, .cg-post-row input { flex: 1; min-width: 120px; }
+
+  .cg-amendment { border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-bottom: 10px; font-size: 13px; }
+  .cg-amendment-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .cg-amendment-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+
+  .ct-party-tag { font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 1px 7px; border-radius: 8px; background: var(--bg); color: var(--mid); }
+</style>
+</head>
+<body>
+<script type="module" src="nav.js"></script>
+
+<div id="loading" class="admin-loading"><div class="admin-loading-spinner"></div><span>Loading the World Court…</span></div>
+
+<div id="denied" class="admin-wrap admin-denied" style="display:none;">
+  <h2>World Court</h2>
+  <p>You need to be signed in with an authorized membership record to view this page.</p>
+</div>
+
+<div id="main" class="admin-wrap" style="display:none;">
+  <div class="admin-hero">
+    <div>
+      <div class="admin-hero-eyebrow">MCA World Court</div>
+      <h1 id="ct-heading">Judicial Portal</h1>
+    </div>
+    <button class="btn btn-primary" id="btn-new-case" style="display:none;">+ File a Case</button>
+  </div>
+  <p style="font-size:13px;color:var(--muted);margin:-1.25rem 0 1.5rem;max-width:760px;">Article III of the Constitution vests judicial power in the World Court. It hears disputes between nations, server rule violations, constitutional interpretations, and impeachment proceedings — and every member has the right to a fair trial, to present evidence, to representation, and to appeal.</p>
+
+  <div class="cg-tabs" role="tablist">
+    <button class="cg-tab active" data-tab="dashboard" role="tab" aria-selected="true">Dashboard</button>
+    <button class="cg-tab" data-tab="docket" role="tab" aria-selected="false">Docket</button>
+    <button class="cg-tab" data-tab="archive" role="tab" aria-selected="false">Archive</button>
+    <button class="cg-tab" data-tab="leadership" role="tab" aria-selected="false" id="ct-tab-leadership" style="display:none;">Court Administration</button>
+  </div>
+
+  <div id="tab-dashboard">
+    <div class="cg-grid" id="ct-dashboard-grid"></div>
+  </div>
+
+  <div id="tab-docket" style="display:none;">
+    <div class="cg-toolbar">
+      <div class="cg-filters">
+        <select class="form-input" id="ct-filter-type" style="width:auto;"><option value="">All case types</option></select>
+        <select class="form-input" id="ct-filter-status" style="width:auto;"><option value="">All statuses</option></select>
+      </div>
+    </div>
+    <div class="cg-list" id="ct-case-list"></div>
+  </div>
+
+  <div id="tab-archive" style="display:none;">
+    <p style="font-size:13px;color:var(--muted);">Decided, dismissed, and withdrawn cases — the permanent public record. Each entry has a stable link (use Copy Link in its detail view) and a Print/PDF view.</p>
+    <div class="cg-toolbar">
+      <div class="cg-filters">
+        <select class="form-input" id="ar-type" style="width:auto;"><option value="">All types</option></select>
+        <select class="form-input" id="ar-status" style="width:auto;"><option value="">All results</option></select>
+        <input class="form-input" id="ar-from" type="date" style="width:auto;" title="From date">
+        <input class="form-input" id="ar-to" type="date" style="width:auto;" title="To date">
+        <input class="form-input" id="ar-keyword" placeholder="Keyword…" style="width:auto;">
+      </div>
+      <button class="btn btn-outline" id="ar-export">Export CSV</button>
+    </div>
+    <div class="cg-list" id="ct-archive-list" style="margin-top:1rem;"></div>
+  </div>
+
+  <div id="tab-leadership" style="display:none;">
+    <div class="cg-section-label">Rulings Awaiting Certification</div>
+    <div id="ct-lt-certify" class="cg-list" style="margin-bottom:1.75rem;"></div>
+
+    <div class="cg-section-label">Docket Management</div>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 .6rem;">Advance a case's status. Docketing assigns its case number.</p>
+    <div id="ct-lt-docket" class="cg-list" style="margin-bottom:1.75rem;"></div>
+
+    <div class="cg-section-label">Parliamentary Motions Enabled</div>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 .6rem;">Only enabled motion types can be raised on a case.</p>
+    <div id="ct-lt-motion-types" class="cg-grid" style="margin-bottom:1.75rem;"></div>
+
+    <div class="cg-section-label">Calendar</div>
+    <div id="ct-lt-calendar" class="cg-list" style="margin-bottom:.75rem;"></div>
+    <div class="cg-post-row" style="max-width:720px;">
+      <select id="cal-type">
+        <option value="hearing">Hearing</option>
+        <option value="oral_argument">Oral Argument</option>
+        <option value="deliberation">Deliberation</option>
+        <option value="deadline">Deadline</option>
+        <option value="special_session">Special Session</option>
+      </select>
+      <input class="form-input" id="cal-title" placeholder="Title">
+      <input class="form-input" id="cal-starts" type="datetime-local">
+      <input class="form-input" id="cal-location" placeholder="Location (optional)">
+      <button class="btn btn-outline" id="cal-submit">Add Event</button>
+    </div>
+
+    <div class="cg-section-label" style="margin-top:1.75rem;">Seated Justices</div>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 .6rem;">One Justice per recognized nation, per Article III. Mark a justice active, recused, vacant, or ineligible.</p>
+    <div id="ct-lt-justices" class="cg-list" style="margin-bottom:.75rem;"></div>
+    <div class="cg-committee-add-row" style="display:flex;gap:8px;margin-top:12px;max-width:640px;">
+      <select id="lt-add-user"><option value="">Add justice…</option></select>
+      <select id="lt-add-nation" style="max-width:200px;"><option value="">Nation (optional)</option></select>
+      <select id="lt-add-role" style="max-width:140px;">
+        <option value="associate">Associate</option>
+        <option value="chief">Chief Justice</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- Case detail modal -->
+<div class="modal-overlay" id="ct-case-modal">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="ct-modal-title">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="ct-modal-title">Case</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;" id="ct-modal-sub"></div>
+      </div>
+      <button class="modal-close" id="ct-modal-close" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body" id="ct-modal-body"></div>
+    <div id="ct-modal-error" class="form-error" style="display:none;padding:0 1.5rem;"></div>
+    <div class="modal-foot" id="ct-modal-foot"></div>
+  </div>
+</div>
+
+<!-- New case modal -->
+<div class="modal-overlay" id="ct-new-case-modal">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="ct-new-title" style="max-width:560px;">
+    <div class="modal-head">
+      <div class="modal-title" id="ct-new-title">File a Case</div>
+      <button class="modal-close" id="ct-new-close" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="nc-type">Type</label>
+        <select class="form-select" id="nc-type"></select>
+      </div>
+      <div class="form-group" id="nc-measure-group" style="display:none;">
+        <label class="form-label" for="nc-measure">Measure being challenged (optional)</label>
+        <select class="form-select" id="nc-measure"><option value="">— None —</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="nc-title">Case Title</label>
+        <input class="form-input" id="nc-title" maxlength="200" placeholder="e.g. Aurelia v. Whitepine">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="nc-summary">Summary</label>
+        <textarea class="form-textarea" id="nc-summary" rows="2"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="nc-text">Complaint / Statement of Facts</label>
+        <textarea class="form-textarea" id="nc-text" rows="8"></textarea>
+      </div>
+      <div id="nc-error" class="form-error" style="display:none;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" id="nc-cancel">Cancel</button>
+      <button class="btn btn-primary" id="nc-submit">File Case</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="court.page.js"></script>
+</body>
+</html>
