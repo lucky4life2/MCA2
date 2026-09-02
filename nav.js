@@ -86,6 +86,7 @@ const NAV_HTML = () => {
         <li><a href="news.html"    data-page="news">News</a></li>
         <li><a href="nations.html" data-page="nations">Nations</a></li>
         <li><a href="congress.html" data-page="congress">Congress</a></li>
+        <li><a href="court.html" data-page="court">World Court</a></li>
       </ul>
     </li>
     <li class="nav-has-dropdown" id="nav-about-item">
