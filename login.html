@@ -271,6 +271,10 @@
             <input type="password" id="signup-password" class="login-form-input" placeholder="8+ characters" autocomplete="new-password">
             <div class="password-hint">Must be 8+ characters with at least one uppercase and one lowercase letter.</div>
           </div>
+          <div class="login-form-group">
+            <label class="login-form-label" for="signup-dob">Date of Birth</label>
+            <input type="date" id="signup-dob" class="login-form-input" autocomplete="bday">
+          </div>
           <div class="login-error" id="signup-error"></div>
 
           <div class="login-consent">
@@ -839,9 +843,16 @@
   });
 
   // ── Email sign up ─────────────────────────────────────────────
+  // Neutral age screen (16 CFR 312.5(a)): no "must be 13+" copy above the
+  // field and no default value — only a hard ceiling of today's date so the
+  // native picker can't accept a future birthdate.
+  const signupDobEl = document.getElementById('signup-dob');
+  if (signupDobEl) signupDobEl.max = new Date().toISOString().slice(0, 10);
+
   document.getElementById('btn-email-signup').addEventListener('click', async () => {
     const email    = document.getElementById('signup-email').value.trim();
     const password = document.getElementById('signup-password').value;
+    const dob      = signupDobEl ? signupDobEl.value : '';
     const errEl    = document.getElementById('signup-error');
     errEl.style.display = 'none';
     if (!requireSignupConsent()) return;
@@ -849,6 +860,14 @@
     // so a typo like "me@" reached the Edge Function and failed there instead.
     if (!/^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(email)) {
       errEl.textContent   = 'Please enter a valid email address.';
+      errEl.style.display = 'block'; return;
+    }
+    if (!dob) {
+      errEl.textContent   = 'Please enter your date of birth.';
+      errEl.style.display = 'block'; return;
+    }
+    if (dob > signupDobEl.max) {
+      errEl.textContent   = 'Please enter a valid date of birth.';
       errEl.style.display = 'block'; return;
     }
     if (password.length < 8) {
@@ -887,7 +906,7 @@
       res = await fetch(`${SUPABASE_URL}/functions/v1/signup-with-email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
-        body: JSON.stringify({ email, password, turnstileToken }),
+        body: JSON.stringify({ email, password, turnstileToken, dateOfBirth: dob }),
       });
       json = await res.json();
     } catch (e) {

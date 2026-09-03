@@ -229,18 +229,22 @@
     </div>
   </div>
 
-  <!-- Under-13 age-check / parental consent gate. Shown instead of
-       account-main whenever the signed-in user's minor_consent row is
-       missing, pending, or declined. -->
+  <!-- COPPA age gate. Shown instead of account-main whenever the signed-in
+       account is age_unverified (no DOB on file yet, e.g. Discord/Google
+       sign-in) or coppa_restricted (DOB says under 13, awaiting or lacking
+       verifiable parental consent). Neutral by design: no "must be 13+"
+       copy above the date field, no default value, and no way to resubmit
+       a different date of birth once one is on file. -->
   <div id="account-age-gate" class="account-wrap account-not-signed-in" style="display:none;">
-    <div id="agegate-ask">
-      <h2>Quick question</h2>
-      <p>Before we set up your account: are you 13 years old or older?</p>
-      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-        <button class="btn btn-primary" id="btn-agegate-yes">Yes, I'm 13 or older</button>
-        <button class="btn btn-outline" id="btn-agegate-no">No, I'm under 13</button>
+    <div id="agegate-dob">
+      <h2>One more step</h2>
+      <p>Please enter your date of birth.</p>
+      <div class="form-group" style="max-width:260px;margin:0 auto;text-align:left;">
+        <label class="form-label" for="agegate-dob-input">Date of Birth</label>
+        <input type="date" id="agegate-dob-input" class="form-input">
       </div>
-      <div class="form-error" id="agegate-ask-error" style="display:none;margin-top:1rem;"></div>
+      <div class="form-error" id="agegate-dob-error" style="display:none;margin-top:1rem;"></div>
+      <button class="btn btn-primary" id="btn-agegate-dob-submit" style="margin-top:1rem;">Continue</button>
     </div>
 
     <div id="agegate-parent" style="display:none;max-width:380px;margin:0 auto;text-align:left;">
@@ -256,13 +260,13 @@
 
     <div id="agegate-pending" style="display:none;">
       <h2>Waiting for parent approval</h2>
-      <p>We've emailed <strong id="agegate-pending-email"></strong> asking them to review and approve your account. Once they do, you'll be able to use the site. Check back later, or ask your parent/guardian to check their email (including spam).</p>
+      <p>We've emailed your parent or guardian asking them to review and approve your account. Once they do, you'll be able to use the site. Check back later, or ask your parent/guardian to check their email (including spam).</p>
       <button class="btn btn-outline" id="btn-agegate-signout">Sign Out</button>
     </div>
 
     <div id="agegate-declined" style="display:none;">
       <h2>Account not approved</h2>
-      <p>A parent or guardian declined to approve this account, so it can't be used. If you think this is a mistake, please contact us at minecraftclubofamerica@gmail.com.</p>
+      <p id="agegate-declined-text">A parent or guardian declined to approve this account, so it can't be used. If you think this is a mistake, please contact us at minecraftclubofamerica@gmail.com.</p>
       <button class="btn btn-outline" id="btn-agegate-signout2">Sign Out</button>
     </div>
   </div>
@@ -293,6 +297,15 @@
         <div class="form-group">
           <label class="form-label" for="field-username">Username</label>
           <input type="text" id="field-username" class="form-input" placeholder="username">
+        </div>
+        <div class="form-group">
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="field-directory-opt-in" style="margin-top:3px;width:16px;height:16px;flex-shrink:0;">
+            <span>
+              <span style="display:block;font-weight:600;font-size:14px;">Show me in the member directory</span>
+              <span class="form-hint" style="display:block;margin-top:2px;">Off by default for members under 18. You can turn this on anytime.</span>
+            </span>
+          </label>
         </div>
         <div class="form-error" id="profile-error"></div>
         <div class="form-success" id="profile-success"></div>
@@ -637,14 +650,15 @@ async function init() {
     }
   }
 
-  // Under-13 age-check / parental consent gate. A missing row means this
-  // account has never answered the age question; pending/declined means a
-  // parent hasn't approved (or refused to). The account can sign in in all
-  // three cases — it just can't get past this screen until resolved.
-  const consent = await getMinorConsent();
-  if (!consent || consent.status === 'pending' || consent.status === 'declined') {
+  // COPPA age gate. account_status drives this: 'age_unverified' means no
+  // date of birth is on file yet (every OAuth signup starts here, since a
+  // provider's own consent screen can't carry a custom DOB field);
+  // 'coppa_restricted' means the DOB said under 13 and verifiable parental
+  // consent isn't recorded yet. nav.js already redirects every other page
+  // here for both statuses — this is where the gate UI itself lives.
+  if (_profile.account_status === 'age_unverified' || _profile.account_status === 'coppa_restricted') {
     elLoading.style.display = 'none';
-    showAgeGate(consent);
+    await showAgeGate();
     return;
   }
 
@@ -725,13 +739,12 @@ function initAppealForm(subjectPrefix) {
   });
 }
 
-// ── Under-13 age-check / parental consent gate ──────────────────
-async function getMinorConsent() {
-  const { data } = await supabase
-    .from('minor_consent')
-    .select('status, parent_email')
-    .eq('user_id', _user.id)
-    .maybeSingle();
+// ── COPPA age gate (16 CFR 312.5(a)) ─────────────────────────────
+// The child cannot read minor_consent directly (no SELECT policy exists
+// for it) — my_minor_consent_status() exposes only the coarse status word
+// needed to pick which panel to show, nothing else on that record.
+async function myMinorConsentStatus() {
+  const { data } = await supabase.rpc('my_minor_consent_status');
   return data || null;
 }
 
@@ -751,41 +764,61 @@ async function submitAgeCheck(payload) {
 }
 
 let _agegateWired = false;
-function showAgeGate(consent) {
+async function showAgeGate() {
   const wrap = document.getElementById('account-age-gate');
   wrap.style.display = 'block';
-  ['agegate-ask', 'agegate-parent', 'agegate-pending', 'agegate-declined'].forEach(id => {
+  ['agegate-dob', 'agegate-parent', 'agegate-pending', 'agegate-declined'].forEach(id => {
     document.getElementById(id).style.display = 'none';
   });
 
-  if (!consent) {
-    document.getElementById('agegate-ask').style.display = 'block';
-  } else if (consent.status === 'pending') {
-    document.getElementById('agegate-pending-email').textContent = consent.parent_email || 'your parent/guardian';
-    document.getElementById('agegate-pending').style.display = 'block';
-  } else if (consent.status === 'declined') {
-    document.getElementById('agegate-declined').style.display = 'block';
+  if (!_profile.date_of_birth) {
+    // Never answered the age question yet (every OAuth signup lands here,
+    // since a provider's consent screen can't carry a custom DOB field).
+    document.getElementById('agegate-dob').style.display = 'block';
+  } else if (_profile.age_band === 'under_13') {
+    const status = await myMinorConsentStatus();
+    if (status === 'pending') {
+      document.getElementById('agegate-pending').style.display = 'block';
+    } else if (status === 'declined' || status === 'revoked') {
+      const text = document.getElementById('agegate-declined-text');
+      text.textContent = status === 'revoked'
+        ? 'A parent or guardian revoked consent for this account, so it can’t be used. If you think this is a mistake, please contact us at minecraftclubofamerica@gmail.com.'
+        : 'A parent or guardian declined to approve this account, so it can’t be used. If you think this is a mistake, please contact us at minecraftclubofamerica@gmail.com.';
+      document.getElementById('agegate-declined').style.display = 'block';
+    } else {
+      // DOB is on file but no consent request has been sent yet.
+      document.getElementById('agegate-parent').style.display = 'block';
+    }
   }
 
   if (_agegateWired) return;
   _agegateWired = true;
 
-  document.getElementById('btn-agegate-yes').addEventListener('click', async (e) => {
+  document.getElementById('btn-agegate-dob-submit').addEventListener('click', async (e) => {
+    const dobEl = document.getElementById('agegate-dob-input');
+    const errEl = document.getElementById('agegate-dob-error');
+    errEl.style.display = 'none';
+    const today = new Date().toISOString().slice(0, 10);
+    dobEl.max = today;
+    if (!dobEl.value) {
+      errEl.textContent = 'Please enter your date of birth.';
+      errEl.style.display = 'block';
+      return;
+    }
+    if (dobEl.value > today) {
+      errEl.textContent = 'Please enter a valid date of birth.';
+      errEl.style.display = 'block';
+      return;
+    }
     const btn = e.target; btn.disabled = true;
-    const { ok, json } = await submitAgeCheck({ isAdult: true });
+    const { ok, json } = await submitAgeCheck({ dateOfBirth: dobEl.value });
     if (!ok) {
-      const errEl = document.getElementById('agegate-ask-error');
       errEl.textContent = json.error || 'Something went wrong. Please try again.';
       errEl.style.display = 'block';
       btn.disabled = false;
       return;
     }
     window.location.reload();
-  });
-
-  document.getElementById('btn-agegate-no').addEventListener('click', () => {
-    document.getElementById('agegate-ask').style.display = 'none';
-    document.getElementById('agegate-parent').style.display = 'block';
   });
 
   document.getElementById('btn-agegate-send').addEventListener('click', async (e) => {
@@ -805,7 +838,8 @@ function showAgeGate(consent) {
       errEl.style.display = 'block';
       return;
     }
-    showAgeGate({ status: 'pending', parent_email: email });
+    document.getElementById('agegate-parent').style.display = 'none';
+    document.getElementById('agegate-pending').style.display = 'block';
   });
 
   const doSignOut = async () => { await signOut(); window.location.replace('login.html?return=account.html'); };
@@ -907,6 +941,7 @@ async function renderPage() {
   // Profile fields
   document.getElementById('field-display-name').value = _profile.display_name || '';
   document.getElementById('field-username').value = _profile.username || '';
+  document.getElementById('field-directory-opt-in').checked = !!_profile.public_listing_opt_in;
   document.getElementById('field-news-opt-in').checked = !!_profile.news_email_opt_in;
   // Task assignment emails default to on, so treat a missing value as opted in.
   document.getElementById('field-task-opt-in').checked = _profile.task_email_opt_in !== false;
@@ -1739,10 +1774,12 @@ document.getElementById('btn-save-profile').addEventListener('click', async () =
     }
   }
 
-  const { error } = await supabase.from('profiles').update({ display_name, username }).eq('id', _user.id);
+  const directoryOptIn = document.getElementById('field-directory-opt-in').checked;
+  const { error } = await supabase.from('profiles').update({ display_name, username, public_listing_opt_in: directoryOptIn }).eq('id', _user.id);
   if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
   _profile.display_name = display_name;
   _profile.username = username;
+  _profile.public_listing_opt_in = directoryOptIn;
   document.getElementById('account-hero-name').textContent = display_name || username || _user.email?.split('@')[0];
   succEl.textContent = 'Saved.'; succEl.style.display = 'block';
   setTimeout(() => succEl.style.display = 'none', 3000);

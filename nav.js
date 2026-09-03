@@ -836,12 +836,32 @@ async function initNavAuth(_authReadyResolve) {
     try {
       const mod0 = await import('./supabase.js');
       const [{ data: roleData }, preview, canViewAdmin] = await Promise.all([
-        mod0.supabase.from('profiles').select('display_name, username').eq('id', user.id).single(),
+        mod0.supabase.from('profiles').select('display_name, username, account_status').eq('id', user.id).single(),
         mod0.getMyRolePreview().catch(() => null),
         mod0.hasPermission('can_view_admin').catch(() => false)
       ]);
       if (roleData) {
         label = roleData.display_name || roleData.username || label;
+      }
+
+      // Sitewide COPPA age gate: an account that hasn't answered the age
+      // question yet, or is a restricted under-13 account still awaiting
+      // (or missing) verifiable parental consent, must not be able to use
+      // any page other than the gate itself and a short list of pages it
+      // needs to get there (sign in/out, legal text, help). This runs here
+      // — not just on account.html — because nav.js is the one script every
+      // page loads, so it's the only reliable sitewide enforcement point on
+      // the client. The real enforcement is server-side (RLS); this is only
+      // what keeps a restricted member from landing on a page that will
+      // just show them empty/broken content.
+      const restrictedStatuses = ['age_unverified', 'coppa_restricted'];
+      if (roleData && restrictedStatuses.includes(roleData.account_status)) {
+        const gateAllowedPages = ['account.html', 'login.html', 'privacy.html', 'terms.html', 'help.html'];
+        const currentPage = window.location.pathname.split('/').pop() || 'index.html';
+        if (!gateAllowedPages.includes(currentPage)) {
+          window.location.replace('account.html');
+          return { isAdmin: false, canPublishNews: false };
+        }
       }
       // isAdmin comes exclusively from the server-side role/permission
       // system (user_roles + roles.permissions) via the can_view_admin
