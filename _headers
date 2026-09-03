@@ -87,5 +87,17 @@
 /parental-consent.html
   Content-Security-Policy: default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://hjaywokvgdzhvsoygctc.supabase.co; connect-src 'self' https://hjaywokvgdzhvsoygctc.supabase.co wss://hjaywokvgdzhvsoygctc.supabase.co https://esm.sh https://api.mcstatus.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
 
+# login.html loads the Cloudflare Turnstile widget (script + the challenge
+# iframe it renders). It isn't in the strict "no unsafe-inline" list above
+# (it still has inline on* handlers, like the rest of the /* tier), and it
+# needs script-src/frame-src to allow challenges.cloudflare.com or the
+# widget script never loads and the div it should render into stays empty
+# — which shows up exactly as "please complete the verification challenge"
+# with nothing to actually complete. Giving it its own explicit block here
+# removes any ambiguity about whether the wildcard /* rule above actually
+# applies to it.
+/login.html
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://esm.sh https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://hjaywokvgdzhvsoygctc.supabase.co; connect-src 'self' https://hjaywokvgdzhvsoygctc.supabase.co wss://hjaywokvgdzhvsoygctc.supabase.co https://esm.sh https://api.mcstatus.io https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+
 /404.html
   Content-Security-Policy: default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://hjaywokvgdzhvsoygctc.supabase.co; connect-src 'self' https://hjaywokvgdzhvsoygctc.supabase.co wss://hjaywokvgdzhvsoygctc.supabase.co https://esm.sh https://api.mcstatus.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
