@@ -1174,3 +1174,12 @@ function renderRolePreviewBanner(preview, mod) {
     window.location.reload();
   });
 }
+
+// Register the PWA service worker (installable, offline-capable app shell —
+// see sw.js for the cache strategy). nav.js loads on every page, so this
+// runs site-wide without needing to touch each page individually.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}

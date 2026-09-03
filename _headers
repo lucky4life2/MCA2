@@ -30,6 +30,17 @@
   Cross-Origin-Resource-Policy: same-site
   X-Permitted-Cross-Domain-Policies: none
 
+# Service worker script: must always be revalidated so an update to the
+# cache strategy actually reaches visitors instead of being served stale
+# from a CDN or browser HTTP cache.
+/sw.js
+  Cache-Control: no-cache
+
+# Manifest is small and rarely changes, but keep it revalidating too since
+# it drives installed-app metadata (name, icons, theme color).
+/manifest.json
+  Cache-Control: no-cache
+
 # ── Strict tier: no 'unsafe-inline' for scripts ──────────────────────────
 # Keep this list in sync with the pages that are free of inline script and
 # inline handlers.
