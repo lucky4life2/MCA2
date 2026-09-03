@@ -41,7 +41,9 @@
 
       <p><strong>Account information.</strong> You may create an account by signing in with Discord or Google, or with an email and password. When you sign in with Google or Discord, we receive basic profile information from that provider — typically your name, email address, and profile picture — which is used solely to create and authenticate your account. We do not receive your Google or Discord password.</p>
 
-      <p><strong>Profile data.</strong> We store a profile record for your account, which may include your display name, username, email address, and your role/permissions within the club.</p>
+      <p><strong>Date of birth.</strong> We ask everyone for their date of birth when they create an account (or, for Discord/Google sign-in, immediately afterward, since those providers don't let us collect it during sign-in itself). This determines how your account is treated under this policy — see "Children's Privacy" below — and is never asked in a way that suggests a "correct" answer, and can't be changed once submitted.</p>
+
+      <p><strong>Profile data.</strong> Once your account is active, we store a profile record which may include your display name, username, email address, your role/permissions within the club, and any persistent identifiers from a linked Discord or Google account or verified Minecraft account (a Discord/Google account ID, or your Minecraft username and UUID).</p>
 
       <p><strong>Content you submit.</strong> If you contribute to the Site — for example, archive documents, nation submissions, or news posts — we store that content along with your author information.</p>
 
@@ -75,16 +77,23 @@
       <p>We do not sell your personal information. We share information only with the service providers that operate the Services on our behalf, and only as needed for them to do so:</p>
       <ul class="history-list">
         <li><strong>Supabase</strong> — our database and authentication provider, which stores account and profile data</li>
-        <li><strong>Discord and Google</strong> — used only if you choose to sign in with those providers</li>
+        <li><strong>Discord and Google</strong> — used only if you choose to sign in with, or link, those providers (blocked entirely for under-13 accounts unless a parent has given separate, explicit consent for third-party disclosure — see "Children's Privacy")</li>
         <li><strong>Cloudflare</strong> — our hosting and content-delivery provider</li>
+        <li><strong>Resend</strong> — our transactional email provider, used to send account verification codes, password resets, parental-consent notices, and (only if you've opted in) news updates</li>
       </ul>
       <p>We may also disclose information if required by law, or to protect the rights, safety, and property of MCA, our members, or the public.</p>
+      <p>We do not operate any targeted-advertising system, do not sell or share personal information with data brokers or advertisers, and do not collect geolocation data.</p>
     </div>
 
     <div class="section">
       <div class="section-label">Retention</div>
       <h2>Data Retention</h2>
-      <p>We keep account and profile information for as long as your account is active or as needed to operate the Services. If you delete your account or request removal, we will delete or anonymize your personal information within a reasonable time, except where we're required to retain it for legal or security reasons.</p>
+      <p>We keep account and profile information for as long as your account is active or as needed to operate the Services, and no longer than reasonably necessary for the purpose it was collected for. Specifically:</p>
+      <ul class="history-list">
+        <li>If you (or, for a child's account, a parent or guardian) request account deletion, the account is deactivated immediately and its data is permanently deleted 7 days later, unless the deletion is cancelled by signing back in during that window.</li>
+        <li>If a parent or guardian declines or later revokes consent for a child's account, the same 7-day deletion applies automatically — there is no separate opt-in required to trigger it.</li>
+        <li>One-time codes and links (sign-in verification, password reset, the parental-consent response link) expire and are purged automatically, typically within minutes to a couple of weeks depending on the type.</li>
+      </ul>
     </div>
 
     <div class="section">
@@ -96,11 +105,19 @@
     <div class="section">
       <div class="section-label">Children</div>
       <h2>Children's Privacy</h2>
-      <p>MCA serves members of all ages, including children under 13, so this section explains how we comply with the Children's Online Privacy Protection Act (COPPA).</p>
-      <p><strong>Parental consent.</strong> When someone creating an account tells us they're under 13, we do not activate the account or collect any personal information beyond what's needed to request consent. Instead, we ask for a parent or guardian's email address and send that parent a message explaining what MCA is, what information we'd collect, and a link to approve or decline the account. The account stays inactive — the child cannot sign in and use the Services — until a parent completes this step.</p>
-      <p><strong>What we collect from children under 13.</strong> Once a parent approves, we collect the same limited account information described above (display name, username, email address, and role/permissions), plus anything the child chooses to submit through club features. We do not use this information for advertising and do not sell it.</p>
-      <p><strong>Parental rights.</strong> A parent or guardian can review the personal information we've collected about their child, request that it be corrected or deleted, or revoke consent and have the account deactivated, at any time by contacting us using the information below. Revoking consent will deactivate the child's account.</p>
-      <p>If you believe a child under 13 has an active account or has provided us with personal information without this consent process having been completed, please contact us and we will investigate and delete the information as appropriate.</p>
+      <p>MCA serves members of all ages, including children under 13, so this section explains how we comply with the Children's Online Privacy Protection Act (COPPA) as amended, effective June 23, 2025.</p>
+      <p><strong>Age screening.</strong> Everyone is asked for their date of birth when creating an account, or immediately afterward for Discord/Google sign-in. Nothing about how the question is asked suggests a "correct" answer, and it can't be resubmitted with a different answer once given.</p>
+      <p><strong>Restricted state before consent.</strong> An account that says it belongs to someone under 13 is placed in a restricted state immediately — before it collects anything beyond the date of birth and, once provided, a parent or guardian's email address. A restricted account cannot publish content, set a public display name, appear in the member directory, hold any role, upload files, or have its information disclosed to any third party. This is enforced by the database itself (row-level security and triggers), not only by what the website's interface shows.</p>
+      <p><strong>Parental consent.</strong> We email the parent or guardian a direct notice — separate from this Privacy Policy — explaining that their child provided this contact information, exactly what categories of information we'd collect and how we'd use them, that we need their consent before collecting anything further, that they may review, delete, or refuse further collection at any time, and a link to this full Privacy Policy. The account stays restricted until they respond. This is our "email plus" verifiable parental consent method: a parent's decision through a unique link tied to their email, followed by a permanent portal link they can use afterward at any time. We currently offer only this method, so we do not disclose a child's information to any third party (including linking a Discord or Google account) — that would require a stronger consent method we haven't implemented, and the database blocks it outright until we do.</p>
+      <p><strong>What we collect from children under 13, once approved.</strong> The same limited account information described above (display name, username, email address, and role/permissions) — never more than what activation requires — plus anything the child chooses to submit through club features. We do not use this information for advertising and do not sell it. A verified under-13 account is also, by default, kept out of the public member directory.</p>
+      <p><strong>Parental rights and the parent portal.</strong> The consent email includes a permanent, no-account-required parent portal link. At any time, a parent or guardian can use it to review exactly what's been collected about their child, revoke consent, or request deletion — without needing to contact us first, though you're always welcome to. Revoking consent or requesting deletion immediately returns the account to its restricted state and queues the collected information for deletion on the same 7-day schedule described above.</p>
+      <p>If you believe a child under 13 has an active, unrestricted account, or has provided us with personal information without this consent process having been completed, please contact us and we will investigate and delete the information as appropriate.</p>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Teens</div>
+      <h2>13-17 Year Olds</h2>
+      <p>Members age 13 through 17 are outside COPPA's scope but are still given privacy-protective defaults, consistent with state minor-privacy laws: no targeted advertising, no sale or sharing of personal information, no public geolocation (we don't collect geolocation from anyone), and a default-off member-directory listing that you can choose to turn on from your account page. These defaults are set automatically based on the date of birth provided at signup.</p>
     </div>
 
     <div class="section">
