@@ -272,8 +272,22 @@
             <div class="password-hint">Must be 8+ characters with at least one uppercase and one lowercase letter.</div>
           </div>
           <div class="login-form-group">
-            <label class="login-form-label" for="signup-dob">Date of Birth</label>
-            <input type="date" id="signup-dob" class="login-form-input" autocomplete="bday">
+            <label class="login-form-label">Date of Birth</label>
+            <div style="display:flex;gap:8px;">
+              <select id="signup-dob-month" class="login-form-input" autocomplete="bday-month">
+                <option value="">Month</option>
+                <option value="01">January</option><option value="02">February</option><option value="03">March</option>
+                <option value="04">April</option><option value="05">May</option><option value="06">June</option>
+                <option value="07">July</option><option value="08">August</option><option value="09">September</option>
+                <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+              </select>
+              <select id="signup-dob-day" class="login-form-input" autocomplete="bday-day" style="flex:0 0 90px;">
+                <option value="">Day</option>
+              </select>
+              <select id="signup-dob-year" class="login-form-input" autocomplete="bday-year" style="flex:0 0 100px;">
+                <option value="">Year</option>
+              </select>
+            </div>
           </div>
           <div class="login-error" id="signup-error"></div>
 
@@ -844,15 +858,48 @@
 
   // ── Email sign up ─────────────────────────────────────────────
   // Neutral age screen (16 CFR 312.5(a)): no "must be 13+" copy above the
-  // field and no default value — only a hard ceiling of today's date so the
-  // native picker can't accept a future birthdate.
-  const signupDobEl = document.getElementById('signup-dob');
-  if (signupDobEl) signupDobEl.max = new Date().toISOString().slice(0, 10);
+  // fields and no default value — month/day/year selects (rather than a
+  // native date picker, which renders inconsistently across browsers and
+  // is awkward on mobile) each start on a blank placeholder, and the day/
+  // year options are built here rather than hardcoded so the year list
+  // never goes stale and Feb 30-style combinations still get caught by
+  // buildDob()'s round-trip check below.
+  const dobMonthEl = document.getElementById('signup-dob-month');
+  const dobDayEl   = document.getElementById('signup-dob-day');
+  const dobYearEl  = document.getElementById('signup-dob-year');
+  if (dobDayEl) {
+    for (let d = 1; d <= 31; d++) {
+      const v = String(d).padStart(2, '0');
+      dobDayEl.insertAdjacentHTML('beforeend', `<option value="${v}">${d}</option>`);
+    }
+  }
+  if (dobYearEl) {
+    const thisYear = new Date().getFullYear();
+    for (let y = thisYear; y >= thisYear - 100; y--) {
+      dobYearEl.insertAdjacentHTML('beforeend', `<option value="${y}">${y}</option>`);
+    }
+  }
+
+  // Combines the three selects into "YYYY-MM-DD", or returns '' if any is
+  // blank or the combination isn't a real calendar date (e.g. Feb 30) —
+  // Date normalizes overflow instead of erroring, so round-tripping through
+  // it and comparing the parts back is what actually catches that.
+  function buildDob() {
+    const m = dobMonthEl ? dobMonthEl.value : '';
+    const d = dobDayEl ? dobDayEl.value : '';
+    const y = dobYearEl ? dobYearEl.value : '';
+    if (!m || !d || !y) return '';
+    const iso = `${y}-${m}-${d}`;
+    const dt = new Date(`${iso}T00:00:00Z`);
+    if (dt.getUTCFullYear() !== Number(y) || dt.getUTCMonth() + 1 !== Number(m) || dt.getUTCDate() !== Number(d)) return '';
+    return iso;
+  }
+  const todayIso = new Date().toISOString().slice(0, 10);
 
   document.getElementById('btn-email-signup').addEventListener('click', async () => {
     const email    = document.getElementById('signup-email').value.trim();
     const password = document.getElementById('signup-password').value;
-    const dob      = signupDobEl ? signupDobEl.value : '';
+    const dob      = buildDob();
     const errEl    = document.getElementById('signup-error');
     errEl.style.display = 'none';
     if (!requireSignupConsent()) return;
@@ -866,7 +913,7 @@
       errEl.textContent   = 'Please enter your date of birth.';
       errEl.style.display = 'block'; return;
     }
-    if (dob > signupDobEl.max) {
+    if (dob > todayIso) {
       errEl.textContent   = 'Please enter a valid date of birth.';
       errEl.style.display = 'block'; return;
     }
