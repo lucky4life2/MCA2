@@ -239,9 +239,23 @@
     <div id="agegate-dob">
       <h2>One more step</h2>
       <p>Please enter your date of birth.</p>
-      <div class="form-group" style="max-width:260px;margin:0 auto;text-align:left;">
-        <label class="form-label" for="agegate-dob-input">Date of Birth</label>
-        <input type="date" id="agegate-dob-input" class="form-input">
+      <div class="form-group" style="max-width:320px;margin:0 auto;text-align:left;">
+        <label class="form-label">Date of Birth</label>
+        <div style="display:flex;gap:8px;">
+          <select id="agegate-dob-month" class="form-input" autocomplete="bday-month">
+            <option value="">Month</option>
+            <option value="01">January</option><option value="02">February</option><option value="03">March</option>
+            <option value="04">April</option><option value="05">May</option><option value="06">June</option>
+            <option value="07">July</option><option value="08">August</option><option value="09">September</option>
+            <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+          </select>
+          <select id="agegate-dob-day" class="form-input" autocomplete="bday-day" style="flex:0 0 90px;">
+            <option value="">Day</option>
+          </select>
+          <select id="agegate-dob-year" class="form-input" autocomplete="bday-year" style="flex:0 0 100px;">
+            <option value="">Year</option>
+          </select>
+        </div>
       </div>
       <div class="form-error" id="agegate-dob-error" style="display:none;margin-top:1rem;"></div>
       <button class="btn btn-primary" id="btn-agegate-dob-submit" style="margin-top:1rem;">Continue</button>
@@ -794,24 +808,46 @@ async function showAgeGate() {
   if (_agegateWired) return;
   _agegateWired = true;
 
+  // Month/day/year selects (not a native date picker — inconsistent across
+  // browsers and awkward on mobile), each starting blank. Day/year options
+  // are built here instead of hardcoded so the year list never goes stale.
+  const dobMonthEl = document.getElementById('agegate-dob-month');
+  const dobDayEl   = document.getElementById('agegate-dob-day');
+  const dobYearEl  = document.getElementById('agegate-dob-year');
+  for (let d = 1; d <= 31; d++) {
+    const v = String(d).padStart(2, '0');
+    dobDayEl.insertAdjacentHTML('beforeend', `<option value="${v}">${d}</option>`);
+  }
+  const thisYear = new Date().getFullYear();
+  for (let y = thisYear; y >= thisYear - 100; y--) {
+    dobYearEl.insertAdjacentHTML('beforeend', `<option value="${y}">${y}</option>`);
+  }
+  function buildAgegateDob() {
+    const m = dobMonthEl.value, d = dobDayEl.value, y = dobYearEl.value;
+    if (!m || !d || !y) return '';
+    const iso = `${y}-${m}-${d}`;
+    const dt = new Date(`${iso}T00:00:00Z`);
+    if (dt.getUTCFullYear() !== Number(y) || dt.getUTCMonth() + 1 !== Number(m) || dt.getUTCDate() !== Number(d)) return '';
+    return iso;
+  }
+
   document.getElementById('btn-agegate-dob-submit').addEventListener('click', async (e) => {
-    const dobEl = document.getElementById('agegate-dob-input');
     const errEl = document.getElementById('agegate-dob-error');
     errEl.style.display = 'none';
     const today = new Date().toISOString().slice(0, 10);
-    dobEl.max = today;
-    if (!dobEl.value) {
+    const dob = buildAgegateDob();
+    if (!dob) {
       errEl.textContent = 'Please enter your date of birth.';
       errEl.style.display = 'block';
       return;
     }
-    if (dobEl.value > today) {
+    if (dob > today) {
       errEl.textContent = 'Please enter a valid date of birth.';
       errEl.style.display = 'block';
       return;
     }
     const btn = e.target; btn.disabled = true;
-    const { ok, json } = await submitAgeCheck({ dateOfBirth: dobEl.value });
+    const { ok, json } = await submitAgeCheck({ dateOfBirth: dob });
     if (!ok) {
       errEl.textContent = json.error || 'Something went wrong. Please try again.';
       errEl.style.display = 'block';
