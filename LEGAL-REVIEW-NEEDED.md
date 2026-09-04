@@ -36,3 +36,26 @@ The task context describing this project's auth methods mentioned only email/pas
 ---
 
 None of the above blocked shipping the Phase 2 technical implementation, because the implementation was built to be conservative by default (block first, require an explicit future decision to loosen) rather than assume an answer to any of these questions.
+
+## 8. General federal/state law compliance pass — 2026-09-04
+
+A broader "make sure the site complies with all applicable laws" pass (beyond COPPA specifically). Everything below was either fixed outright or is flagged here because it needs a fact or a decision only the site owner/counsel can supply — nothing was fabricated.
+
+**Fixed this session (code/schema/content, no owner input required):**
+- CAN-SPAM (15 U.S.C. § 7704) one-click, no-login unsubscribe for the news digest and task-assignment emails (`unsubscribe` Edge Function, `unsubscribe.html`, `List-Unsubscribe`/`List-Unsubscribe-Post` headers for Gmail/Outlook/Yahoo's built-in one-click button), replacing the previous login-gated "manage preferences" link as the *only* opt-out.
+- DMCA notice-and-takedown section added to `terms.html` (17 U.S.C. § 512): notice requirements, counter-notice process, repeat-infringer termination.
+- Accessibility Statement page added (`accessibility.html`, linked from the footer): WCAG 2.1 AA conformance target, a feedback contact, consistent with ADA Title II/III web-accessibility expectations.
+- State privacy-rights section added to `privacy.html` (know/access, correct, delete, opt-out-of-sale, non-discrimination) — formalizes the site's existing no-sale/no-targeted-ads posture into explicit rights language for CCPA/CPRA and comparable state laws.
+- `profiles_update` RLS column-blind write access (flagged in `AUDIT-2026-09-01.md` finding #7) — a `can_manage_minecraft`-only caller (no `admin`/`owner`/`can_manage_users`) can no longer change another member's `username`, `display_name`, `public_listing_opt_in`, or `news_email_opt_in`; the security-critical columns (`role`, `email`, `account_status`, all tokens) were already unconditionally protected by the `profiles_guard_columns` trigger added in Phase 2. No custom role in the live database currently grants `can_manage_minecraft` without also granting one of the exempted permissions, so this closes a *latent* gap (relevant the next time an owner creates a narrower custom role via the role editor), not an active one.
+
+**Needs the site owner to supply a fact (not a legal judgment — just missing information):**
+- **CAN-SPAM physical postal address.** Every commercial/bulk email must include a valid postal address (15 U.S.C. § 7704(a)(5)(A)(iii)) — a P.O. Box is acceptable. The news-digest email currently renders a bracketed placeholder (`[MAILING ADDRESS NEEDED ...]`) in `notify-news-subscribers`'s footer so it's impossible to miss in the next digest sent. **Action:** update the `MAILING_ADDRESS` constant in that Edge Function (and in `notify-task-assignee` if a postal address is added there too) with a real address once one exists.
+- **DMCA designated agent registration.** The notice-and-takedown *policy* is now in `terms.html`, but full DMCA safe-harbor protection (17 U.S.C. § 512(c)) also requires registering a designated agent with the U.S. Copyright Office at [dmca.copyright.gov](https://dmca.copyright.gov) (a small recurring fee, renewed periodically) — an account/business action outside what code or a database migration can do. **Action:** register `minecraftclubofamerica@gmail.com` (or whoever should hold this role) as the designated agent.
+
+**Needs a Supabase Dashboard change (not reachable via any tool available to this effort):**
+- **Leaked-password protection is still disabled** in Supabase Auth (re-confirmed live via the security advisor this session — same finding as `AUDIT-2026-09-01.md` #2). Dashboard → Authentication → Sign In / Providers → Password → enable "Leaked password protection." No code change, no data risk.
+
+**Still attorney-judgment calls (not attempted, consistent with items #1-#7 above):**
+- Whether MCA's revenue/user counts actually cross any state privacy law's "covered business" threshold (e.g., CCPA's $25M/100k-consumer/50%-revenue tests) was not determined — the new state-rights section in `privacy.html` honors those rights regardless, which is protective either way but isn't itself a determination of legal coverage.
+- No governing-law/dispute-resolution (venue, arbitration) clause was added to `terms.html` — doing so requires knowing MCA's actual state of organization/operation, which wasn't provided and shouldn't be guessed.
+- Whether any state's "social media platform" minor-safety statute (age-verification/parental-control mandates some states have enacted for larger platforms) reaches an organization of MCA's size was not researched or determined here — flagging only because the task description asked about "internet safety laws" broadly; nothing was implemented against an unconfirmed statute.

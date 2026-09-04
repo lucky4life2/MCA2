@@ -168,6 +168,7 @@ const FOOTER_HTML = () => {
         <div class="footer-col-title">Legal</div>
         <a href="privacy.html">Privacy Policy</a>
         <a href="terms.html">Terms of Service</a>
+        <a href="accessibility.html">Accessibility</a>
       </div>
     </div>
 
