@@ -836,7 +836,7 @@ async function initNavAuth(_authReadyResolve) {
     try {
       const mod0 = await import('./supabase.js');
       const [{ data: roleData }, preview, canViewAdmin] = await Promise.all([
-        mod0.supabase.from('profiles').select('display_name, username, account_status').eq('id', user.id).single(),
+        mod0.supabase.from('profiles').select('display_name, username, account_status, membership_status, membership_current_period_end').eq('id', user.id).single(),
         mod0.getMyRolePreview().catch(() => null),
         mod0.hasPermission('can_view_admin').catch(() => false)
       ]);
@@ -860,6 +860,23 @@ async function initNavAuth(_authReadyResolve) {
         const currentPage = window.location.pathname.split('/').pop() || 'index.html';
         if (!gateAllowedPages.includes(currentPage)) {
           window.location.replace('account.html');
+          return { isAdmin: false, canPublishNews: false };
+        }
+      }
+
+      // Membership gate: the Minecraft server and the website features tied
+      // to it are locked to paying members. Same client-side "check
+      // profiles, redirect if not allowed" idiom as the COPPA gate above —
+      // real enforcement for any data these pages read still depends on
+      // that table's own RLS. Admins/owners are exempt so staff can manage
+      // the site without buying a membership themselves.
+      const memberGatedPages = ['server.html', 'economy.html', 'stocks.html', 'congress.html', 'court.html'];
+      const currentPageForMembers = window.location.pathname.split('/').pop() || 'index.html';
+      if (memberGatedPages.includes(currentPageForMembers) && !canViewAdmin) {
+        const periodEnd = roleData?.membership_current_period_end ? new Date(roleData.membership_current_period_end) : null;
+        const isActiveMember = roleData?.membership_status === 'active' && periodEnd && periodEnd.getTime() > Date.now();
+        if (!isActiveMember) {
+          window.location.replace('account.html?membership_required=1');
           return { isAdmin: false, canPublishNews: false };
         }
       }

@@ -202,3 +202,29 @@ export async function signInWithEmail(email, password) {
 export async function signOut() {
   await supabase.auth.signOut();
 }
+
+// ── Checkout ─────────────────────────────────────────────────
+
+/**
+ * Creates a Stripe Checkout Session for the given cart items via the
+ * create-checkout-session Edge Function, and returns the session URL to
+ * redirect the browser to. items: [{ id, qty }]. Throws on any failure
+ * (not signed in, empty cart, Stripe/Edge Function error).
+ */
+export async function createCheckoutSession(items) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error('You must be signed in to check out.');
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/create-checkout-session`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ items }),
+  });
+  const result = await res.json().catch(() => ({}));
+  if (!res.ok || !result.url) throw new Error(result.error || 'Could not start checkout.');
+  return result.url;
+}
