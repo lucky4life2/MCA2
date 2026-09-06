@@ -96,6 +96,47 @@ public class SupabaseClient {
         }
     }
 
+    /**
+     * Looks up membership status by linked Minecraft UUID. Returns null if
+     * no linked profile is found (or on error) — callers should treat that
+     * the same as "not an active member".
+     */
+    public MembershipStatus findMembershipStatusByUuid(String minecraftUuid) {
+        String select = String.join(",", "id", columns.membershipStatus, columns.membershipPeriodEnd);
+        String url = baseUrl + "/rest/v1/" + urlEncodePath(table)
+                + "?" + urlEncode(columns.minecraftUuid) + "=eq." + urlEncode(minecraftUuid)
+                + "&select=" + urlEncode(select);
+        try {
+            HttpRequest request = baseRequest(url).GET().build();
+            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                logger.log(Level.WARNING, "Supabase membership lookup failed (" + response.statusCode() + "): " + response.body());
+                return null;
+            }
+            JsonElement parsed = JsonParser.parseString(response.body());
+            if (!parsed.isJsonArray()) return null;
+            JsonArray arr = parsed.getAsJsonArray();
+            if (arr.size() == 0) return null;
+            JsonObject row = arr.get(0).getAsJsonObject();
+
+            String status = getString(row, columns.membershipStatus);
+            Instant periodEnd = null;
+            String periodEndStr = getString(row, columns.membershipPeriodEnd);
+            if (periodEndStr != null) {
+                try {
+                    periodEnd = Instant.parse(periodEndStr);
+                } catch (Exception e) {
+                    // leave periodEnd null if it doesn't parse
+                }
+            }
+            return new MembershipStatus(status, periodEnd);
+        } catch (Exception e) {
+            logger.log(Level.WARNING, "Error contacting Supabase", e);
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            return null;
+        }
+    }
+
     /** Looks up a profile row by its linked Minecraft username. Returns null if not found or on error. */
     public ProfileMatch findByMinecraftUsername(String username) {
         String select = String.join(",", "id", columns.minecraftUsername, columns.minecraftVerified);
@@ -251,13 +292,38 @@ public class SupabaseClient {
         public final String minecraftUuid;
         public final String verifyCode;
         public final String verifyExpires;
+        public final String membershipStatus;
+        public final String membershipPeriodEnd;
 
         public ColumnNames(String minecraftUsername, String minecraftVerified, String minecraftUuid, String verifyCode, String verifyExpires) {
+            this(minecraftUsername, minecraftVerified, minecraftUuid, verifyCode, verifyExpires, "membership_status", "membership_current_period_end");
+        }
+
+        public ColumnNames(String minecraftUsername, String minecraftVerified, String minecraftUuid, String verifyCode, String verifyExpires,
+                            String membershipStatus, String membershipPeriodEnd) {
             this.minecraftUsername = minecraftUsername;
             this.minecraftVerified = minecraftVerified;
             this.minecraftUuid = minecraftUuid == null ? "" : minecraftUuid;
             this.verifyCode = verifyCode;
             this.verifyExpires = verifyExpires;
+            this.membershipStatus = membershipStatus;
+            this.membershipPeriodEnd = membershipPeriodEnd;
+        }
+    }
+
+    /** membership_status ("active"/"past_due"/"canceled"/"none") + the current paid period's end. */
+    public static class MembershipStatus {
+        public final String status;
+        public final Instant periodEnd;
+
+        public MembershipStatus(String status, Instant periodEnd) {
+            this.status = status;
+            this.periodEnd = periodEnd;
+        }
+
+        /** True only while status is "active" AND the paid period hasn't ended yet. */
+        public boolean isActive() {
+            return "active".equals(status) && periodEnd != null && Instant.now().isBefore(periodEnd);
         }
     }
 

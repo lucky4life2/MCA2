@@ -30,6 +30,14 @@ columns:
   minecraft_uuid: "minecraft_uuid"
   verify_code: "mc_verify_code"
   verify_expires: "mc_verify_expires"
+  membership_status: "membership_status"
+  membership_period_end: "membership_current_period_end"
+
+# Locks the server to players whose linked website account has an active
+# $12/year membership (set false to open the server back up to everyone,
+# e.g. while testing before Stripe is fully configured).
+membership:
+  gate_enabled: true
 
 # NEW: periodic heartbeat so the website's admin panel can tell this plugin
 # is actually running (vs. just the Supabase Edge Function being deployed).
@@ -52,3 +60,5 @@ messages:
   lookup_not_found: "&cNo linked website account found for %player_name%."
   lookup_found: "&a%player_name% is linked to website account: %website_username% (verified: %verified%)"
   unverify_done: "&aUnverified %player_name%'s Minecraft link."
+  membership_required: "&cYour MCA membership isn't active.\n&7Renew for $12/year at the website (My Account) to rejoin."
+  membership_required_unlinked: "&cYou need an active MCA membership to join.\n&7Sign up on the website, verify with /mcaverify, then purchase a membership."

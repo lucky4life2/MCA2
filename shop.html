@@ -249,7 +249,7 @@
       <span class="cart-subtotal-label">Subtotal</span>
       <span class="cart-subtotal-amount" id="cart-subtotal">$0.00</span>
     </div>
-    <button class="btn-checkout">Checkout — Coming Soon</button>
+    <button class="btn-checkout" id="btn-checkout">Checkout</button>
   </div>
 </div>
 
@@ -263,7 +263,7 @@
 
 
 <script type="module">
-  import { supabase, signOut, hasPermission } from './supabase.js';
+  import { supabase, signOut, hasPermission, createCheckoutSession } from './supabase.js';
 
   let _isAdmin = false, _isLoggedIn = false, _userId = null, _initialized = false;
   let _products = [];
@@ -362,6 +362,28 @@
   elCartOverlay.addEventListener('click', closeCartDrawer);
   const navCartBtn = document.getElementById('nav-cart-btn');
   if (navCartBtn) navCartBtn.addEventListener('click', () => { renderCartDrawer(); openCartDrawer(); });
+
+  // ── Checkout
+  document.querySelector('.btn-checkout').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const items = getCart();
+    if (!items.length) return;
+    const prevText = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Redirecting to checkout...';
+    try {
+      const url = await createCheckoutSession(items.map(i => ({ id: i.id, qty: i.qty || 1 })));
+      window.location.href = url;
+    } catch (err) {
+      alert(err.message || 'Could not start checkout.');
+      btn.disabled = false; btn.textContent = prevText;
+    }
+  });
+
+  // Stripe redirects back here with ?checkout=success|cancel. The cart is
+  // keyed per-user, so it can only be cleared once _userId is known —
+  // handled inside init() below.
+  const _checkoutReturn = new URLSearchParams(window.location.search).get('checkout');
+  if (_checkoutReturn) history.replaceState(null, '', window.location.pathname);
 
   function renderCartDrawer() {
     const items = getCart();
@@ -482,6 +504,12 @@
     elLoading.style.display = 'none'; elShop.style.display = 'block';
     loadProducts(); updateFloatCart();
     applyState();
+    if (_checkoutReturn === 'success' && _userId) {
+      saveCart([]);
+      alert('Payment received! Your order or membership is now active — it may take a minute to update on your account page.');
+    } else if (_checkoutReturn === 'cancel') {
+      alert('Checkout was canceled — your cart is still here whenever you\'re ready.');
+    }
   }
 
   // Show the shop immediately in a signed-out state — no spinner wait.

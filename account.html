@@ -327,6 +327,17 @@
       </div>
     </div>
 
+    <!-- Membership -->
+    <div class="account-section" id="section-membership">
+      <div class="account-section-header">
+        <div class="account-section-title">Membership</div>
+        <span class="account-section-badge" id="membership-badge">Loading</span>
+      </div>
+      <div class="account-section-body" id="membership-body">
+        <!-- injected -->
+      </div>
+    </div>
+
     <!-- My Roles -->
     <div class="account-section" id="section-my-roles">
       <div class="account-section-header">
@@ -493,7 +504,7 @@
       <div class="account-section-header">
         <div class="account-section-title">Order History</div>
       </div>
-      <div class="account-section-body">
+      <div class="account-section-body" id="order-history-body">
         <div class="orders-empty">
           <div class="orders-empty-icon">📦</div>
           <p>No orders yet.</p>
@@ -554,6 +565,14 @@ async function init() {
   // user") comes back as ?error=...&error_description=... on this page,
   // not as a JS exception we can catch. Previously nothing looked for it,
   // so a failed link attempt looked like the button just did nothing.
+  (function showMembershipRequiredNotice() {
+    const queryParams = new URLSearchParams(window.location.search);
+    if (queryParams.get('membership_required') !== '1') return;
+    alert('That page requires an active MCA membership ($12/yr). See the Membership section below to join.');
+    const cleanSearch = window.location.search.replace(/[?&]membership_required=1/, '').replace(/^&/, '?');
+    history.replaceState(null, '', window.location.pathname + cleanSearch + window.location.hash);
+  })();
+
   (function showOAuthReturnError() {
     const queryParams = new URLSearchParams(window.location.search);
     const oauthError = queryParams.get('error_description') || queryParams.get('error')
@@ -928,6 +947,73 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// ── Membership ───────────────────────────────────────────────
+function renderMembership() {
+  const badge = document.getElementById('membership-badge');
+  const body = document.getElementById('membership-body');
+  if (!badge || !body) return;
+
+  const status = _profile.membership_status || 'none';
+  const periodEnd = _profile.membership_current_period_end ? new Date(_profile.membership_current_period_end) : null;
+  const isActive = status === 'active' && periodEnd && periodEnd.getTime() > Date.now();
+
+  if (isActive) {
+    badge.textContent = 'Active';
+    badge.className = 'account-section-badge badge-verified';
+    body.innerHTML = `
+      <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
+        Your membership renews on <strong>${escapeHtml(periodEnd.toLocaleDateString())}</strong>. This unlocks the Minecraft server and the member-only pages of the site.
+      </p>
+      <a class="btn btn-outline" href="shop.html" style="text-decoration:none;display:inline-block;">Manage in Shop</a>`;
+  } else if (status === 'past_due') {
+    badge.textContent = 'Payment Issue';
+    badge.className = 'account-section-badge badge-pending';
+    body.innerHTML = `
+      <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
+        We couldn't process your last membership payment. Server and member-page access may be paused until this is resolved.
+      </p>
+      <a class="btn btn-primary" href="shop.html" style="text-decoration:none;display:inline-block;">Update Payment</a>`;
+  } else {
+    badge.textContent = status === 'canceled' ? 'Canceled' : 'Not a Member';
+    badge.className = 'account-section-badge badge-unlinked';
+    body.innerHTML = `
+      <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
+        Membership is $12/year and is required to join the Minecraft server and access member-only pages.
+      </p>
+      <a class="btn btn-primary" href="shop.html" style="text-decoration:none;display:inline-block;">Join Now — $12/yr</a>`;
+  }
+}
+
+// ── Order history ────────────────────────────────────────────
+async function loadOrderHistory() {
+  const body = document.getElementById('order-history-body');
+  if (!body) return;
+  const { data, error } = await supabase
+    .from('orders')
+    .select('id, kind, amount_total, currency, status, created_at')
+    .eq('user_id', _user.id)
+    .order('created_at', { ascending: false })
+    .limit(25);
+
+  if (error || !data || !data.length) {
+    body.innerHTML = '<div class="orders-empty"><div class="orders-empty-icon">📦</div><p>No orders yet.</p></div>';
+    return;
+  }
+
+  body.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:2px;">
+      ${data.map(o => `
+        <div class="connected-row">
+          <div class="connected-provider-info">
+            <div class="connected-provider-name">${o.kind === 'membership' ? 'MCA Membership' : 'Shop Order'}</div>
+            <div class="connected-provider-detail">${escapeHtml(new Date(o.created_at).toLocaleDateString())} &middot; ${escapeHtml((o.status || '').replace(/^./, c => c.toUpperCase()))}</div>
+          </div>
+          <div style="font-size:13px;font-weight:600;color:var(--black);">$${Number(o.amount_total || 0).toFixed(2)}</div>
+        </div>
+      `).join('')}
+    </div>`;
+}
+
 async function loadMyRoles() {
   const body = document.getElementById('my-roles-body');
   if (!body) return;
@@ -982,6 +1068,10 @@ async function renderPage() {
   // Task assignment emails default to on, so treat a missing value as opted in.
   document.getElementById('field-task-opt-in').checked = _profile.task_email_opt_in !== false;
   revealTaskEmailPref();
+
+  // Membership
+  renderMembership();
+  loadOrderHistory();
 
   // Connected accounts
   await renderConnectedAccounts();
