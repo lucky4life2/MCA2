@@ -329,6 +329,7 @@
           </div>
           <div class="login-error" id="confirm-error"></div>
           <button class="btn-login-submit" id="btn-verify-signup">Verify &amp; Continue</button>
+          <a href="#" class="login-back-link" id="confirm-resend">Didn't get a code? Resend</a>
           <a href="#" class="login-back-link" id="confirm-back">← Back to sign in</a>
         </div>
 
@@ -1016,6 +1017,42 @@
   // Enter key on signup code field
   document.getElementById('signup-code').addEventListener('keydown', e => {
     if (e.key === 'Enter') document.getElementById('btn-verify-signup').click();
+  });
+
+  // Resend the signup code (covers the code expiring, or the original email
+  // landing in spam / never arriving) without forcing the user to wait out
+  // the 15-minute expiry and go through "Create Account" again.
+  document.getElementById('confirm-resend').addEventListener('click', async e => {
+    e.preventDefault();
+    const link = document.getElementById('confirm-resend');
+    const errEl = document.getElementById('confirm-error');
+    errEl.style.display = 'none';
+    if (!_pendingSignupUserId) return;
+    const originalText = link.textContent;
+    link.textContent = 'Sending…';
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/resend-signup-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: _pendingSignupUserId }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        errEl.style.color = '';
+        errEl.textContent = json.error || 'Failed to resend the code.';
+        errEl.style.display = 'block';
+      } else {
+        document.getElementById('signup-code').value = '';
+        errEl.style.color = '#2e7d32';
+        errEl.textContent = 'A new code has been sent to your email.';
+        errEl.style.display = 'block';
+      }
+    } catch {
+      errEl.textContent = 'Failed to resend the code. Please check your connection and try again.';
+      errEl.style.display = 'block';
+    } finally {
+      link.textContent = originalText;
+    }
   });
 
   // Back to sign in from confirmation
