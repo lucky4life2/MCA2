@@ -9,6 +9,13 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
 
+/**
+ * One plugin, two jobs that now depend on each other: linking a player's
+ * Minecraft account to their MCA website account (/mcaverify, unchanged),
+ * and — since the $12/year membership system shipped — refusing to let
+ * anyone who isn't an active member join at all (MembershipGateListener).
+ * There is no separate "verify-only" plugin anymore; this replaces it.
+ */
 public class MCAVerifyPlugin extends JavaPlugin {
 
     private SupabaseClient supabase;

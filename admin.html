@@ -573,6 +573,7 @@
                 <th>Roles</th>
                 <th>Account</th>
                 <th>MC Status</th>
+                <th>Membership</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -1349,6 +1350,7 @@ const ALL_PERMISSIONS = [
   { key: 'can_manage_archive',   label: 'Write & Edit Archive',    group: 'content' },
   { key: 'can_manage_faqs',      label: 'Write & Edit FAQs',       group: 'content' },
   { key: 'can_manage_shop',      label: 'Manage Shop Products',    group: 'content' },
+  { key: 'can_manage_memberships', label: 'Grant / Revoke Memberships', group: 'content' },
   { key: 'can_manage_config',    label: 'Edit Site Config',        group: 'content' },
   { key: 'can_manage_minecraft', label: 'MC Verifications',        group: 'content' },
   { key: 'can_manage_economy',   label: 'Approve Companies & Manage Economy', group: 'content' },
@@ -1505,7 +1507,7 @@ function show(which) {
 // fields (password_reset_token, pending_email_token, mc_verify_code, etc.)
 // that are no longer selectable by any client role — see the profiles
 // column-select-allowlist migration.
-const PROFILES_SAFE_COLUMNS = 'id, username, display_name, minecraft_username, role, created_at, discord_id, minecraft_verified, email, minecraft_uuid, email_access_revoked, account_status, deletion_scheduled_at, google_id, news_email_opt_in, deactivated_at, task_email_opt_in';
+const PROFILES_SAFE_COLUMNS = 'id, username, display_name, minecraft_username, role, created_at, discord_id, minecraft_verified, email, minecraft_uuid, email_access_revoked, account_status, deletion_scheduled_at, google_id, news_email_opt_in, deactivated_at, task_email_opt_in, membership_status, membership_source, membership_current_period_end';
 
 async function loadAll() {
   // Load members with stacked roles via RPC
@@ -1603,7 +1605,7 @@ function renderMembers(members) {
   clearBtn.style.display = hasFilters ? '' : 'none';
 
   if (!members.length) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--muted);">No members found.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--muted);">No members found.</td></tr>`;
     return;
   }
   tbody.innerHTML = members.map(m => {
@@ -1664,6 +1666,20 @@ function renderMembers(members) {
         ? `<span class="badge badge-pending">Pending</span>`
         : `<span class="badge badge-unlinked">None</span>`;
 
+    // Membership: active is only "real" while the current period hasn't
+    // lapsed yet, whether that period came from Stripe or an admin comp.
+    const periodEnd = m.membership_current_period_end ? new Date(m.membership_current_period_end) : null;
+    const isActiveMember = m.membership_status === 'active' && periodEnd && periodEnd.getTime() > Date.now();
+    const membershipBadge = isActiveMember
+      ? `<span class="badge badge-verified">${m.membership_source === 'admin_grant' ? 'Comped' : 'Active'}</span>`
+      : m.membership_status === 'past_due'
+        ? `<span class="badge badge-pending">Past Due</span>`
+        : `<span class="badge badge-unlinked">None</span>`;
+    const grantMembershipBtn = !isActiveMember && _myPermissions.can_manage_memberships
+      ? `<button class="btn btn-outline btn-sm" onclick="grantMembership('${m.id}')">Grant</button>` : '';
+    const revokeMembershipBtn = isActiveMember && _myPermissions.can_manage_memberships
+      ? `<button class="btn btn-danger btn-sm" onclick="revokeMembership('${m.id}')">Revoke</button>` : '';
+
     const allowEmailBtn = !emailVerified && m.email && _myPermissions.can_manage_users
       ? `<button class="btn btn-secondary btn-sm" onclick="allowEmail('${m.id}')">Allow Email</button>` : '';
     const revokeEmailBtn = m.email && _myPermissions.can_manage_users
@@ -1692,6 +1708,12 @@ function renderMembers(members) {
         <div style="display:flex;flex-direction:column;gap:4px;">${emailBadge}${discordBadge}${googleBadge}${statusBadge}</div>
       </td>
       <td>${mcBadge}</td>
+      <td>
+        <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;">
+          ${membershipBadge}
+          ${grantMembershipBtn}${revokeMembershipBtn}
+        </div>
+      </td>
       <td>
         <div class="btn-actions">
           ${emailMemberBtn}${allowEmailBtn}${revokeEmailBtn}${revokeDiscordBtn}${revokeGoogleBtn}
@@ -2757,6 +2779,22 @@ window.unfreezeAccount = async (id) => {
   const name = member?.display_name || member?.username || 'this account';
   if (!confirm(`Unfreeze ${name}? They will be able to sign in again.`)) return;
   const { error } = await supabase.rpc('unfreeze_account', { user_id: id });
+  if (error) { alert('Error: ' + error.message); return; }
+  await loadAll();
+};
+window.grantMembership = async (id) => {
+  const member = _allMembers.find(m => m.id === id);
+  const name = member?.display_name || member?.username || 'this member';
+  if (!confirm(`Grant ${name} a complimentary MCA membership? They'll get server + member-page access without paying.`)) return;
+  const { error } = await supabase.rpc('admin_set_membership', { p_user_id: id, p_grant: true });
+  if (error) { alert('Error: ' + error.message); return; }
+  await loadAll();
+};
+window.revokeMembership = async (id) => {
+  const member = _allMembers.find(m => m.id === id);
+  const name = member?.display_name || member?.username || 'this member';
+  if (!confirm(`Revoke ${name}'s membership? They'll lose server + member-page access immediately.`)) return;
+  const { error } = await supabase.rpc('admin_set_membership', { p_user_id: id, p_grant: false });
   if (error) { alert('Error: ' + error.message); return; }
   await loadAll();
 };
