@@ -835,7 +835,7 @@ async function initNavAuth(_authReadyResolve) {
     // each page having to make its own duplicate (slow) profiles query.
     try {
       const mod0 = await import('./supabase.js');
-      const [{ data: roleData }, preview, canViewAdmin, canBypassMembership] = await Promise.all([
+      const [{ data: roleData, error: roleError }, preview, canViewAdmin, canBypassMembership] = await Promise.all([
         mod0.supabase.from('profiles').select('display_name, username, account_status, membership_status, membership_current_period_end').eq('id', user.id).single(),
         mod0.getMyRolePreview().catch(() => null),
         mod0.hasPermission('can_view_admin').catch(() => false),
@@ -879,9 +879,14 @@ async function initNavAuth(_authReadyResolve) {
       // it granted explicitly via the Roles tab.
       const memberGatedPages = ['server.html', 'economy.html', 'stocks.html', 'congress.html', 'court.html'];
       const currentPageForMembers = window.location.pathname.split('/').pop() || 'index.html';
-      if (memberGatedPages.includes(currentPageForMembers) && !canBypassMembership) {
-        const periodEnd = roleData?.membership_current_period_end ? new Date(roleData.membership_current_period_end) : null;
-        const isActiveMember = roleData?.membership_status === 'active' && periodEnd && periodEnd.getTime() > Date.now();
+      // A failed profile read is not proof of a lapsed membership, and this
+      // redirect is UX rather than enforcement (RLS is what actually gates
+      // the data). Bouncing a paid member to "you need a membership" on a
+      // transient error is worse than letting the page load and come up
+      // empty, so the gate only fires on a profile we actually read.
+      if (memberGatedPages.includes(currentPageForMembers) && !canBypassMembership && roleData && !roleError) {
+        const periodEnd = roleData.membership_current_period_end ? new Date(roleData.membership_current_period_end) : null;
+        const isActiveMember = roleData.membership_status === 'active' && periodEnd && periodEnd.getTime() > Date.now();
         if (!isActiveMember) {
           window.location.replace('account.html?membership_required=1');
           return { isAdmin: false, canPublishNews: false };

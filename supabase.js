@@ -228,3 +228,53 @@ export async function createCheckoutSession(items) {
   if (!res.ok || !result.url) throw new Error(result.error || 'Could not start checkout.');
   return result.url;
 }
+
+/**
+ * Returns the signed-in user's membership state, or null when signed out.
+ * { status, source, periodEnd (Date|null), isActive }. An active membership
+ * is status 'active' AND a period end still in the future — the same rule
+ * nav.js, the account page and the Minecraft plugin all gate on, kept in
+ * one place so they can't drift apart.
+ */
+export async function getMembership() {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('membership_status, membership_source, membership_current_period_end')
+    .eq('id', user.id)
+    .single();
+  if (error) { console.error('getMembership error:', error.message); return null; }
+  const periodEnd = data?.membership_current_period_end ? new Date(data.membership_current_period_end) : null;
+  return {
+    status: data?.membership_status || 'none',
+    source: data?.membership_source || null,
+    periodEnd,
+    isActive: data?.membership_status === 'active' && !!periodEnd && periodEnd.getTime() > Date.now(),
+  };
+}
+
+/**
+ * Opens the Stripe-hosted billing portal, where a member can update their
+ * card, see invoices or cancel. Returns the URL to send the browser to.
+ * Throws with a readable message when there's nothing to manage (comped
+ * membership, never subscribed) or Stripe isn't connected yet.
+ * returnTo is a bare page name on this site, e.g. 'account.html'.
+ */
+export async function createBillingPortalSession(returnTo = 'account.html') {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error('You must be signed in.');
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/create-billing-portal-session`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ return_to: returnTo }),
+  });
+  const result = await res.json().catch(() => ({}));
+  if (!res.ok || !result.url) throw new Error(result.error || 'Could not open the billing portal.');
+  return result.url;
+}

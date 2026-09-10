@@ -540,7 +540,7 @@
 </div>
 
 <script type="module">
-import { supabase, signOut } from './supabase.js';
+import { supabase, signOut, createBillingPortalSession } from './supabase.js';
 
 const elLoading      = document.getElementById('account-loading');
 const elNotSignedIn  = document.getElementById('account-not-signed-in');
@@ -804,9 +804,12 @@ async function showAgeGate() {
     document.getElementById(id).style.display = 'none';
   });
 
-  if (!_profile.date_of_birth) {
+  if (!_profile.age_band) {
     // Never answered the age question yet (every OAuth signup lands here,
     // since a provider's consent screen can't carry a custom DOB field).
+    // Keyed on age_band rather than date_of_birth: the two are written
+    // together by submit-age-check, and date_of_birth is deliberately not
+    // readable by the client.
     document.getElementById('agegate-dob').style.display = 'block';
   } else if (_profile.age_band === 'under_13') {
     const status = await myMinorConsentStatus();
@@ -919,12 +922,25 @@ function showRecoveryBanner() {
   }, 300);
 }
 
+// profiles has column-level SELECT grants, not a table-wide one, so
+// select('*') asks for columns this role may not read and PostgREST answers
+// 403 — which this function used to swallow into an empty _profile, blanking
+// the whole account page. Name the columns the page actually uses instead.
+const PROFILE_COLUMNS = [
+  'id', 'username', 'display_name', 'minecraft_username', 'minecraft_verified',
+  'role', 'created_at', 'discord_id', 'google_id', 'email', 'account_status',
+  'deletion_scheduled_at', 'deactivated_at', 'news_email_opt_in',
+  'task_email_opt_in', 'public_listing_opt_in', 'age_band',
+  'membership_status', 'membership_source', 'membership_current_period_end',
+].join(', ');
+
 async function loadProfile() {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
-    .select('*')
+    .select(PROFILE_COLUMNS)
     .eq('id', _user.id)
     .single();
+  if (error) console.error('loadProfile error:', error.message);
   _profile = data || {};
 }
 
@@ -958,13 +974,19 @@ function renderMembership() {
   const isActive = status === 'active' && periodEnd && periodEnd.getTime() > Date.now();
 
   if (isActive) {
-    badge.textContent = 'Active';
+    const comped = _profile.membership_source === 'admin_grant';
+    badge.textContent = comped ? 'Complimentary' : 'Active';
     badge.className = 'account-section-badge badge-verified';
-    body.innerHTML = `
+    body.innerHTML = comped
+      ? `
+      <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
+        An MCA admin gave you a complimentary membership — there's nothing to pay and nothing to renew. This unlocks the Minecraft server and the member-only pages of the site.
+      </p>`
+      : `
       <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
         Your membership renews on <strong>${escapeHtml(periodEnd.toLocaleDateString())}</strong>. This unlocks the Minecraft server and the member-only pages of the site.
       </p>
-      <a class="btn btn-outline" href="shop.html" style="text-decoration:none;display:inline-block;">Manage in Shop</a>`;
+      <button class="btn btn-outline" type="button" onclick="openBillingPortal(this)">Manage Billing</button>`;
   } else if (status === 'past_due') {
     badge.textContent = 'Payment Issue';
     badge.className = 'account-section-badge badge-pending';
@@ -972,7 +994,7 @@ function renderMembership() {
       <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
         We couldn't process your last membership payment. Server and member-page access may be paused until this is resolved.
       </p>
-      <a class="btn btn-primary" href="shop.html" style="text-decoration:none;display:inline-block;">Update Payment</a>`;
+      <button class="btn btn-primary" type="button" onclick="openBillingPortal(this)">Update Payment</button>`;
   } else {
     badge.textContent = status === 'canceled' ? 'Canceled' : 'Not a Member';
     badge.className = 'account-section-badge badge-unlinked';
@@ -983,6 +1005,20 @@ function renderMembership() {
       <a class="btn btn-primary" href="shop.html" style="text-decoration:none;display:inline-block;">Join Now — $12/yr</a>`;
   }
 }
+
+// Cancelling, changing a card or fetching an invoice all happen in the
+// Stripe-hosted billing portal — the site never handles card details. Until
+// this existed there was no self-serve way to cancel a subscription at all.
+window.openBillingPortal = async (btn) => {
+  const prev = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Opening…'; }
+  try {
+    window.location.href = await createBillingPortalSession('account.html');
+  } catch (err) {
+    alert(err.message || 'Could not open the billing portal.');
+    if (btn) { btn.disabled = false; btn.textContent = prev; }
+  }
+};
 
 // ── Order history ────────────────────────────────────────────
 async function loadOrderHistory() {

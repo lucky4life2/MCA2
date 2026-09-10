@@ -38,9 +38,19 @@ public class MembershipGateListener implements Listener {
         SupabaseClient.MembershipStatus status;
         try {
             status = supabase.findMembershipStatusByUuid(uuid.toString());
-        } catch (Exception e) {
+        } catch (SupabaseClient.MembershipLookupException e) {
+            // The lookup itself failed — Supabase is down or unreachable.
+            // That is not the same as "this player has no membership", and
+            // used to be reported to the player as "go buy a membership".
+            // The gate protects paid access, so the default is still to
+            // refuse, but with an honest message and a config switch for
+            // admins who would rather keep the server open through an
+            // outage than lock out everyone who has paid.
             plugin.getLogger().log(Level.WARNING, "Membership check failed for " + uuid, e);
-            status = null;
+            if (plugin.denyOnMembershipLookupError()) {
+                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, plugin.msg("membership_check_unavailable"));
+            }
+            return;
         }
 
         // No linked profile at all, or a profile that isn't an active member:

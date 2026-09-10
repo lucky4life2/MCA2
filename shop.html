@@ -263,10 +263,21 @@
 
 
 <script type="module">
-  import { supabase, signOut, hasPermission, createCheckoutSession } from './supabase.js';
+  import { supabase, signOut, hasPermission, createCheckoutSession, createBillingPortalSession, getMembership } from './supabase.js';
 
   let _isAdmin = false, _isLoggedIn = false, _userId = null, _initialized = false;
   let _products = [];
+  // Membership state for the signed-in user, or null when signed out /
+  // not yet loaded. The storefront needs it to stop an existing member
+  // from starting a second subscription: the checkout function rejects
+  // that server-side, but only after the member has clicked through to a
+  // checkout that was never going to work.
+  let _membership = null;
+  // The ?checkout= banner must fire once per page load. init() runs again
+  // on every auth event (INITIAL_SESSION lands right after _mcaAuthReady
+  // resolves, and TOKEN_REFRESHED later), which used to re-alert and
+  // re-clear the cart each time.
+  let _checkoutNoticeShown = false;
 
   // Product text is admin-supplied but still untrusted at render time: every
   // field below lands in innerHTML, and several land inside quoted attributes.
@@ -310,14 +321,48 @@
   // a bare price with no cadence at all.
   function billingPeriod(cycle) { return BILLING_PERIODS[cycle] || BILLING_PERIODS.monthly; }
   function isSubscription(x) { return !!x && x.product_type === 'subscription'; }
+  // A subscription is one seat: Stripe is sent quantity 1 no matter what
+  // the cart says, so letting the cart show 2 only misprices the subtotal.
+  function maxQty(x) { return isSubscription(x) ? 1 : 99; }
   function priceLabel(x) {
     const amount = '$' + Number(x.price).toFixed(2);
     return isSubscription(x) ? amount + billingPeriod(x.billing_cycle).short : amount;
   }
 
+  // How a subscription product should present itself to the signed-in
+  // viewer. An existing member cannot buy a second seat (the checkout
+  // function refuses it), and someone whose payment failed needs the
+  // billing portal, not a fresh subscription.
+  function subscriptionState() {
+    if (!_membership) return 'none';
+    if (_membership.isActive) return _membership.source === 'admin_grant' ? 'comped' : 'active';
+    if (_membership.status === 'past_due') return 'past_due';
+    return 'none';
+  }
+
+  window.openBillingPortal = async (btn) => {
+    const prev = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Opening…'; }
+    try {
+      window.location.href = await createBillingPortalSession('shop.html');
+    } catch (err) {
+      alert(err.message || 'Could not open the billing portal.');
+      if (btn) { btn.disabled = false; btn.textContent = prev; }
+    }
+  };
+
   // ── Cart
   function cartKey() { return 'mca_cart_' + _userId; }
-  function getCart() { if (!_userId) return []; try { return JSON.parse(localStorage.getItem(cartKey())) || []; } catch(e) { return []; } }
+  function getCart() {
+    if (!_userId) return [];
+    let items;
+    try { items = JSON.parse(localStorage.getItem(cartKey())) || []; } catch(e) { return []; }
+    if (!Array.isArray(items)) return [];
+    // Normalise on read so a cart saved before the one-seat rule (or hand
+    // edited in localStorage) can't show a subtotal the checkout won't
+    // charge — Stripe is sent quantity 1 for a subscription regardless.
+    return items.map(i => ({ ...i, qty: Math.min(maxQty(i), Math.max(1, Math.floor(Number(i.qty) || 1))) }));
+  }
   function saveCart(items) {
     if (!_userId) return;
     localStorage.setItem(cartKey(), JSON.stringify(items));
@@ -325,14 +370,34 @@
     if (window._mcaUpdateCartBadge) window._mcaUpdateCartBadge();
   }
   function addToCart(product) {
-    const items = getCart(), ex = items.find(i => i.id === product.id);
-    if (ex) { ex.qty = (ex.qty || 1) + 1; } else { items.push({...product, qty: 1}); }
+    const items = getCart();
+    // Stripe bills one Checkout Session as either a subscription or a
+    // one-off payment, never both, and the checkout function rejects a
+    // mixed cart. Catch it at the point of the click instead of at the
+    // end of checkout, where the cart is already full.
+    const mixing = isSubscription(product)
+      ? items.some(i => !isSubscription(i))
+      : items.some(i => isSubscription(i));
+    if (mixing) {
+      alert(isSubscription(product)
+        ? 'Membership has to be checked out on its own. Empty your cart (or check out first), then subscribe.'
+        : 'Your cart has a membership in it, and membership is checked out on its own. Check out the membership first, then add shop items.');
+      return;
+    }
+    if (isSubscription(product) && items.some(i => isSubscription(i))) {
+      alert('Only one subscription can be checked out at a time.');
+      return;
+    }
+    const ex = items.find(i => i.id === product.id);
+    if (ex) { ex.qty = Math.min(maxQty(ex), (ex.qty || 1) + 1); }
+    else { items.push({...product, qty: 1}); }
     saveCart(items); renderCartDrawer(); openCartDrawer();
   }
   function removeFromCart(id) { saveCart(getCart().filter(i => i.id !== id)); renderCartDrawer(); }
   function changeQty(id, d) {
     const items = getCart(), item = items.find(i => i.id === id);
-    if (!item) return; item.qty = Math.max(1, (item.qty || 1) + d);
+    if (!item) return;
+    item.qty = Math.min(maxQty(item), Math.max(1, (item.qty || 1) + d));
     saveCart(items); renderCartDrawer();
   }
   window.cartQty    = (id, d) => changeQty(id, d);
@@ -388,7 +453,7 @@
   function renderCartDrawer() {
     const items = getCart();
     if (!items.length) { elCartBody.innerHTML = '<div class="cart-empty"><div class="cart-empty-icon">🛒</div><p>Your cart is empty.</p></div>'; elCartFooter.style.display = 'none'; return; }
-    const sub = items.reduce((s, i) => s + (i.price * (i.qty || 1)), 0);
+    const sub = items.reduce((s, i) => s + (Number(i.price) || 0) * Math.min(maxQty(i), i.qty || 1), 0);
     elCartBody.innerHTML = items.map(i => `
       <div class="cart-item">
         ${safeUrl(i.image_url) ? `<img class="cart-item-img" src="${esc(safeUrl(i.image_url))}" alt="${esc(i.name)}">` : `<div class="cart-item-img-placeholder"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></div>`}
@@ -396,9 +461,10 @@
           <div class="cart-item-name">${esc(i.name)}</div>
           <div class="cart-item-price">${isSubscription(i) ? priceLabel(i) : priceLabel(i) + ' each'}</div>
           <div class="cart-item-controls">
+            ${isSubscription(i) ? '' : `
             <button class="cart-qty-btn" type="button" aria-label="Decrease quantity" onclick="cartQty('${esc(i.id)}',-1)">−</button>
             <span class="cart-qty">${i.qty || 1}</span>
-            <button class="cart-qty-btn" type="button" aria-label="Increase quantity" onclick="cartQty('${esc(i.id)}',1)">+</button>
+            <button class="cart-qty-btn" type="button" aria-label="Increase quantity" onclick="cartQty('${esc(i.id)}',1)">+</button>`}
             <button class="cart-item-remove" type="button" onclick="cartRemove('${esc(i.id)}')">Remove</button>
           </div>
         </div>
@@ -426,9 +492,18 @@
       if (_isLoggedIn) {
         const prod = esc(JSON.stringify({id:p.id,name:p.name,price:p.price,image_url:p.image_url||null,product_type:p.product_type||null,billing_cycle:p.billing_cycle||null}));
         const isSubDetail = p.product_type === 'subscription';
+        const subState = isSubDetail ? subscriptionState() : 'none';
         const isOOSDetail = !isSubDetail && p.inventory === 0;
-        const detailLabel = isSubDetail ? 'Subscribe' : (isOOSDetail ? 'Out of Stock' : 'Add to Cart');
-        cartBtn = `<button class="btn-detail-cart" ${isOOSDetail?'disabled':''} onclick='shopAddToCart(${prod});closeDetail();'>${detailLabel}</button>`;
+        if (subState === 'active') {
+          cartBtn = `<button class="btn-detail-cart" onclick="openBillingPortal(this)">Manage Membership</button>`;
+        } else if (subState === 'comped') {
+          cartBtn = `<button class="btn-detail-cart" disabled>Membership Included</button>`;
+        } else if (subState === 'past_due') {
+          cartBtn = `<button class="btn-detail-cart" onclick="openBillingPortal(this)">Update Payment</button>`;
+        } else {
+          const detailLabel = isSubDetail ? 'Subscribe' : (isOOSDetail ? 'Out of Stock' : 'Add to Cart');
+          cartBtn = `<button class="btn-detail-cart" ${isOOSDetail?'disabled':''} onclick='shopAddToCart(${prod});closeDetail();'>${detailLabel}</button>`;
+        }
       } else {
         cartBtn = `<a class="btn-detail-cart sign-in" href="login.html?return=shop.html">Sign In to Add to Cart</a>`;
       }
@@ -479,7 +554,8 @@
     const url = window._detailGallery?.[i];
     if (!url) return;
     const mainImg = document.getElementById('detail-modal-main-img');
-    if (mainImg) mainImg.src = url;
+    const safe = safeUrl(url);
+    if (mainImg && safe) mainImg.src = safe;
     document.querySelectorAll('.detail-modal-thumbs img').forEach((el, j) => {
       el.style.borderColor = j === i ? 'var(--blue)' : 'transparent';
     });
@@ -502,14 +578,21 @@
     _isLoggedIn = !!user; _userId = user?.id || null;
     _isAdmin = !!isAdmin;
     elLoading.style.display = 'none'; elShop.style.display = 'block';
-    loadProducts(); updateFloatCart();
+    updateFloatCart();
     applyState();
-    if (_checkoutReturn === 'success' && _userId) {
+    if (_checkoutReturn === 'success' && _userId && !_checkoutNoticeShown) {
+      _checkoutNoticeShown = true;
       saveCart([]);
       alert('Payment received! Your order or membership is now active — it may take a minute to update on your account page.');
-    } else if (_checkoutReturn === 'cancel') {
+    } else if (_checkoutReturn === 'cancel' && !_checkoutNoticeShown) {
+      _checkoutNoticeShown = true;
       alert('Checkout was canceled — your cart is still here whenever you\'re ready.');
     }
+    // Membership state decides how the membership product is rendered, so
+    // it is resolved before the grid is drawn rather than after.
+    try { _membership = await withTimeout(getMembership(), 6000); }
+    catch (e) { _membership = null; }
+    loadProducts();
   }
 
   // Show the shop immediately in a signed-out state — no spinner wait.
@@ -548,7 +631,7 @@
       _initialized = true;
       await init(session.user, session.access_token || null, isAdmin);
     } else if (event === 'SIGNED_OUT') {
-      _initialized = false; _isAdmin = false; _isLoggedIn = false; _userId = null;
+      _initialized = false; _isAdmin = false; _isLoggedIn = false; _userId = null; _membership = null;
       elLoading.style.display = 'none'; elShop.style.display = 'block';
       applyState(); loadProducts(); updateFloatCart();
     }
@@ -580,9 +663,19 @@
       if (cartAllowed) {
         if (_isLoggedIn) {
           const prod = esc(JSON.stringify({id:p.id,name:p.name,price:p.price,image_url:p.image_url||null,product_type:p.product_type||null,billing_cycle:p.billing_cycle||null}));
-          const isOutOfStock = p.product_type !== 'subscription' && p.inventory === 0;
-          const btnLabel = p.product_type === 'subscription' ? 'Subscribe' : (isOutOfStock ? 'Out of Stock' : 'Add to Cart');
-          cartBtn = `<button class="btn-add-to-cart" ${isOutOfStock?'disabled':''} onclick='event.stopPropagation();shopAddToCart(${prod})'>${btnLabel}</button>`;
+          const isSub = p.product_type === 'subscription';
+          const subState = isSub ? subscriptionState() : 'none';
+          const isOutOfStock = !isSub && p.inventory === 0;
+          if (subState === 'active') {
+            cartBtn = `<button class="btn-add-to-cart" onclick="event.stopPropagation();openBillingPortal(this)">Manage Membership</button>`;
+          } else if (subState === 'comped') {
+            cartBtn = `<button class="btn-add-to-cart" disabled onclick="event.stopPropagation()">Membership Included</button>`;
+          } else if (subState === 'past_due') {
+            cartBtn = `<button class="btn-add-to-cart" onclick="event.stopPropagation();openBillingPortal(this)">Update Payment</button>`;
+          } else {
+            const btnLabel = isSub ? 'Subscribe' : (isOutOfStock ? 'Out of Stock' : 'Add to Cart');
+            cartBtn = `<button class="btn-add-to-cart" ${isOutOfStock?'disabled':''} onclick='event.stopPropagation();shopAddToCart(${prod})'>${btnLabel}</button>`;
+          }
         } else {
           cartBtn = `<a class="btn-add-to-cart sign-in-prompt" href="login.html?return=shop.html" onclick="event.stopPropagation()">Sign In to Add to Cart</a>`;
         }
