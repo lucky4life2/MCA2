@@ -343,7 +343,7 @@ Regular paragraph text.
 <div id="np-toast"></div>
 
 <script type="module">
-import { supabase, getMyRolePreview } from './supabase.js';
+import { supabase, getMyRolePreview, requireAal2 } from './supabase.js';
 
 // Article metadata is author-supplied and rendered through innerHTML below.
 function esc(s) {
@@ -415,6 +415,7 @@ function toast(msg, isError = false) {
 async function init() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user) { showState('denied'); return; }
+  if (!(await requireAal2('news-publish.html'))) return;
   _user = session.user;
 
   // Check access via the server-side permission RPC only. A failed or

@@ -324,7 +324,7 @@
 
 <script type="module" src="nav.js"></script>
 <script type="module">
-import { supabase, getMyRolePreview } from './supabase.js';
+import { supabase, getMyRolePreview, requireAal2 } from './supabase.js';
 
 // ── Tag / status / color system ─────────────────────────────────
 // A task's tag IS its status and its color — one field, no overrides.
@@ -450,6 +450,7 @@ function applyAccessUI() {
 async function init() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user) return show('denied');
+  if (!(await requireAal2('tasks.html'))) return;
   _me = session.user;
   _access = await resolveAccess(_me.id);
   if (!_access.manage && !_access.checkoff && !_access.test) return show('denied');

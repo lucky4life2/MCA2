@@ -454,17 +454,15 @@
   // to show the MFA panel to satisfy the AAL2 requirement.
   const { data: { session } } = await supabase.auth.getSession();
   if (session) {
-    if (params.get('mfa') === '1') {
-      // Check if MFA is actually still needed; if it's already satisfied, just redirect.
-      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-      if (!aal || aal.currentLevel === aal.nextLevel) {
-        // Already at required level — nothing to do.
-        finishLogin(returnTo);
-      }
-      // Otherwise fall through: the MFA panel will be shown below after init.
-    } else {
+    // Always check AAL regardless of the mfa=1 param — a plain revisit/bookmark
+    // of login.html with only an AAL1 session (2FA enrolled but not yet
+    // verified this session) must not skip straight to returnTo.
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (!aal || aal.currentLevel === aal.nextLevel) {
+      // Already at required level — nothing to do.
       finishLogin(returnTo);
     }
+    // Otherwise fall through: the MFA panel will be shown below after init.
   }
 
   // Pending email addresses for the code-entry steps below
