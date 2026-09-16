@@ -337,7 +337,11 @@ function isDoneTask(t) { return !!tagById(t.tag_id)?.is_done; }
 function isCheckoffTask(t) { return !!tagById(t.tag_id)?.is_checkoff; }
 function contrastText(hex) {
   if (!hex) return '#111';
-  const h = hex.replace('#', '');
+  let h = hex.replace('#', '');
+  // safeColor() accepts 3-digit hex, but substring(4,6) on "abc" is empty ->
+  // NaN luminance -> always white text, unreadable on a light tag. Expand the
+  // shorthand first.
+  if (h.length === 3) h = h[0]+h[0] + h[1]+h[1] + h[2]+h[2];
   const r = parseInt(h.substring(0,2),16), g = parseInt(h.substring(2,4),16), b = parseInt(h.substring(4,6),16);
   const yiq = (r*299 + g*587 + b*114) / 1000;
   return yiq >= 150 ? '#111111' : '#ffffff';
@@ -830,12 +834,18 @@ async function saveTagEdit(id, name, color) {
   render();
 }
 
-// Delete a tag from the task modal's picker — removes it from the tag list,
-// the current filter, and every task's tag_id, same as the Manage Tags
-// modal's delete action.
+// Delete a tag from the task modal's picker — removes it from the tag list
+// and the current filter. tasks.tag_id references task_tags with ON DELETE NO
+// ACTION, so Postgres refuses the delete while any task still carries the tag
+// (this function never rewrote tasks.tag_id, despite what it used to claim).
 async function deleteTagEverywhere(id) {
   const { error } = await supabase.from('task_tags').delete().eq('id', id);
-  if (error) { alert(error.message); return; }
+  if (error) {
+    alert(/foreign key|violates/i.test(error.message || '')
+      ? 'That status is still assigned to one or more tasks. Move those tasks to another status first, then delete it.'
+      : error.message);
+    return;
+  }
   _tags = _tags.filter(t => t.id !== id);
   _tagFilter.delete(id);
   if (_editingTag === id) _editingTag = null;
@@ -1317,7 +1327,10 @@ document.getElementById('tk-comment-add').onclick = async () => {
   const input = document.getElementById('tk-comment-input');
   const body = input.value.trim();
   if (!body || !taskId) return;
-  await supabase.from('task_comments').insert({ task_id: taskId, author_id: _me.id, body });
+  // The result used to be ignored and the box cleared unconditionally, so an
+  // RLS or network failure silently threw away whatever the user had typed.
+  const { error } = await supabase.from('task_comments').insert({ task_id: taskId, author_id: _me.id, body });
+  if (error) { alert('Could not post that comment: ' + error.message); return; }
   input.value = '';
   loadComments(taskId);
 };

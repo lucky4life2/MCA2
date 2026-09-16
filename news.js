@@ -30,7 +30,9 @@ function renderMarkdown(md) {
     .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
     .replace(/\*\*(.+?)\*\*/g,     '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g,         '<em>$1</em>')
-    .replace(/_(.+?)_/g,           '<em>$1</em>')
+    // Intraword underscores stay literal (snake_case, file_name.yml), matching
+    // CommonMark — `_(.+?)_` used to eat them and italicise the middle.
+    .replace(/(^|[^A-Za-z0-9_])_([^_\n]+)_(?![A-Za-z0-9_])/g, '$1<em>$2</em>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     // Images must be matched before links: `![alt](url)` also matches the
     // link pattern, so running links first turned every markdown image into

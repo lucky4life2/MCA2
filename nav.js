@@ -224,11 +224,30 @@ window._mcaAuthReady = new Promise(r => { _mcaAuthResolve = r; });
   document.documentElement.style.visibility = 'hidden';
 })();
 
+// `fetch` rejects on a *failed* connection but not on a stalled one — a
+// captive portal, blackholed DNS or a hanging Supabase can leave it pending
+// for minutes. Both gate checks below run before the page is made visible
+// again, so without an explicit timeout a stalled connection meant a blank
+// white page site-wide, not the documented fail-open.
+function _fetchWithTimeout(url, opts, ms = 6000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+}
+
+// Last-resort failsafe: whatever happens above, the page must never stay
+// invisible. The two gate fetches run in sequence at 6s each, so 14s sits
+// past their combined worst case — this only fires if something entirely
+// unforeseen stalls the chain.
+const _visibilityFailsafe = setTimeout(() => {
+  document.documentElement.style.visibility = '';
+}, 14000);
+
 const _systemLockdownCheck = (async function checkSystemLockdown() {
   const SUPABASE_URL  = 'https://hjaywokvgdzhvsoygctc.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNzA2NTQsImV4cCI6MjA5NTg0NjY1NH0.nFqlc20iUDwE1sXLRi2Pev181v2RJKx_S6UcTkGgPWU';
   try {
-    const res = await fetch(
+    const res = await _fetchWithTimeout(
       `${SUPABASE_URL}/rest/v1/system_lockdown?select=locked,message&id=eq.1`,
       { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` } }
     );
@@ -236,6 +255,7 @@ const _systemLockdownCheck = (async function checkSystemLockdown() {
       const rows = await res.json();
       if (rows?.[0]?.locked === true) {
         if (window.stop) window.stop();
+        clearTimeout(_visibilityFailsafe);
         document.documentElement.style.visibility = '';
         document.documentElement.innerHTML = `<head><meta charset="utf-8"><title>Unavailable</title></head><body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#05070f;font-family:'Open Sans',sans-serif;padding:2rem;text-align:center;">
           <div>
@@ -297,7 +317,7 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
 
   try {
     // Check lock state from Supabase settings table
-    const res = await fetch(
+    const res = await _fetchWithTimeout(
       `${SUPABASE_URL}/rest/v1/settings?key=eq.site_lock&select=value`,
       {
         headers: {
@@ -617,12 +637,21 @@ async function injectNav() {
 
   // Cookie notice — shown once until dismissed, never on the Cookie Policy
   // page itself (no point disclosing the page you're already reading).
-  if (!localStorage.getItem('mca_cookie_notice_dismissed') && !/\/cookies\.html$/.test(window.location.pathname)) {
+  if (!localStorage.getItem('mca_cookie_notice_dismissed') && !/\/cookies(\.html)?$/.test(window.location.pathname)) {
     document.body.insertAdjacentHTML('beforeend', COOKIE_BANNER_HTML);
     const banner = document.getElementById('cookie-banner');
     banner.hidden = false;
+    // Publish the banner's real height (it wraps to two lines on narrow
+    // screens) so fixed bottom-anchored widgets — the shop's floating cart
+    // button, toasts — can sit above it instead of underneath.
+    const syncBannerHeight = () =>
+      document.documentElement.style.setProperty('--cookie-banner-h', banner.offsetHeight + 'px');
+    syncBannerHeight();
+    window.addEventListener('resize', syncBannerHeight);
     document.getElementById('cookie-banner-dismiss').addEventListener('click', () => {
       localStorage.setItem('mca_cookie_notice_dismissed', '1');
+      window.removeEventListener('resize', syncBannerHeight);
+      document.documentElement.style.removeProperty('--cookie-banner-h');
       banner.remove();
     });
   }

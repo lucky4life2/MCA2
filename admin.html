@@ -1750,7 +1750,7 @@ window.openRolePopup = (event, userId) => {
   function renderItems() {
     return assignableRoles.map(r => {
       const has = stagedRoleIds.has(r.id);
-      return `<div class="role-popup-item" data-role-id="${r.id}" onclick="event.stopPropagation();_toggleStagedRole('${r.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();_toggleStagedRole('${r.id}')}" role="option" aria-selected="${has}" tabindex="0">
+      return `<div class="role-popup-item" data-role-id="${r.id}" onclick="event.stopPropagation();_toggleStagedRole('${r.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();_toggleStagedRole('${r.id}')}" role="checkbox" aria-checked="${has}" tabindex="0">
         <span class="role-popup-dot" style="background:${safeColor(r.color)};"></span>
         <span style="flex:1;">${escapeHtml(r.label)}</span>
         ${has ? `<span class="role-popup-check">✓</span>` : ''}
@@ -2102,7 +2102,25 @@ document.getElementById('btn-new-article').addEventListener('click', () => openN
 document.getElementById('nm2-close').addEventListener('click',  closeNewsModal);
 document.getElementById('nm2-cancel').addEventListener('click', closeNewsModal);
 
+// Double-clicking Publish on a new article used to run the insert twice —
+// two published articles, and notifySubscribers() firing a second email blast
+// to every subscriber. The generated slug carries a timestamp, so there was no
+// unique constraint to fall back on.
+let _savingArticle = false;
+
 async function saveArticle(forceStatus = null) {
+  if (_savingArticle) return;
+  _savingArticle = true;
+  const saveBtns = ['nm2-save-draft', 'nm2-save-publish'].map(x => document.getElementById(x)).filter(Boolean);
+  saveBtns.forEach(b => { b.disabled = true; });
+  try { await saveArticleInner(forceStatus); }
+  finally {
+    _savingArticle = false;
+    saveBtns.forEach(b => { b.disabled = false; });
+  }
+}
+
+async function saveArticleInner(forceStatus) {
   const id      = document.getElementById('nm2-id').value;
   const title   = document.getElementById('nm2-title-input').value.trim();
   const errEl   = document.getElementById('nm2-error');
@@ -2203,13 +2221,17 @@ window.publishArticle = async (id) => {
 };
 window.approveArticle = window.publishArticle; // same action, different entry point
 window.rejectArticle = async (id) => {
-  const reason = prompt("Optional note for the author on why this was sent back (leave blank to skip):") || null;
+  // This prompt is the only gate on rejecting — there is no preceding
+  // confirm() — so Cancel has to abort. `|| null` swallowed the null and sent
+  // the article back to draft anyway, with no way to back out once clicked.
+  const reason = prompt("Send this article back to the author? Optional note on why (leave blank to skip):", '');
+  if (reason === null) return;
   const { data: { user } } = await supabase.auth.getUser();
   await supabase.from('news_articles').update({
     status: 'draft',
     reviewed_by: user.id,
     reviewed_at: new Date().toISOString(),
-    rejection_note: reason,
+    rejection_note: reason || null,
   }).eq('id', id);
   loadNewsAdmin();
   loadPendingNewsCount();
@@ -2961,7 +2983,10 @@ async function pmUploadPendingImages(productIdHint) {
 function openProductModal(product = null) {
   ['id','name','desc','price','inventory','category','weight','dimensions','material','sizes','colors','sku','notes'].forEach(k => {
     const el = document.getElementById('pm-'+k);
-    if (el) el.value = product?.[k === 'desc' ? 'description' : k === 'notes' ? 'admin_notes' : k] || '';
+    // `??`, not `||`: a price of 0 (free) or inventory of 0 (out of stock) are
+    // legitimate stored values, and `||` blanked the field so saving an
+    // otherwise-untouched product failed with "price/inventory is required".
+    if (el) el.value = product?.[k === 'desc' ? 'description' : k === 'notes' ? 'admin_notes' : k] ?? '';
   });
   document.getElementById('pm-product-type').value = product?.product_type || 'physical';
   document.getElementById('pm-billing-cycle').value = product?.billing_cycle || 'monthly';
@@ -3164,7 +3189,7 @@ function renderOwnerDropdownList() {
   const list = document.getElementById('nm-owner-dropdown-list');
   const matches = _allMembers.filter(m => !q || (m.display_name || '').toLowerCase().includes(q) || (m.username || '').toLowerCase().includes(q));
   list.innerHTML = matches.length
-    ? matches.map(m => `<div onclick="toggleNationOwner('${m.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleNationOwner('${m.id}')}" role="option" aria-selected="${_nmOwnerIds.includes(m.id)}" tabindex="0" style="padding:8px 10px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px;" onmouseover="this.style.background='var(--bg-alt,#f5f7fa)'" onmouseout="this.style.background=''"><input type="checkbox" ${_nmOwnerIds.includes(m.id) ? 'checked' : ''} style="pointer-events:none;">${m.display_name || m.username}${m.username && m.display_name ? ' <span style="color:var(--muted);">@'+m.username+'</span>' : ''}</div>`).join('')
+    ? matches.map(m => `<div onclick="toggleNationOwner('${m.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleNationOwner('${m.id}')}" role="checkbox" aria-checked="${_nmOwnerIds.includes(m.id)}" tabindex="0" style="padding:8px 10px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px;" onmouseover="this.style.background='var(--bg-alt,#f5f7fa)'" onmouseout="this.style.background=''"><input type="checkbox" tabindex="-1" aria-hidden="true" ${_nmOwnerIds.includes(m.id) ? 'checked' : ''} style="pointer-events:none;">${m.display_name || m.username}${m.username && m.display_name ? ' <span style="color:var(--muted);">@'+m.username+'</span>' : ''}</div>`).join('')
     : '<div style="padding:8px 10px;font-size:13px;color:var(--muted);">No matches</div>';
 }
 window.toggleNationOwner = (id) => {
@@ -4070,7 +4095,7 @@ async function renderAuditLog() {
     const actorType = r.actor_type || 'system';
     const hasDetail = r.old_data || r.new_data;
     return `<div class="audit-row">
-      <div class="audit-row-top" ${hasDetail ? `onclick="toggleAuditDetail(${idx})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAuditDetail(${idx})}" role="button" tabindex="0"` : ''}>
+      <div class="audit-row-top" ${hasDetail ? `onclick="toggleAuditDetail(${idx})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAuditDetail(${idx})}" role="button" tabindex="0" aria-expanded="false" aria-controls="audit-detail-${idx}"` : ''}>
         <div class="audit-row-main">
           <div class="audit-summary">
             <span class="audit-actor-badge audit-actor-${escapeHtml(actorType)}">${escapeHtml(actorType)}</span><span class="audit-action-badge audit-action-${escapeHtml(r.action)}">${escapeHtml(r.action)}</span>${escapeHtml(r.summary || auditTableLabel(r.table_name))}
@@ -4093,6 +4118,8 @@ function toggleAuditDetail(idx) {
   if (!detail) return;
   const open = detail.classList.toggle('open');
   if (toggle) toggle.textContent = open ? 'Details ▴' : 'Details ▾';
+  const row = detail.previousElementSibling;
+  if (row && row.hasAttribute('aria-expanded')) row.setAttribute('aria-expanded', String(open));
 }
 window.toggleAuditDetail = toggleAuditDetail;
 

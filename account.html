@@ -947,6 +947,15 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// `_` is legal in both site and Minecraft usernames and is also LIKE's
+// single-character wildcard, so an unescaped ilike "is this taken?" check
+// matched unrelated accounts — wrongly rejecting a free username, or (when
+// the wildcard matched 2+ rows) making maybeSingle() return null and letting
+// a genuine duplicate through.
+function likeEscape(value) {
+  return String(value == null ? '' : value).replace(/([\\%_])/g, '\\$1');
+}
+
 // ── Membership ───────────────────────────────────────────────
 function renderMembership() {
   const badge = document.getElementById('membership-badge');
@@ -954,15 +963,22 @@ function renderMembership() {
   if (!badge || !body) return;
 
   const status = _profile.membership_status || 'none';
-  const periodEnd = _profile.membership_current_period_end ? new Date(_profile.membership_current_period_end) : null;
-  const isActive = status === 'active' && periodEnd && periodEnd.getTime() > Date.now();
+  const rawPeriodEnd = _profile.membership_current_period_end ? new Date(_profile.membership_current_period_end) : null;
+  // Only trust the date if it actually parsed — an unparseable value used to
+  // make NaN > now false.
+  const periodEnd = rawPeriodEnd && !isNaN(rawPeriodEnd.getTime()) ? rawPeriodEnd : null;
+  // Membership state follows the Stripe-synced status, not the date: a null or
+  // briefly-stale period end (webhook lag right after a renewal) used to drop
+  // a paying member into the "Not a Member — Join Now" branch, from where they
+  // could buy a second subscription.
+  const isActive = status === 'active' || status === 'trialing';
 
   if (isActive) {
     badge.textContent = 'Active';
     badge.className = 'account-section-badge badge-verified';
     body.innerHTML = `
       <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
-        Your membership renews on <strong>${escapeHtml(periodEnd.toLocaleDateString())}</strong>. This unlocks the Minecraft server and the member-only pages of the site.
+        ${periodEnd ? `Your membership renews on <strong>${escapeHtml(periodEnd.toLocaleDateString())}</strong>. ` : ''}This unlocks the Minecraft server and the member-only pages of the site.
       </p>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <a class="btn btn-outline" href="shop.html" style="text-decoration:none;display:inline-block;">Manage in Shop</a>
@@ -981,7 +997,13 @@ function renderMembership() {
   } else {
     badge.textContent = status === 'canceled' ? 'Canceled' : 'Not a Member';
     badge.className = 'account-section-badge badge-unlinked';
+    // A just-cancelled member keeps access to the end of the period they paid
+    // for — saying nothing here read as though it had been cut off immediately.
+    const stillCovered = status === 'canceled' && periodEnd && periodEnd.getTime() > Date.now();
     body.innerHTML = `
+      ${stillCovered ? `<p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
+        Your membership is cancelled and won't renew, but you keep access until <strong>${escapeHtml(periodEnd.toLocaleDateString())}</strong>.
+      </p>` : ''}
       <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
         Membership is $12/year and is required to join the Minecraft server and access member-only pages.
       </p>
@@ -1000,7 +1022,13 @@ async function loadOrderHistory() {
     .order('created_at', { ascending: false })
     .limit(25);
 
-  if (error || !data || !data.length) {
+  // An RLS or network failure used to render as "No orders yet", telling a
+  // paying member their order history was empty.
+  if (error) {
+    body.innerHTML = '<div class="orders-empty"><div class="orders-empty-icon">⚠️</div><p>Could not load your orders just now. Please refresh to try again.</p></div>';
+    return;
+  }
+  if (!data || !data.length) {
     body.innerHTML = '<div class="orders-empty"><div class="orders-empty-icon">📦</div><p>No orders yet.</p></div>';
     return;
   }
@@ -1586,7 +1614,7 @@ function renderMinecraft() {
     const { data: existing } = await supabase
       .from('profiles')
       .select('id')
-      .ilike('minecraft_username', username)
+      .ilike('minecraft_username', likeEscape(username))
       .neq('id', _user.id)
       .maybeSingle();
     if (existing) {
@@ -1898,7 +1926,7 @@ document.getElementById('btn-save-profile').addEventListener('click', async () =
   // Check for duplicate username (only if changed)
   if (username && username !== _profile.username) {
     const { data: existing } = await supabase
-      .from('profiles').select('id').ilike('username', username).neq('id', _user.id).maybeSingle();
+      .from('profiles').select('id').ilike('username', likeEscape(username)).neq('id', _user.id).maybeSingle();
     if (existing) {
       errEl.textContent = `"${username}" is already taken. Please choose a different username.`;
       errEl.style.display = 'block'; return;

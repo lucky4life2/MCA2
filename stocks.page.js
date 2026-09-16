@@ -4,7 +4,7 @@ import {
   showError, showSuccess, clearMessages, confirmAction, newToken, previewOrder,
   loadMyAccounts, loadExchangeSettings, loadCompanies, loadMarketSummary,
   loadOrderBook, loadRecentTrades, loadMyOrders, loadMyHoldings,
-  loadOpenOfferings, loadMyCompanyRoles
+  loadOpenOfferings, loadMyCompanyRoles, likeEscape
 } from './economy.js';
 
 const view = document.getElementById('view');
@@ -961,7 +961,17 @@ function dividendPanel() {
     '</div></div>';
 }
 
+// Without this guard a double-click proposed and paid two separate dividends —
+// real Marks leaving the company account twice for one action. The button
+// stays disabled across the confirm dialog too.
 async function proposeDividend(c) {
+  const divBtn = document.getElementById('btn-propose-dividend');
+  if (divBtn) { if (divBtn.disabled) return; divBtn.disabled = true; }
+  try { await proposeDividendInner(c); }
+  finally { if (divBtn) divBtn.disabled = false; }
+}
+
+async function proposeDividendInner(c) {
   const errEl = document.getElementById('div-err');
   const okEl = document.getElementById('div-ok');
   clearMessages(errEl, okEl);
@@ -973,6 +983,10 @@ async function proposeDividend(c) {
     p_company_id: c.id, p_total_amount: amount, p_note: note
   });
   if (error) { showError(errEl, error); return; }
+  // Sibling call sites guard this the same way — a rowset-returning RPC makes
+  // a bare `data.id` undefined, which then fails the pay step.
+  const dividend = Array.isArray(data) ? data[0] : data;
+  if (!dividend?.id) { showError(errEl, { message: 'Could not create the dividend.' }); return; }
 
   const ok = await confirmAction({
     title: 'Pay this dividend now?',
@@ -985,7 +999,7 @@ async function proposeDividend(c) {
   });
   if (!ok) { showSuccess(okEl, 'Dividend proposed but not paid.'); return; }
 
-  const { error: payErr } = await supabase.rpc('economy_pay_dividend', { p_dividend_id: data.id });
+  const { error: payErr } = await supabase.rpc('economy_pay_dividend', { p_dividend_id: dividend.id });
   if (payErr) { showError(errEl, payErr); return; }
   showSuccess(okEl, 'Dividend paid.');
 }
@@ -1035,8 +1049,12 @@ async function addOfficer(c) {
   if (!username) { showError(errEl, { message: 'Enter a username.' }); return; }
 
   const { data: profile } = await supabase.from('public_profiles')
-    .select('id,username').ilike('username', username).limit(1).maybeSingle();
-  if (!profile) { showError(errEl, { message: 'No player called "' + username + '".' }); return; }
+    .select('id,username').ilike('username', likeEscape(username)).limit(1).maybeSingle();
+  // Exact-match guard on top of the escaping — granting officer powers to the
+  // wrong account is not something a wildcard should ever be able to cause.
+  if (!profile || String(profile.username || '').toLowerCase() !== username.toLowerCase()) {
+    showError(errEl, { message: 'No player called "' + username + '".' }); return;
+  }
 
   const { error } = await supabase.rpc('economy_add_company_member', {
     p_company_id: c.id, p_user_id: profile.id,

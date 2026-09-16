@@ -773,7 +773,7 @@ footer {
 
 /* ── TOAST ── */
 .toast {
-  position: fixed; bottom: 2rem; left: 50%;
+  position: fixed; bottom: calc(2rem + var(--cookie-banner-h, 0px)); left: 50%;
   transform: translateX(-50%) translateY(10px);
   background: var(--blue); color: white; font-size: 13px; font-weight: 500;
   padding: 10px 22px; border-radius: 4px; opacity: 0; pointer-events: none;
@@ -782,8 +782,12 @@ footer {
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* ── COOKIE NOTICE BANNER ───────────────────────────────────── */
+/* z-index sits above page content but below drawers (300/301), modals (400+)
+   and the site-lock overlay (9000+), so it can never cover their controls.
+   While visible it publishes its own height as --cookie-banner-h (set in
+   nav.js) so bottom-anchored widgets can shift clear of it. */
 .cookie-banner {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 9998;
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 250;
   display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px;
   background: var(--white); border-top: 1px solid var(--border);
   padding: 14px 20px; box-shadow: 0 -4px 16px rgba(0,0,0,0.08);
