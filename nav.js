@@ -168,11 +168,14 @@ const FOOTER_HTML = () => {
         <div class="footer-col-title">Legal</div>
         <a href="privacy.html">Privacy Policy</a>
         <a href="terms.html">Terms of Service</a>
+        <a href="cookies.html">Cookie Policy</a>
+        <a href="refund.html">Refund Policy</a>
       </div>
     </div>
 
   </div>
   <div class="footer-disclaimer">
+    Minecraft Club of America is a volunteer-run, non-commercial community club.
     Not affiliated with, endorsed by, or associated with Mojang Studios or Microsoft.
     Minecraft is a trademark of Mojang Studios.
     <span class="footer-version">v2.5.67</span>
@@ -183,6 +186,14 @@ const FOOTER_HTML = () => {
 const TOAST_HTML = `<div class="toast" id="toast" role="status" aria-live="polite">Address copied to clipboard</div>`;
 
 const PROGRESS_HTML = `<div class="scroll-progress" id="scroll-progress"></div>`;
+
+// Informational only — we don't use advertising/analytics cookies, so there's
+// nothing to gate behind an opt-in. This just discloses the strictly-necessary
+// browser storage we do use (sign-in, theme, cart) and links the full policy.
+const COOKIE_BANNER_HTML = `<div class="cookie-banner" id="cookie-banner" role="region" aria-label="Cookie notice" hidden>
+  <p class="cookie-banner-text">We use strictly necessary browser storage to keep you signed in and remember your preferences — never for advertising or tracking. See our <a href="cookies.html">Cookie Policy</a>.</p>
+  <button type="button" class="cookie-banner-dismiss" id="cookie-banner-dismiss">Got it</button>
+</div>`;
 
 // Declared here (before the site-lock IIFE below) because that IIFE can call
 // injectNav() synchronously on some pages (e.g. admin.html, or ?preview=key),
@@ -603,6 +614,18 @@ async function injectNav() {
 
   // Inject footer + toast
   document.body.insertAdjacentHTML('beforeend', FOOTER_HTML() + TOAST_HTML);
+
+  // Cookie notice — shown once until dismissed, never on the Cookie Policy
+  // page itself (no point disclosing the page you're already reading).
+  if (!localStorage.getItem('mca_cookie_notice_dismissed') && !/\/cookies\.html$/.test(window.location.pathname)) {
+    document.body.insertAdjacentHTML('beforeend', COOKIE_BANNER_HTML);
+    const banner = document.getElementById('cookie-banner');
+    banner.hidden = false;
+    document.getElementById('cookie-banner-dismiss').addEventListener('click', () => {
+      localStorage.setItem('mca_cookie_notice_dismissed', '1');
+      banner.remove();
+    });
+  }
 
   // Inject scroll progress bar
   document.body.insertAdjacentHTML('afterbegin', PROGRESS_HTML);

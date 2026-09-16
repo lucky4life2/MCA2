@@ -592,7 +592,7 @@ function renderCollapsedStrip() {
   strip.innerHTML = collapsed.map(p => {
     const count = visibleTasks().filter(t => t.project_id === p.id).length;
     return `
-    <div class="tk-collapsed-chip" onclick="toggleProjectCollapse('${p.id}')" title="Expand ${escapeHtml(p.name)}">
+    <div class="tk-collapsed-chip" onclick="toggleProjectCollapse('${p.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleProjectCollapse('${p.id}')}" role="button" tabindex="0" title="Expand ${escapeHtml(p.name)}">
       <span class="tk-collapsed-caret">▸</span>
       <span class="tk-collapsed-name">${escapeHtml(p.name)}</span>
       <span class="tk-collapsed-count">${count}</span>
@@ -622,7 +622,7 @@ function renderList() {
         const txt = contrastText(color);
         const tg = taskTag(t);
         return `
-        <div class="t-row" onclick="editTask('${t.id}')">
+        <div class="t-row" onclick="editTask('${t.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();editTask('${t.id}')}" role="button" tabindex="0">
           <span class="t-color-dot" style="background:${safeColor(color)};"></span>
           <div class="t-title${isDoneTask(t) ? ' done' : ''}">${escapeHtml(t.title)}</div>
           ${t.is_draft ? '<span class="draft-badge">Draft</span>' : ''}
@@ -662,7 +662,7 @@ function renderGrid() {
           const txt = contrastText(color);
           const tg = taskTag(t);
           return `
-          <div class="tk-card" style="background:${safeColor(color)};color:${safeColor(txt)};" onclick="editTask('${t.id}')">
+          <div class="tk-card" style="background:${safeColor(color)};color:${safeColor(txt)};" onclick="editTask('${t.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();editTask('${t.id}')}" role="button" tabindex="0">
             <div class="tk-card-title${isDoneTask(t) ? ' done' : ''}" style="color:${safeColor(txt)};">${escapeHtml(t.title)}${t.is_draft ? ' <span class="draft-badge">Draft</span>' : ''}</div>
             <div class="tk-card-foot">
               <span class="tk-card-status" style="color:${safeColor(txt)};">${escapeHtml(tg.name)}</span>

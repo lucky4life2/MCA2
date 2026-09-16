@@ -964,7 +964,12 @@ function renderMembership() {
       <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
         Your membership renews on <strong>${escapeHtml(periodEnd.toLocaleDateString())}</strong>. This unlocks the Minecraft server and the member-only pages of the site.
       </p>
-      <a class="btn btn-outline" href="shop.html" style="text-decoration:none;display:inline-block;">Manage in Shop</a>`;
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a class="btn btn-outline" href="shop.html" style="text-decoration:none;display:inline-block;">Manage in Shop</a>
+        <button type="button" class="btn btn-outline" id="btn-cancel-membership">Cancel Membership</button>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-top:0.75rem;">Cancelling stops future renewal charges — you keep access through the end of the period you already paid for. See our <a href="refund.html">Refund &amp; Cancellation Policy</a>.</p>`;
+    wireCancelMembershipButton();
   } else if (status === 'past_due') {
     badge.textContent = 'Payment Issue';
     badge.className = 'account-section-badge badge-pending';
@@ -2360,11 +2365,11 @@ function renderMyMessages() {
     }).join('');
     const hasReply = items.some(it => it.sender_type === 'admin');
     return `<div style="border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:10px;">
-      <div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="toggleMyThreadExpand('${m.id}')">
+      <div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="toggleMyThreadExpand('${m.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleMyThreadExpand('${m.id}')}" role="button" tabindex="0" aria-expanded="${expanded ? 'true' : 'false'}">
         <span style="flex:1;">${escapeHtml(m.subject)}</span>
         <span style="font-size:11px;color:var(--muted);font-weight:400;">${expanded ? '▲' : '▼'}</span>
       </div>
-      ${expanded ? '' : `<div style="font-size:12px;color:var(--muted);margin-top:4px;cursor:pointer;" onclick="toggleMyThreadExpand('${m.id}')">${escapeHtml(lastPreview)} ${lastPreview ? '· ' + escapeHtml(lastTime) : ''}</div>`}
+      ${expanded ? '' : `<div style="font-size:12px;color:var(--muted);margin-top:4px;cursor:pointer;" onclick="toggleMyThreadExpand('${m.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleMyThreadExpand('${m.id}')}" role="button" tabindex="0">${escapeHtml(lastPreview)} ${lastPreview ? '· ' + escapeHtml(lastTime) : ''}</div>`}
       ${expanded ? `
       ${itemsHtml}
       ${hasReply ? '' : '<div style="font-size:12px;color:var(--muted);margin-top:6px;font-style:italic;">Awaiting reply...</div>'}
@@ -2422,6 +2427,22 @@ document.getElementById('btn-contact-admin').addEventListener('click', () => {
   document.getElementById('contact-modal').classList.remove('hidden');
   document.getElementById('contact-subject').focus();
 });
+
+// "Cancel Membership" opens the same staff-message form used for support
+// requests, pre-filled so cancelling takes one click to send rather than
+// requiring the member to know who to contact or what to say — this is the
+// self-service cancellation path referenced in the Refund & Cancellation Policy.
+function wireCancelMembershipButton() {
+  const btn = document.getElementById('btn-cancel-membership');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    document.getElementById('contact-modal').classList.remove('hidden');
+    document.getElementById('contact-subject').value = 'Cancel my membership';
+    document.getElementById('contact-body').value = 'Please cancel my MCA membership so it does not renew. I understand I will keep access through the end of the period I already paid for.';
+    document.getElementById('contact-char-count').textContent = document.getElementById('contact-body').value.length + ' / 2000';
+    document.getElementById('contact-send').focus();
+  });
+}
 function closeContactModal() {
   document.getElementById('contact-modal').classList.add('hidden');
   document.getElementById('contact-error').style.display = 'none';

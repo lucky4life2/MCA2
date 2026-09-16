@@ -481,8 +481,8 @@
           <!-- Active Now stat disabled — see commented block below stats-row
           <div class="stat-cell"><div class="stat-label">Active Now</div><div class="stat-value" id="stat-active-now" style="color:#22c55e;">—</div></div>
           -->
-          <div class="stat-cell" id="stat-news-pending-cell" style="display:none;cursor:pointer;" onclick="document.querySelector('[data-tab=news]').click();"><div class="stat-label">News Awaiting Review</div><div class="stat-value" id="stat-news-pending" style="color:#c0392b;">—</div></div>
-          <div class="stat-cell" id="stat-company-pending-cell" style="display:none;cursor:pointer;" onclick="document.querySelector('[data-tab=economy]').click();"><div class="stat-label">Companies Awaiting Review</div><div class="stat-value" id="stat-company-pending" style="color:#c0392b;">—</div></div>
+          <div class="stat-cell" id="stat-news-pending-cell" style="display:none;cursor:pointer;" onclick="document.querySelector('[data-tab=news]').click();" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.querySelector('[data-tab=news]').click();}" role="button" tabindex="0"><div class="stat-label">News Awaiting Review</div><div class="stat-value" id="stat-news-pending" style="color:#c0392b;">—</div></div>
+          <div class="stat-cell" id="stat-company-pending-cell" style="display:none;cursor:pointer;" onclick="document.querySelector('[data-tab=economy]').click();" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.querySelector('[data-tab=economy]').click();}" role="button" tabindex="0"><div class="stat-label">Companies Awaiting Review</div><div class="stat-value" id="stat-company-pending" style="color:#c0392b;">—</div></div>
         </div>
       </div>
 
@@ -1622,12 +1622,12 @@ function renderMembers(members) {
     const overflowRoles = sortedRoles.slice(VISIBLE_ROLE_COUNT);
     const roleBadgesHtml = visibleRoles.map(roleBadge).join('') +
       (overflowRoles.length
-        ? `<span class="role-badge role-more-toggle" style="cursor:pointer;background:var(--bg);color:var(--muted);border:1px dashed var(--border);" title="${overflowRoles.map(r=>r.label).join(', ')}" onclick="
+        ? `<span class="role-badge role-more-toggle" style="cursor:pointer;background:var(--bg);color:var(--muted);border:1px dashed var(--border);" title="${overflowRoles.map(r=>r.label).join(', ')}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" onclick="
             const hidden=this.nextElementSibling, less=hidden.nextElementSibling;
-            this.style.display='none'; hidden.style.display='inline'; less.style.display='inline-flex';
-          ">+${overflowRoles.length} more</span><span style="display:none;">${overflowRoles.map(roleBadge).join('')}</span><span class="role-badge role-less-toggle" style="display:none;cursor:pointer;background:var(--bg);color:var(--muted);border:1px dashed var(--border);" onclick="
+            this.style.display='none'; hidden.style.display='inline'; less.style.display='inline-flex'; less.focus();
+          ">+${overflowRoles.length} more</span><span style="display:none;">${overflowRoles.map(roleBadge).join('')}</span><span class="role-badge role-less-toggle" style="display:none;cursor:pointer;background:var(--bg);color:var(--muted);border:1px dashed var(--border);" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" onclick="
             const less=this, hidden=less.previousElementSibling, more=hidden.previousElementSibling;
-            less.style.display='none'; hidden.style.display='none'; more.style.display='inline';
+            less.style.display='none'; hidden.style.display='none'; more.style.display='inline'; more.focus();
           ">− less</span>`
         : '');
 
@@ -1750,7 +1750,7 @@ window.openRolePopup = (event, userId) => {
   function renderItems() {
     return assignableRoles.map(r => {
       const has = stagedRoleIds.has(r.id);
-      return `<div class="role-popup-item" data-role-id="${r.id}" onclick="event.stopPropagation();_toggleStagedRole('${r.id}')">
+      return `<div class="role-popup-item" data-role-id="${r.id}" onclick="event.stopPropagation();_toggleStagedRole('${r.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();_toggleStagedRole('${r.id}')}" role="option" aria-selected="${has}" tabindex="0">
         <span class="role-popup-dot" style="background:${safeColor(r.color)};"></span>
         <span style="flex:1;">${escapeHtml(r.label)}</span>
         ${has ? `<span class="role-popup-check">✓</span>` : ''}
@@ -3164,7 +3164,7 @@ function renderOwnerDropdownList() {
   const list = document.getElementById('nm-owner-dropdown-list');
   const matches = _allMembers.filter(m => !q || (m.display_name || '').toLowerCase().includes(q) || (m.username || '').toLowerCase().includes(q));
   list.innerHTML = matches.length
-    ? matches.map(m => `<div onclick="toggleNationOwner('${m.id}')" style="padding:8px 10px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px;" onmouseover="this.style.background='var(--bg-alt,#f5f7fa)'" onmouseout="this.style.background=''"><input type="checkbox" ${_nmOwnerIds.includes(m.id) ? 'checked' : ''} style="pointer-events:none;">${m.display_name || m.username}${m.username && m.display_name ? ' <span style="color:var(--muted);">@'+m.username+'</span>' : ''}</div>`).join('')
+    ? matches.map(m => `<div onclick="toggleNationOwner('${m.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleNationOwner('${m.id}')}" role="option" aria-selected="${_nmOwnerIds.includes(m.id)}" tabindex="0" style="padding:8px 10px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px;" onmouseover="this.style.background='var(--bg-alt,#f5f7fa)'" onmouseout="this.style.background=''"><input type="checkbox" ${_nmOwnerIds.includes(m.id) ? 'checked' : ''} style="pointer-events:none;">${m.display_name || m.username}${m.username && m.display_name ? ' <span style="color:var(--muted);">@'+m.username+'</span>' : ''}</div>`).join('')
     : '<div style="padding:8px 10px;font-size:13px;color:var(--muted);">No matches</div>';
 }
 window.toggleNationOwner = (id) => {
@@ -3705,13 +3705,13 @@ function renderMessages() {
     return `<div class="msg-row ${unread ? 'unread' : ''}" data-id="${m.id}">
       <div class="msg-dot"></div>
       <div class="msg-content">
-        <div class="msg-meta" style="cursor:pointer;" onclick="toggleThreadExpand('${m.id}')">
+        <div class="msg-meta" style="cursor:pointer;" onclick="toggleThreadExpand('${m.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleThreadExpand('${m.id}')}" role="button" tabindex="0" aria-expanded="${expanded ? 'true' : 'false'}">
           <span class="msg-sender">${sender}</span>
           ${claimBadge}
           <span style="margin-left:auto;font-size:11px;color:var(--muted);">${expanded ? '▲' : '▼'}</span>
         </div>
-        <div class="msg-subject" style="cursor:pointer;" onclick="toggleThreadExpand('${m.id}')">${subject}</div>
-        ${expanded ? '' : `<div style="font-size:12px;color:var(--muted);margin-top:2px;cursor:pointer;" onclick="toggleThreadExpand('${m.id}')">${lastPreview} ${lastPreview ? '· ' + lastTime : ''}</div>`}
+        <div class="msg-subject" style="cursor:pointer;" onclick="toggleThreadExpand('${m.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleThreadExpand('${m.id}')}" role="button" tabindex="0">${subject}</div>
+        ${expanded ? '' : `<div style="font-size:12px;color:var(--muted);margin-top:2px;cursor:pointer;" onclick="toggleThreadExpand('${m.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleThreadExpand('${m.id}')}" role="button" tabindex="0">${lastPreview} ${lastPreview ? '· ' + lastTime : ''}</div>`}
         ${expanded ? `
         ${itemsHtml}
         <div class="msg-reply-form" style="margin-top:10px;">
@@ -4070,7 +4070,7 @@ async function renderAuditLog() {
     const actorType = r.actor_type || 'system';
     const hasDetail = r.old_data || r.new_data;
     return `<div class="audit-row">
-      <div class="audit-row-top" ${hasDetail ? `onclick="toggleAuditDetail(${idx})"` : ''}>
+      <div class="audit-row-top" ${hasDetail ? `onclick="toggleAuditDetail(${idx})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAuditDetail(${idx})}" role="button" tabindex="0"` : ''}>
         <div class="audit-row-main">
           <div class="audit-summary">
             <span class="audit-actor-badge audit-actor-${escapeHtml(actorType)}">${escapeHtml(actorType)}</span><span class="audit-action-badge audit-action-${escapeHtml(r.action)}">${escapeHtml(r.action)}</span>${escapeHtml(r.summary || auditTableLabel(r.table_name))}

@@ -55,7 +55,7 @@ function renderGrid(nations) {
         : `<span class="flag-placeholder">No flag</span>`
     }</div>`;
     return `
-      <div class="nation-flag-item" data-season="${esc(n.season || '')}" onclick="openNationDetail(${i})" style="cursor:pointer;" title="View ${esc(n.name)}">
+      <div class="nation-flag-item" data-season="${esc(n.season || '')}" onclick="openNationDetail(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openNationDetail(${i})}" role="button" tabindex="0" style="cursor:pointer;" title="View ${esc(n.name)}">
         ${flagHtml}
         <div class="nation-name">${esc(n.name)}</div>
         ${n.season ? `<div class="nation-season-tag">${esc(n.season)}</div>` : ''}
