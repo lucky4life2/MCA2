@@ -68,7 +68,7 @@ const NAV_HTML = () => {
   return `
 <nav>
   <a class="nav-logo" href="index.html">
-    <img src="${wideLogo}" alt="Minecraft Club of America" class="nav-logo-img" id="nav-logo-img">
+    <img src="${wideLogo}" width="500" height="198" alt="Minecraft Club of America" class="nav-logo-img" id="nav-logo-img">
   </a>
   <ul class="nav-links" id="nav-links">
     <li><a href="index.html"      data-page="index">Home</a></li>
@@ -128,7 +128,7 @@ const FOOTER_HTML = () => {
 
     <div class="footer-brand">
       <div class="footer-logo">
-        <img src="${squareLogo}" alt="Minecraft Club of America" class="footer-logo-img" id="footer-logo-img">
+        <img src="${squareLogo}" width="500" height="500" alt="Minecraft Club of America" class="footer-logo-img" id="footer-logo-img">
         <span class="footer-logo-text">Minecraft Club of America</span>
       </div>
       <p class="footer-tagline">Trade · Build · Govern · Create</p>
@@ -246,6 +246,27 @@ const PREVIEW_KEY     = 'I-pG1idLnWhIjId9i1TLAumZkBQjVcvc';
 const SUPABASE_URL    = 'https://hjaywokvgdzhvsoygctc.supabase.co';
 const SUPABASE_ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNzA2NTQsImV4cCI6MjA5NTg0NjY1NH0.nFqlc20iUDwE1sXLRi2Pev181v2RJKx_S6UcTkGgPWU';
 
+// Kicked off immediately, in parallel with _systemLockdownCheck above, rather
+// than only starting after that check resolves. The page stays
+// visibility:hidden until both are accounted for, so previously these two
+// Supabase round trips ran back-to-back (lockdown fetch, then this one),
+// doubling the time before first paint on every single page load. Firing
+// both requests at once and letting checkLock() await this pre-started
+// promise removes that stacked latency without changing which checks run or
+// what they decide.
+const _siteLockRowFetch = (async function fetchSiteLockRow() {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/settings?key=eq.site_lock&select=value`,
+      { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` } }
+    );
+    if (!res.ok) return { ok: false, rows: null };
+    return { ok: true, rows: await res.json() };
+  } catch (error) {
+    return { ok: false, rows: null, error };
+  }
+})();
+
 let _siteLocked = false;
 let _lockCheckResolve;
 const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
@@ -285,20 +306,14 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
   }
 
   try {
-    // Check lock state from Supabase settings table
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/settings?key=eq.site_lock&select=value`,
-      {
-        headers: {
-          'apikey': SUPABASE_ANON,
-          'Authorization': `Bearer ${SUPABASE_ANON}`,
-        }
-      }
-    );
+    // Site-lock row was already fetched in parallel with the lockdown check
+    // above (see _siteLockRowFetch) — reuse that in-flight request instead
+    // of firing a second, sequential one now.
+    const { ok, rows, error } = await _siteLockRowFetch;
+    if (error) throw error;
 
-    if (!res.ok) { document.documentElement.style.visibility = ''; _lockCheckResolve(); injectNav(); return; }
+    if (!ok) { document.documentElement.style.visibility = ''; _lockCheckResolve(); injectNav(); return; }
 
-    const rows = await res.json();
     if (!rows.length) { document.documentElement.style.visibility = ''; _lockCheckResolve(); injectNav(); return; }
 
     let cfg = {};
