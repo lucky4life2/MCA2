@@ -339,23 +339,12 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
           const token = session?.access_token;
           if (!token) return false;
 
-          // Check legacy profiles.role
-          const profileRes = await fetch(
-            `${SUPABASE_URL}/rest/v1/profiles?select=role&id=eq.${session.user.id}`,
-            {
-              headers: {
-                'apikey': SUPABASE_ANON,
-                'Authorization': `Bearer ${token}`,
-              }
-            }
-          );
-          if (profileRes.ok) {
-            const profiles = await profileRes.json();
-            const role = profiles?.[0]?.role;
-            if (role === 'admin' || role === 'owner') return true;
-          }
-
-          // Check new roles system via RPC
+          // Check via the server-side role/permission system (user_roles +
+          // roles.permissions) exclusively. profiles.role is legacy and must
+          // never be used for an access decision — it goes stale the moment
+          // a role is granted/revoked from the admin panel (assign_role_to_user
+          // only ever writes to user_roles), so checking it here could let a
+          // since-demoted admin keep bypassing the site lock.
           const rpcRes = await fetch(
             `${SUPABASE_URL}/rest/v1/rpc/user_has_permission`,
             {
@@ -554,16 +543,11 @@ function showLockScreen(cfg) {
         refresh_token: json.refresh_token,
       });
       if (sessionErr) throw sessionErr;
-      // Verify they're actually an admin — check legacy role first, then the
-      // newer permission system, matching the logic used for the lock bypass.
-      let verifiedAdmin = false;
-      const { data: profile } = await _sb.from('profiles').select('role').eq('id', json.user.id).single();
-      if (profile && ['admin', 'owner'].includes(profile.role)) {
-        verifiedAdmin = true;
-      } else {
-        const { data: hasAccess } = await _sb.rpc('user_has_permission', { perm: 'can_view_admin' });
-        if (hasAccess === true) verifiedAdmin = true;
-      }
+      // Verify they're actually an admin via the server-side permission
+      // system exclusively — never profiles.role, which is legacy and can
+      // be stale relative to a user's real, current roles.
+      const { data: hasAccess } = await _sb.rpc('user_has_permission', { perm: 'can_view_admin' });
+      const verifiedAdmin = hasAccess === true;
       if (!verifiedAdmin) {
         await _sb.auth.signOut();
         throw new Error('Sorry, this site is for admins only right now.');
