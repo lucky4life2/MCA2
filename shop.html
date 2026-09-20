@@ -445,10 +445,18 @@
     const btn = e.currentTarget;
     const items = getCart();
     if (!items.length) return;
+    // Defense in depth against a cart that went stale while this tab sat
+    // open (e.g. a membership was added, then granted/renewed elsewhere
+    // before checkout): never send a subscription line at qty > 1, and
+    // never let an already-active member check out another subscription.
+    if (_membership?.isActive && items.some(isSubscription)) {
+      alert("You're already a member — remove the membership from your cart to continue.");
+      return;
+    }
     const prevText = btn.textContent;
     btn.disabled = true; btn.textContent = 'Redirecting to checkout...';
     try {
-      const url = await createCheckoutSession(items.map(i => ({ id: i.id, qty: i.qty || 1 })));
+      const url = await createCheckoutSession(items.map(i => ({ id: i.id, qty: isSubscription(i) ? 1 : (i.qty || 1) })));
       window.location.href = url;
     } catch (err) {
       alert(err.message || 'Could not start checkout.');
