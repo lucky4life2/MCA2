@@ -18,7 +18,11 @@ function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;',
 // them; blocks javascript: and other schemes. Needed because dataset reads
 // back HTML-entity-decoded values, so esc() alone doesn't protect a nav sink.
 function safeUrl(url) {
-  const u = String(url ?? '').trim();
+  // Strip ASCII tab/newline/CR before the scheme check — browsers strip
+  // these when parsing a URL for navigation, so "java\tscript:" would
+  // otherwise dodge the scheme regex below while still executing as
+  // javascript: once the browser normalizes it on click.
+  const u = String(url ?? '').replace(/[\t\n\r]/g, '').trim();
   if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return /^https?:\/\//i.test(u) ? u : '';
   return u;
 }

@@ -1842,7 +1842,8 @@ document.getElementById('field-news-opt-in').addEventListener('change', async (e
 
 // Task assignment emails only mean something to people who can reach the
 // Tasks board, so the toggle stays hidden for everyone else. Mirrors
-// resolveAccess() in tasks.html: any task permission, or admin/owner.
+// resolveAccess() in tasks.html: any task permission (admin/owner already
+// carry can_manage_tasks via roles.permissions, so no separate check needed).
 async function revealTaskEmailPref() {
   let allowed = false;
   try {
@@ -1853,7 +1854,6 @@ async function revealTaskEmailPref() {
     ]);
     allowed = manage === true || checkoff === true || test === true;
   } catch {}
-  if (!allowed) allowed = _profile.role === 'admin' || _profile.role === 'owner';
   document.getElementById('pref-task').style.display = allowed ? '' : 'none';
 }
 

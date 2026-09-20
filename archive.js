@@ -16,7 +16,11 @@ function esc(s) {
 /* Only http(s) and relative URLs may reach an href/src, so a javascript: or
    data: URL stored in file_url (or a markdown link) can't execute. */
 function safeUrl(url) {
-  const u = String(url ?? '').trim();
+  // Strip ASCII tab/newline/CR before the scheme check — browsers strip
+  // these when parsing a URL for navigation, so "java\tscript:" would
+  // otherwise dodge the scheme regex below while still executing as
+  // javascript: once the browser normalizes it on click.
+  const u = String(url ?? '').replace(/[\t\n\r]/g, '').trim();
   if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return /^https?:\/\//i.test(u) ? u : '';
   return u;
 }
