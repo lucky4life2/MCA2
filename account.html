@@ -2,8 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <script src="early-hide.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Account — Minecraft Club of America</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600&display=swap">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" type="image/x-icon" href="images/icon.ico">
   <link rel="manifest" href="/manifest.json">
@@ -963,6 +967,15 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// `_` is legal in both site and Minecraft usernames and is also LIKE's
+// single-character wildcard, so an unescaped ilike "is this taken?" check
+// matched unrelated accounts — wrongly rejecting a free username, or (when
+// the wildcard matched 2+ rows) making maybeSingle() return null and letting
+// a genuine duplicate through.
+function likeEscape(value) {
+  return String(value == null ? '' : value).replace(/([\\%_])/g, '\\$1');
+}
+
 // ── Membership ───────────────────────────────────────────────
 function renderMembership() {
   const badge = document.getElementById('membership-badge');
@@ -970,8 +983,15 @@ function renderMembership() {
   if (!badge || !body) return;
 
   const status = _profile.membership_status || 'none';
-  const periodEnd = _profile.membership_current_period_end ? new Date(_profile.membership_current_period_end) : null;
-  const isActive = status === 'active' && periodEnd && periodEnd.getTime() > Date.now();
+  const rawPeriodEnd = _profile.membership_current_period_end ? new Date(_profile.membership_current_period_end) : null;
+  // Only trust the date if it actually parsed — an unparseable value used to
+  // make NaN > now false.
+  const periodEnd = rawPeriodEnd && !isNaN(rawPeriodEnd.getTime()) ? rawPeriodEnd : null;
+  // Membership state follows the Stripe-synced status, not the date: a null or
+  // briefly-stale period end (webhook lag right after a renewal) used to drop
+  // a paying member into the "Not a Member — Join Now" branch, from where they
+  // could buy a second subscription.
+  const isActive = status === 'active' || status === 'trialing';
 
   if (isActive) {
     const comped = _profile.membership_source === 'admin_grant';
@@ -984,9 +1004,15 @@ function renderMembership() {
       </p>`
       : `
       <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
-        Your membership renews on <strong>${escapeHtml(periodEnd.toLocaleDateString())}</strong>. This unlocks the Minecraft server and the member-only pages of the site.
+        ${periodEnd ? `Your membership renews on <strong>${escapeHtml(periodEnd.toLocaleDateString())}</strong>. ` : ''}This unlocks the Minecraft server and the member-only pages of the site.
       </p>
-      <button class="btn btn-outline" type="button" onclick="openBillingPortal(this)">Manage Billing</button>`;
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-outline" type="button" onclick="openBillingPortal(this)">Manage Billing</button>
+        <a class="btn btn-outline" href="shop.html" style="text-decoration:none;display:inline-block;">Manage in Shop</a>
+        <button type="button" class="btn btn-outline" id="btn-cancel-membership">Cancel Membership</button>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-top:0.75rem;">Cancelling stops future renewal charges — you keep access through the end of the period you already paid for. See our <a href="refund.html">Refund &amp; Cancellation Policy</a>.</p>`;
+    wireCancelMembershipButton();
   } else if (status === 'past_due') {
     badge.textContent = 'Payment Issue';
     badge.className = 'account-section-badge badge-pending';
@@ -998,7 +1024,13 @@ function renderMembership() {
   } else {
     badge.textContent = status === 'canceled' ? 'Canceled' : 'Not a Member';
     badge.className = 'account-section-badge badge-unlinked';
+    // A just-cancelled member keeps access to the end of the period they paid
+    // for — saying nothing here read as though it had been cut off immediately.
+    const stillCovered = status === 'canceled' && periodEnd && periodEnd.getTime() > Date.now();
     body.innerHTML = `
+      ${stillCovered ? `<p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
+        Your membership is cancelled and won't renew, but you keep access until <strong>${escapeHtml(periodEnd.toLocaleDateString())}</strong>.
+      </p>` : ''}
       <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
         Membership is $12/year and is required to join the Minecraft server and access member-only pages.
       </p>
@@ -1031,7 +1063,13 @@ async function loadOrderHistory() {
     .order('created_at', { ascending: false })
     .limit(25);
 
-  if (error || !data || !data.length) {
+  // An RLS or network failure used to render as "No orders yet", telling a
+  // paying member their order history was empty.
+  if (error) {
+    body.innerHTML = '<div class="orders-empty"><div class="orders-empty-icon">⚠️</div><p>Could not load your orders just now. Please refresh to try again.</p></div>';
+    return;
+  }
+  if (!data || !data.length) {
     body.innerHTML = '<div class="orders-empty"><div class="orders-empty-icon">📦</div><p>No orders yet.</p></div>';
     return;
   }
@@ -1617,7 +1655,7 @@ function renderMinecraft() {
     const { data: existing } = await supabase
       .from('profiles')
       .select('id')
-      .ilike('minecraft_username', username)
+      .ilike('minecraft_username', likeEscape(username))
       .neq('id', _user.id)
       .maybeSingle();
     if (existing) {
@@ -1878,7 +1916,8 @@ document.getElementById('field-news-opt-in').addEventListener('change', async (e
 
 // Task assignment emails only mean something to people who can reach the
 // Tasks board, so the toggle stays hidden for everyone else. Mirrors
-// resolveAccess() in tasks.html: any task permission, or admin/owner.
+// resolveAccess() in tasks.html: any task permission (admin/owner already
+// carry can_manage_tasks via roles.permissions, so no separate check needed).
 async function revealTaskEmailPref() {
   let allowed = false;
   try {
@@ -1889,7 +1928,6 @@ async function revealTaskEmailPref() {
     ]);
     allowed = manage === true || checkoff === true || test === true;
   } catch {}
-  if (!allowed) allowed = _profile.role === 'admin' || _profile.role === 'owner';
   document.getElementById('pref-task').style.display = allowed ? '' : 'none';
 }
 
@@ -1929,7 +1967,7 @@ document.getElementById('btn-save-profile').addEventListener('click', async () =
   // Check for duplicate username (only if changed)
   if (username && username !== _profile.username) {
     const { data: existing } = await supabase
-      .from('profiles').select('id').ilike('username', username).neq('id', _user.id).maybeSingle();
+      .from('profiles').select('id').ilike('username', likeEscape(username)).neq('id', _user.id).maybeSingle();
     if (existing) {
       errEl.textContent = `"${username}" is already taken. Please choose a different username.`;
       errEl.style.display = 'block'; return;
@@ -2396,11 +2434,11 @@ function renderMyMessages() {
     }).join('');
     const hasReply = items.some(it => it.sender_type === 'admin');
     return `<div style="border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:10px;">
-      <div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="toggleMyThreadExpand('${m.id}')">
+      <div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="toggleMyThreadExpand('${m.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleMyThreadExpand('${m.id}')}" role="button" tabindex="0" aria-expanded="${expanded ? 'true' : 'false'}">
         <span style="flex:1;">${escapeHtml(m.subject)}</span>
         <span style="font-size:11px;color:var(--muted);font-weight:400;">${expanded ? '▲' : '▼'}</span>
       </div>
-      ${expanded ? '' : `<div style="font-size:12px;color:var(--muted);margin-top:4px;cursor:pointer;" onclick="toggleMyThreadExpand('${m.id}')">${escapeHtml(lastPreview)} ${lastPreview ? '· ' + escapeHtml(lastTime) : ''}</div>`}
+      ${expanded ? '' : `<div style="font-size:12px;color:var(--muted);margin-top:4px;cursor:pointer;" onclick="toggleMyThreadExpand('${m.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleMyThreadExpand('${m.id}')}" role="button" tabindex="0">${escapeHtml(lastPreview)} ${lastPreview ? '· ' + escapeHtml(lastTime) : ''}</div>`}
       ${expanded ? `
       ${itemsHtml}
       ${hasReply ? '' : '<div style="font-size:12px;color:var(--muted);margin-top:6px;font-style:italic;">Awaiting reply...</div>'}
@@ -2458,6 +2496,22 @@ document.getElementById('btn-contact-admin').addEventListener('click', () => {
   document.getElementById('contact-modal').classList.remove('hidden');
   document.getElementById('contact-subject').focus();
 });
+
+// "Cancel Membership" opens the same staff-message form used for support
+// requests, pre-filled so cancelling takes one click to send rather than
+// requiring the member to know who to contact or what to say — this is the
+// self-service cancellation path referenced in the Refund & Cancellation Policy.
+function wireCancelMembershipButton() {
+  const btn = document.getElementById('btn-cancel-membership');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    document.getElementById('contact-modal').classList.remove('hidden');
+    document.getElementById('contact-subject').value = 'Cancel my membership';
+    document.getElementById('contact-body').value = 'Please cancel my MCA membership so it does not renew. I understand I will keep access through the end of the period I already paid for.';
+    document.getElementById('contact-char-count').textContent = document.getElementById('contact-body').value.length + ' / 2000';
+    document.getElementById('contact-send').focus();
+  });
+}
 function closeContactModal() {
   document.getElementById('contact-modal').classList.add('hidden');
   document.getElementById('contact-error').style.display = 'none';

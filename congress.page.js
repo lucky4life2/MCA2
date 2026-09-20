@@ -18,7 +18,11 @@ function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;',
 // them; blocks javascript: and other schemes. Needed because dataset reads
 // back HTML-entity-decoded values, so esc() alone doesn't protect a nav sink.
 function safeUrl(url) {
-  const u = String(url ?? '').trim();
+  // Strip ASCII tab/newline/CR before the scheme check — browsers strip
+  // these when parsing a URL for navigation, so "java\tscript:" would
+  // otherwise dodge the scheme regex below while still executing as
+  // javascript: once the browser normalizes it on click.
+  const u = String(url ?? '').replace(/[\t\n\r]/g, '').trim();
   if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return /^https?:\/\//i.test(u) ? u : '';
   return u;
 }
@@ -597,7 +601,11 @@ async function openMeasure(id) {
   window.history.replaceState(null, '', '?measure=' + id);
   _currentMeasure = measure;
   const latestVersion = (version && version[0]) || null;
-  const openRollCall = (rollCalls || []).find(rc => rc.status === 'open');
+  // Must exclude amendment roll calls, same as the fallback below: an open
+  // vote on an amendment used to take over the measure's own vote block, so
+  // the chair's Close Voting / Certify buttons acted on the amendment's roll
+  // call while the modal still looked like the passage vote.
+  const openRollCall = (rollCalls || []).find(rc => rc.status === 'open' && !rc.amendment_id);
   const latestMeasureRollCall = openRollCall || (rollCalls || []).find(rc => !rc.amendment_id) || null;
 
   document.getElementById('cg-modal-title').textContent = `${measure.number || 'Draft'} — ${measure.title}`;
@@ -737,15 +745,19 @@ async function openMeasure(id) {
   });
   document.querySelectorAll('#cg-motions [data-motion-resolve]').forEach(btn => btn.onclick = async () => {
     const id = btn.dataset.motionResolve, status = btn.dataset.motionStatus;
+    const motion = (motions || []).find(m => m.id === id);
     await supabase.from('congress_motions').update({ status, resolved_by: _me.id, resolved_at: new Date().toISOString() }).eq('id', id);
     if (status === 'adopted') {
-      const motionKey = (motions || []).find(m => m.id === id)?.motion_type_key;
+      const motionKey = motion?.motion_type_key;
       if (motionKey === 'discharge_committee' && measure.status_key === 'committee') {
         await supabase.from('congress_measures').update({ status_key: 'introduced', committee_id: null }).eq('id', measure.id);
       } else if (motionKey === 'table') {
         await supabase.from('congress_measures').update({ status_key: 'committee' }).eq('id', measure.id);
-      } else if (motionKey === 'recusal') {
-        await supabase.from('congress_members').update({ status: 'recused', status_set_by: _me.id, status_set_at: new Date().toISOString() }).eq('user_id', _me.id).eq('chamber_id', measure.chamber_id);
+      } else if (motionKey === 'recusal' && motion?.raised_by) {
+        // Recuse whoever moved to be recused, not the chair adopting the
+        // motion — `_me.id` here removed the wrong member from the chamber.
+        // Matches court.page.js, which already uses motion.raised_by.
+        await supabase.from('congress_members').update({ status: 'recused', status_set_by: _me.id, status_set_at: new Date().toISOString() }).eq('user_id', motion.raised_by).eq('chamber_id', measure.chamber_id);
       }
       await loadMeasures(); if (_access.manage) { await loadDashboardExtras(); renderDashboard(); renderLeadershipTools(); }
     }

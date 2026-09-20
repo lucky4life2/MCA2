@@ -2,8 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <script src="early-hide.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Shop — Minecraft Club of America</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600&display=swap">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" type="image/x-icon" href="images/icon.ico">
   <link rel="manifest" href="/manifest.json">
@@ -83,7 +87,7 @@
     .product-empty p { font-size:15px; }
 
     /* Floating cart button */
-    .btn-float-cart { position:fixed; bottom:2rem; right:2rem; z-index:100; background:var(--blue); color:#fff; border:none; border-radius:50px; padding:14px 22px; font-size:14px; font-weight:600; cursor:pointer; box-shadow:0 4px 20px rgba(24,72,158,.3); display:none; align-items:center; gap:10px; transition:background .15s,transform .15s,box-shadow .15s; }
+    .btn-float-cart { position:fixed; bottom:calc(2rem + var(--cookie-banner-h, 0px)); right:2rem; z-index:100; background:var(--blue); color:#fff; border:none; border-radius:50px; padding:14px 22px; font-size:14px; font-weight:600; cursor:pointer; box-shadow:0 4px 20px rgba(24,72,158,.3); display:none; align-items:center; gap:10px; transition:background .15s,transform .15s,box-shadow .15s; }
     .btn-float-cart:hover { background:var(--blue-dark); transform:translateY(-2px); box-shadow:0 6px 24px rgba(24,72,158,.4); }
     .btn-float-cart.visible { display:flex; }
     .float-cart-badge { background:var(--green); color:#fff; font-size:11px; font-weight:700; min-width:20px; height:20px; border-radius:10px; display:flex; align-items:center; justify-content:center; padding:0 5px; }
@@ -186,7 +190,7 @@
       .form-row,.form-row-3 { grid-template-columns:1fr; }
       .shop-admin-bar { flex-direction:column; gap:12px; align-items:flex-start; }
       .detail-modal-spec-grid { grid-template-columns:1fr; }
-      .btn-float-cart { bottom:1.25rem; right:1.25rem; }
+      .btn-float-cart { bottom:calc(1.25rem + var(--cookie-banner-h, 0px)); right:1.25rem; }
     }
   </style>
 </head>
@@ -249,6 +253,7 @@
       <span class="cart-subtotal-label">Subtotal</span>
       <span class="cart-subtotal-amount" id="cart-subtotal">$0.00</span>
     </div>
+    <div class="cart-subtotal-note" id="cart-subtotal-note" style="display:none;"></div>
     <button class="btn-checkout" id="btn-checkout">Checkout</button>
   </div>
 </div>
@@ -273,11 +278,6 @@
   // that server-side, but only after the member has clicked through to a
   // checkout that was never going to work.
   let _membership = null;
-  // The ?checkout= banner must fire once per page load. init() runs again
-  // on every auth event (INITIAL_SESSION lands right after _mcaAuthReady
-  // resolves, and TOKEN_REFRESHED later), which used to re-alert and
-  // re-clear the cart each time.
-  let _checkoutNoticeShown = false;
 
   // Product text is admin-supplied but still untrusted at render time: every
   // field below lands in innerHTML, and several land inside quoted attributes.
@@ -288,7 +288,11 @@
   // Image URLs come from the products table; only http(s) and relative paths
   // may reach a src, so a javascript: value can't execute.
   function safeUrl(url) {
-    const u = String(url ?? '').trim();
+    // Strip ASCII tab/newline/CR before the scheme check — browsers strip
+    // these when parsing a URL for navigation, so "java\tscript:" would
+    // otherwise dodge the scheme regex below while still executing as
+    // javascript: once the browser normalizes it on click.
+    const u = String(url ?? '').replace(/[\t\n\r]/g, '').trim();
     if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return /^https?:\/\//i.test(u) ? u : '';
     return u;
   }
@@ -365,10 +369,17 @@
   }
   function saveCart(items) {
     if (!_userId) return;
-    localStorage.setItem(cartKey(), JSON.stringify(items));
+    // getCart() already tolerates blocked storage; without the same guard here
+    // a quota/private-mode throw escaped addToCart() before the drawer opened,
+    // so "Add to Cart" looked like a dead button.
+    try { localStorage.setItem(cartKey(), JSON.stringify(items)); }
+    catch (e) { alert('Your browser is blocking local storage, so the cart could not be saved.'); }
     updateFloatCart();
     if (window._mcaUpdateCartBadge) window._mcaUpdateCartBadge();
   }
+  // A subscription is a single recurring entitlement — quantity is meaningless
+  // for it, and letting it climb meant a second "Subscribe" click checked out
+  // as qty 2, i.e. double the recurring charge for one membership.
   function addToCart(product) {
     const items = getCart();
     // Stripe bills one Checkout Session as either a subscription or a
@@ -420,6 +431,7 @@
   const elCartBody     = document.getElementById('cart-drawer-body');
   const elCartFooter   = document.getElementById('cart-drawer-footer');
   const elCartSubtotal = document.getElementById('cart-subtotal');
+  const elCartSubtotalNote = document.getElementById('cart-subtotal-note');
   function openCartDrawer()  { elCartOverlay.classList.add('open'); elCartDrawer.classList.add('open'); }
   function closeCartDrawer() { elCartOverlay.classList.remove('open'); elCartDrawer.classList.remove('open'); }
   document.getElementById('cart-drawer-close').addEventListener('click', closeCartDrawer);
@@ -448,6 +460,7 @@
   // keyed per-user, so it can only be cleared once _userId is known —
   // handled inside init() below.
   const _checkoutReturn = new URLSearchParams(window.location.search).get('checkout');
+  let _checkoutHandled = false;
   if (_checkoutReturn) history.replaceState(null, '', window.location.pathname);
 
   function renderCartDrawer() {
@@ -470,6 +483,13 @@
         </div>
       </div>`).join('');
     elCartSubtotal.textContent = '$' + sub.toFixed(2);
+    // The subtotal adds recurring and one-off items together, so say plainly
+    // which part of it renews rather than letting it read as a single charge.
+    const subs = items.filter(isSubscription);
+    elCartSubtotalNote.innerHTML = subs.length
+      ? subs.map(i => `${esc(i.name)} renews at ${esc(priceLabel(i))} (${esc(billingPeriod(i.billing_cycle).label.toLowerCase())}) until you cancel.`).join('<br>')
+      : '';
+    elCartSubtotalNote.style.display = subs.length ? '' : 'none';
     elCartFooter.style.display = '';
   }
 
@@ -580,13 +600,19 @@
     elLoading.style.display = 'none'; elShop.style.display = 'block';
     updateFloatCart();
     applyState();
-    if (_checkoutReturn === 'success' && _userId && !_checkoutNoticeShown) {
-      _checkoutNoticeShown = true;
-      saveCart([]);
-      alert('Payment received! Your order or membership is now active — it may take a minute to update on your account page.');
-    } else if (_checkoutReturn === 'cancel' && !_checkoutNoticeShown) {
-      _checkoutNoticeShown = true;
-      alert('Checkout was canceled — your cart is still here whenever you\'re ready.');
+    // init() deliberately re-runs on later auth events (SIGNED_IN,
+    // TOKEN_REFRESHED, INITIAL_SESSION) to refresh the admin bar, but the
+    // Stripe return is a one-shot: without this guard the success alert fired
+    // once per event and every re-run called saveCart([]) again, wiping items
+    // the user had added since paying.
+    if (_checkoutReturn && !_checkoutHandled) {
+      _checkoutHandled = true;
+      if (_checkoutReturn === 'success' && _userId) {
+        saveCart([]);
+        alert('Payment received! Your order or membership is now active — it may take a minute to update on your account page.');
+      } else if (_checkoutReturn === 'cancel') {
+        alert('Checkout was canceled — your cart is still here whenever you\'re ready.');
+      }
     }
     // Membership state decides how the membership product is rendered, so
     // it is resolved before the grid is drawn rather than after.

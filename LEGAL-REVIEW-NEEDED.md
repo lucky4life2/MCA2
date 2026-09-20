@@ -36,3 +36,7 @@ The task context describing this project's auth methods mentioned only email/pas
 ---
 
 None of the above blocked shipping the Phase 2 technical implementation, because the implementation was built to be conservative by default (block first, require an explicit future decision to loosen) rather than assume an answer to any of these questions.
+
+## 8. Refund Policy specific terms (added 2026-09-16)
+
+`refund.html` (created during the 2026-09-16 compliance/accessibility pass, prompted by the Shop's Stripe integration going live with real payments) states a specific refund window — full refund within 7 days of first subscribing if member benefits haven't been used, and a 14-day defect/non-delivery window for merchandise. These day-counts and terms were chosen as a reasonable, conservative default so the site wouldn't be taking real payments with zero posted refund policy, but they are a business decision, not a legal or engineering one. Please review and adjust to match your actual intended policy (including whether membership fees should ever be prorated/partially refunded outside that window). `[uncertain — business decision, not decided by counsel or by this engineering pass]`
