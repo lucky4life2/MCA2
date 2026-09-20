@@ -893,6 +893,28 @@ async function initNavAuth(_authReadyResolve) {
     // each page having to make its own duplicate (slow) profiles query.
     try {
       const mod0 = await import('./supabase.js');
+
+      // Sitewide 2FA (AAL2) enforcement. Previously the AAL2 check was
+      // opt-in per page (account.html's own inline check, and requireAal2()
+      // on the four staff pages) — every other page skipped it entirely.
+      // OAuth sign-in (Discord/Google) redirects straight from the provider
+      // to the destination page, never back through login.html's own
+      // post-password AAL2 check, so an MFA-enrolled user landed fully
+      // "signed in" on an AAL1-only session and could browse freely until
+      // they happened to hit one of the few pages that checked. This runs
+      // in the one auth path every page executes, so the challenge is
+      // issued immediately after sign-in regardless of how the session was
+      // established or which page it lands on. login.html is excluded
+      // because it already drives its own MFA panel in place.
+      const currentPageForMfa = window.location.pathname.split('/').pop() || 'index.html';
+      if (currentPageForMfa !== 'login.html') {
+        const { data: aal } = await mod0.supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (aal && aal.nextLevel === 'aal2' && aal.nextLevel !== aal.currentLevel) {
+          window.location.replace(`login.html?return=${encodeURIComponent(currentPageForMfa)}&mfa=1`);
+          return { isAdmin: false, canPublishNews: false };
+        }
+      }
+
       const [{ data: roleData, error: roleError }, preview, canViewAdmin, canBypassMembership] = await Promise.all([
         mod0.supabase.from('profiles').select('display_name, username, account_status, membership_status, membership_current_period_end').eq('id', user.id).single(),
         mod0.getMyRolePreview().catch(() => null),
