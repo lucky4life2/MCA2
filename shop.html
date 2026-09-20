@@ -275,7 +275,7 @@
   // admin-comped). create-checkout-session refuses a second subscription
   // server-side, so without this the Subscribe button stayed live for
   // existing members and only failed once they'd been sent to checkout.
-  let _isMember = false;
+  let _isActiveMember = false;
   let _products = [];
 
   // Product text is admin-supplied but still untrusted at render time: every
@@ -392,10 +392,18 @@
     const btn = e.currentTarget;
     const items = getCart();
     if (!items.length) return;
+    // Defense in depth against a cart that went stale while this tab sat
+    // open (e.g. a membership was added, then granted/renewed elsewhere
+    // before checkout): never send a subscription line at qty > 1, and
+    // never let an already-active member check out another subscription.
+    if (_isActiveMember && items.some(isSubscription)) {
+      alert("You're already a member — remove the membership from your cart to continue.");
+      return;
+    }
     const prevText = btn.textContent;
     btn.disabled = true; btn.textContent = 'Redirecting to checkout...';
     try {
-      const url = await createCheckoutSession(items.map(i => ({ id: i.id, qty: i.qty || 1 })));
+      const url = await createCheckoutSession(items.map(i => ({ id: i.id, qty: isSubscription(i) ? 1 : (i.qty || 1) })));
       window.location.href = url;
     } catch (err) {
       alert(err.message || 'Could not start checkout.');
@@ -459,12 +467,10 @@
       if (_isLoggedIn) {
         const prod = esc(JSON.stringify({id:p.id,name:p.name,price:p.price,image_url:p.image_url||null,product_type:p.product_type||null,billing_cycle:p.billing_cycle||null}));
         const isSubDetail = p.product_type === 'subscription';
+        const alreadyMemberDetail = isSubDetail && _isActiveMember;
         const isOOSDetail = !isSubDetail && p.inventory === 0;
-        const alreadyMemberDetail = isSubDetail && _isMember;
-        const detailLabel = isSubDetail
-          ? (alreadyMemberDetail ? 'Already a Member' : 'Subscribe')
-          : (isOOSDetail ? 'Out of Stock' : 'Add to Cart');
-        cartBtn = `<button class="btn-detail-cart" ${isOOSDetail||alreadyMemberDetail?'disabled':''} onclick='shopAddToCart(${prod});closeDetail();'>${detailLabel}</button>`;
+        const detailLabel = alreadyMemberDetail ? 'Already a Member' : isSubDetail ? 'Subscribe' : (isOOSDetail ? 'Out of Stock' : 'Add to Cart');
+        cartBtn = `<button class="btn-detail-cart" ${(isOOSDetail||alreadyMemberDetail)?'disabled':''} onclick='shopAddToCart(${prod});closeDetail();'>${detailLabel}</button>`;
       } else {
         cartBtn = `<a class="btn-detail-cart sign-in" href="login.html?return=shop.html">Sign In to Add to Cart</a>`;
       }
@@ -534,27 +540,27 @@
     document.body.classList.toggle('admin-mode', _isAdmin);
   }
 
-  // Membership is one seat on the profile, not a per-product purchase, so
-  // the storefront has to read it to know whether to offer the seat at all.
-  async function loadMembership() {
-    if (!_userId) { _isMember = false; return; }
+  // Subscribing is a single global membership on the profile, not a
+  // per-product purchase — an already-active member (paid or comped) must
+  // not be able to check out a second membership subscription and get
+  // billed again on top of their current one.
+  async function loadMembershipStatus() {
+    if (!_userId) { _isActiveMember = false; return; }
     try {
       const { data } = await withTimeout(
-        supabase.from('profiles')
-          .select('membership_status, membership_current_period_end')
-          .eq('id', _userId).single(),
+        supabase.from('profiles').select('membership_status, membership_current_period_end').eq('id', _userId).single(),
         8000
       );
-      const end = data?.membership_current_period_end ? new Date(data.membership_current_period_end) : null;
-      _isMember = data?.membership_status === 'active' && !!end && end.getTime() > Date.now();
-    } catch(e) { _isMember = false; }
+      const periodEnd = data?.membership_current_period_end ? new Date(data.membership_current_period_end) : null;
+      _isActiveMember = data?.membership_status === 'active' && !!periodEnd && periodEnd.getTime() > Date.now();
+    } catch (e) { _isActiveMember = false; }
   }
 
   async function init(user, accessToken, isAdmin) {
     _isLoggedIn = !!user; _userId = user?.id || null;
     _isAdmin = !!isAdmin;
     elLoading.style.display = 'none'; elShop.style.display = 'block';
-    await loadMembership();
+    await loadMembershipStatus();
     loadProducts(); updateFloatCart();
     applyState();
     // init() deliberately re-runs on later auth events (SIGNED_IN,
@@ -609,7 +615,7 @@
       _initialized = true;
       await init(session.user, session.access_token || null, isAdmin);
     } else if (event === 'SIGNED_OUT') {
-      _initialized = false; _isAdmin = false; _isLoggedIn = false; _userId = null; _isMember = false;
+      _initialized = false; _isAdmin = false; _isLoggedIn = false; _userId = null; _isActiveMember = false;
       elLoading.style.display = 'none'; elShop.style.display = 'block';
       applyState(); loadProducts(); updateFloatCart();
     }
@@ -642,12 +648,10 @@
         if (_isLoggedIn) {
           const prod = esc(JSON.stringify({id:p.id,name:p.name,price:p.price,image_url:p.image_url||null,product_type:p.product_type||null,billing_cycle:p.billing_cycle||null}));
           const isSub = p.product_type === 'subscription';
+          const alreadyMember = isSub && _isActiveMember;
           const isOutOfStock = !isSub && p.inventory === 0;
-          const alreadyMember = isSub && _isMember;
-          const btnLabel = isSub
-            ? (alreadyMember ? 'Already a Member' : 'Subscribe')
-            : (isOutOfStock ? 'Out of Stock' : 'Add to Cart');
-          cartBtn = `<button class="btn-add-to-cart" ${isOutOfStock||alreadyMember?'disabled':''} onclick='event.stopPropagation();shopAddToCart(${prod})'>${btnLabel}</button>`;
+          const btnLabel = alreadyMember ? 'Already a Member' : isSub ? 'Subscribe' : (isOutOfStock ? 'Out of Stock' : 'Add to Cart');
+          cartBtn = `<button class="btn-add-to-cart" ${(isOutOfStock||alreadyMember)?'disabled':''} onclick='event.stopPropagation();shopAddToCart(${prod})'>${btnLabel}</button>`;
         } else {
           cartBtn = `<a class="btn-add-to-cart sign-in-prompt" href="login.html?return=shop.html" onclick="event.stopPropagation()">Sign In to Add to Cart</a>`;
         }
