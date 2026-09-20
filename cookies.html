@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cookie Policy — Minecraft Club of America</title>
+  <meta name="description" content="Cookie Policy for Minecraft Club of America — what browser storage we use and why.">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/x-icon" href="images/icon.ico">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#18489e">
+  <link rel="apple-touch-icon" href="/images/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="MCA">
+</head>
+<body>
+
+<!-- nav + footer injected by nav.js -->
+
+<div class="page-wrap">
+
+  <div class="hero">
+    <div class="hero-eyebrow">Legal</div>
+    <h1>Cookie<br><em>Policy</em></h1>
+    <p class="hero-sub">Last updated: September 16, 2026</p>
+  </div>
+
+  <div class="content">
+
+    <div class="section">
+      <div class="section-label">Overview</div>
+      <h2>What This Page Covers</h2>
+      <p>This Cookie Policy explains how Minecraft Club of America ("MCA," "we," "us," or "our") uses cookies and similar browser storage (such as <code>localStorage</code>) on minecraftclubofamerica.me (the "Site"). It supplements our <a href="privacy.html">Privacy Policy</a>, which covers how we handle personal information more broadly.</p>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Summary</div>
+      <h2>The Short Version</h2>
+      <p>We only use browser storage that's <strong>strictly necessary</strong> to make the Site work — to keep you signed in and to remember your light/dark theme choice. We do not use cookies or browser storage for advertising, cross-site tracking, or analytics, and we don't load any third-party advertising or analytics scripts. Because we don't use any non-essential cookies, there's nothing here that requires your opt-in consent — but we still want you to know exactly what's stored and why.</p>
+    </div>
+
+    <div class="section">
+      <div class="section-label">What We Use</div>
+      <h2>Storage Categories</h2>
+      <div style="overflow-x:auto;">
+      <table style="width:100%;min-width:520px;border-collapse:collapse;font-size:13.5px;">
+        <thead>
+          <tr style="text-align:left;border-bottom:2px solid var(--border);">
+            <th style="padding:8px 10px;">Name / type</th>
+            <th style="padding:8px 10px;">Purpose</th>
+            <th style="padding:8px 10px;">Category</th>
+            <th style="padding:8px 10px;">Duration</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 10px;">Supabase auth session (<code>localStorage</code>)</td>
+            <td style="padding:8px 10px;">Keeps you signed in between visits</td>
+            <td style="padding:8px 10px;">Strictly necessary</td>
+            <td style="padding:8px 10px;">Until you sign out, or the session expires</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 10px;"><code>mca_theme</code> (<code>localStorage</code>)</td>
+            <td style="padding:8px 10px;">Remembers your light/dark mode preference</td>
+            <td style="padding:8px 10px;">Strictly necessary / functional</td>
+            <td style="padding:8px 10px;">Until you clear browser data</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 10px;"><code>mca_cart_&lt;user id&gt;</code> (<code>localStorage</code>)</td>
+            <td style="padding:8px 10px;">Remembers items in your Shop cart</td>
+            <td style="padding:8px 10px;">Strictly necessary / functional</td>
+            <td style="padding:8px 10px;">Until you check out, clear it, or clear browser data</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 10px;">Cloudflare (hosting/CDN)</td>
+            <td style="padding:8px 10px;">Security and bot mitigation (Turnstile) during signup</td>
+            <td style="padding:8px 10px;">Strictly necessary</td>
+            <td style="padding:8px 10px;">Session-based; set by Cloudflare, not by MCA</td>
+          </tr>
+        </tbody>
+      </table>
+      </div>
+      <p style="margin-top:1rem;">None of this is a cookie in the traditional sense (a value automatically sent with every request) except the Cloudflare security check — everything else is <code>localStorage</code>, which stays on your device and is only read by our own code when you visit the Site.</p>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Not Used</div>
+      <h2>What We Don't Use</h2>
+      <p>We do not use advertising cookies, cross-site tracking pixels, or third-party analytics (no Google Analytics, Meta/Facebook Pixel, or similar). We don't sell or share browsing data with data brokers or ad networks. If that ever changes, we'll update this policy and, where required, ask for your consent first.</p>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Your Choices</div>
+      <h2>Managing Storage</h2>
+      <p>Because everything we store is strictly necessary, blocking it will simply sign you out and reset your theme/cart preferences rather than change what data we collect. You can clear cookies and site data at any time through your browser's settings, or use a private/incognito window to avoid persistent storage entirely. Signing out from your <a href="account.html">account page</a> also clears your session.</p>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Updates</div>
+      <h2>Changes to This Policy</h2>
+      <p>We may update this Cookie Policy if what we store changes. Material changes will be reflected by updating the "Last updated" date above.</p>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Contact</div>
+      <h2>Contact Us</h2>
+      <p>Questions about this Cookie Policy? Email us at <a href="#" onclick="copyEmail(this);return false;">minecraftclubofamerica@gmail.com</a> or reach out on Discord.</p>
+    </div>
+
+  </div>
+
+</div>
+
+<script type="module" src="nav.js"></script>
+</body>
+</html>

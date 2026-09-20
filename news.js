@@ -12,7 +12,11 @@ function esc(s) {
 // data: or vbscript: payload smuggled in through a markdown link, a markdown
 // image, or an article's image_url can't execute.
 function safeUrl(url) {
-  const u = String(url ?? '').trim();
+  // Strip ASCII tab/newline/CR before the scheme check — browsers strip
+  // these when parsing a URL for navigation, so "java\tscript:" would
+  // otherwise dodge the scheme regex below while still executing as
+  // javascript: once the browser normalizes it on click.
+  const u = String(url ?? '').replace(/[\t\n\r]/g, '').trim();
   if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return /^https?:\/\//i.test(u) ? u : '';
   return u;
 }
@@ -30,7 +34,9 @@ function renderMarkdown(md) {
     .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
     .replace(/\*\*(.+?)\*\*/g,     '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g,         '<em>$1</em>')
-    .replace(/_(.+?)_/g,           '<em>$1</em>')
+    // Intraword underscores stay literal (snake_case, file_name.yml), matching
+    // CommonMark — `_(.+?)_` used to eat them and italicise the middle.
+    .replace(/(^|[^A-Za-z0-9_])_([^_\n]+)_(?![A-Za-z0-9_])/g, '$1<em>$2</em>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     // Images must be matched before links: `![alt](url)` also matches the
     // link pattern, so running links first turned every markdown image into

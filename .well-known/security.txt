@@ -1,0 +1,8 @@
+# RFC 9116 security.txt for Minecraft Club of America.
+# Contact address is the same one already published in privacy.html / terms.html.
+# TODO(site owner): add a PGP-signed version and/or an Encryption: field if you
+# want reports encrypted, and keep Expires rolling forward periodically.
+Contact: mailto:minecraftclubofamerica@gmail.com
+Expires: 2027-09-19T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://minecraftclubofamerica.me/.well-known/security.txt

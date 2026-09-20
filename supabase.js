@@ -203,6 +203,26 @@ export async function signOut() {
   await supabase.auth.signOut();
 }
 
+/**
+ * Guards a protected page against the AAL1-only bypass: a session is
+ * live (and passes a plain getSession()/getUser() check) as soon as the
+ * password step succeeds, before any enrolled TOTP factor is verified.
+ * Call this right after confirming a session exists, on every page that
+ * requires being signed in. Returns true if the page should render;
+ * otherwise it has already redirected to the MFA challenge and the
+ * caller should stop.
+ */
+export async function requireAal2(returnPath) {
+  try {
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aal && aal.nextLevel === 'aal2' && aal.nextLevel !== aal.currentLevel) {
+      window.location.replace(`login.html?return=${encodeURIComponent(returnPath)}&mfa=1`);
+      return false;
+    }
+  } catch (e) {}
+  return true;
+}
+
 // ── Checkout ─────────────────────────────────────────────────
 
 /**
