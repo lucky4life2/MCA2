@@ -4,12 +4,38 @@ This project has always applied migrations straight to Supabase rather than
 keeping copies in the repo, so this folder is not a complete migration history
 and `supabase db push` is **not** the workflow here.
 
-Only one file is stored locally —
-`20260827_economy_ledger_invariants_and_treasury.sql` — because it was written
-before database access was available in that session and would otherwise have
-been lost. It has since been corrected to match what actually landed (the
-`_economy_audit` helper originally used an `actor_type` the `audit_log` CHECK
-constraint rejects).
+Only two files are stored locally:
+
+- `20260827_economy_ledger_invariants_and_treasury.sql` — because it was
+  written before database access was available in that session and would
+  otherwise have been lost. It has since been corrected to match what
+  actually landed (the `_economy_audit` helper originally used an
+  `actor_type` the `audit_log` CHECK constraint rejects).
+- `20260915_enforce_aal2_for_privileged_access.sql` — the server-side half of
+  the 2FA-bypass fix (see below). Kept in full because it's short and worth
+  having reviewable in the repo.
+
+## 2026-09-15: 2FA bypass — client fix + this migration
+
+A Supabase session is valid (AAL1) the moment the password step succeeds,
+before an enrolled TOTP factor is verified. `admin.html`, `tasks.html`,
+`news-publish.html`, and `archive-publish.html` only checked for session
+presence, so a correct password alone reached those pages without ever
+completing the TOTP prompt. `login.html` had the same gap on its
+already-signed-in redirect. Fixed client-side by adding a shared
+`requireAal2()` check (`supabase.js`) to every protected page's entry point.
+
+This migration is the server-side companion: even with the client fixed,
+nothing stopped a caller from hitting the underlying RPCs/RLS-gated tables
+directly with only an AAL1 session. Nearly every privileged RLS policy and
+permission check in this schema funnels through one of four functions —
+`user_has_permission()`, `private.get_my_role()`,
+`private.current_user_role_level()`, `private.user_has_config_permission()`
+— so a new `private.aal2_ok()` helper (mirrors
+`supabase.auth.mfa.getAuthenticatorAssuranceLevel()`: true unless the caller
+has a verified MFA factor but the session hasn't cleared AAL2) was folded
+into all four instead of touching every individual policy. A user who has
+never enrolled MFA is unaffected.
 
 ## What was applied, in order
 

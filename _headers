@@ -25,7 +25,7 @@
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), midi=(), display-capture=()
-  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
   Cross-Origin-Opener-Policy: same-origin-allow-popups
   Cross-Origin-Resource-Policy: same-site
   X-Permitted-Cross-Domain-Policies: none
@@ -40,6 +40,24 @@
 # it drives installed-app metadata (name, icons, theme color).
 /manifest.json
   Cache-Control: no-cache
+
+# Images, the vendor QR library, style.css and nav.js are not content-hashed
+# (same filename across deploys), so nothing here is marked immutable —
+# each rule instead caches for a bounded window and revalidates after that,
+# so a deploy is never stale for longer than the window and a normal
+# multi-page visit within it reuses the cached copy instead of re-fetching
+# the same shared files on every page.
+/images/*
+  Cache-Control: public, max-age=86400, must-revalidate
+
+/vendor/*
+  Cache-Control: public, max-age=604800, must-revalidate
+
+/style.css
+  Cache-Control: public, max-age=300, must-revalidate
+
+/nav.js
+  Cache-Control: public, max-age=300, must-revalidate
 
 # ── Strict tier: no 'unsafe-inline' for scripts ──────────────────────────
 # Keep this list in sync with the pages that are free of inline script and

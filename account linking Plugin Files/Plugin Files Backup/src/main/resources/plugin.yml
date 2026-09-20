@@ -3,7 +3,7 @@ version: '1.0.0'
 main: com.mca.verify.MCAVerifyPlugin
 api-version: '1.20'
 author: MCA
-description: Links Minecraft accounts to MCA website accounts via /mcaverify codes.
+description: Links Minecraft accounts to MCA website accounts via /mcaverify codes, and gates server join to active $12/year members. Replaces the old verify-only plugin — linking and membership gating are now one plugin.
 
 commands:
   mcaverify:

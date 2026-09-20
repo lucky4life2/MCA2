@@ -68,7 +68,7 @@ const NAV_HTML = () => {
   return `
 <nav>
   <a class="nav-logo" href="index.html">
-    <img src="${wideLogo}" alt="Minecraft Club of America" class="nav-logo-img" id="nav-logo-img">
+    <img src="${wideLogo}" width="500" height="198" alt="Minecraft Club of America" class="nav-logo-img" id="nav-logo-img">
   </a>
   <ul class="nav-links" id="nav-links">
     <li><a href="index.html"      data-page="index">Home</a></li>
@@ -128,7 +128,7 @@ const FOOTER_HTML = () => {
 
     <div class="footer-brand">
       <div class="footer-logo">
-        <img src="${squareLogo}" alt="Minecraft Club of America" class="footer-logo-img" id="footer-logo-img">
+        <img src="${squareLogo}" width="500" height="500" alt="Minecraft Club of America" class="footer-logo-img" id="footer-logo-img">
         <span class="footer-logo-text">Minecraft Club of America</span>
       </div>
       <p class="footer-tagline">Trade · Build · Govern · Create</p>
@@ -169,11 +169,14 @@ const FOOTER_HTML = () => {
         <a href="privacy.html">Privacy Policy</a>
         <a href="terms.html">Terms of Service</a>
         <a href="accessibility.html">Accessibility</a>
+        <a href="cookies.html">Cookie Policy</a>
+        <a href="refund.html">Refund Policy</a>
       </div>
     </div>
 
   </div>
   <div class="footer-disclaimer">
+    Minecraft Club of America is a volunteer-run, non-commercial community club.
     Not affiliated with, endorsed by, or associated with Mojang Studios or Microsoft.
     Minecraft is a trademark of Mojang Studios.
     <span class="footer-version">v2.5.67</span>
@@ -184,6 +187,14 @@ const FOOTER_HTML = () => {
 const TOAST_HTML = `<div class="toast" id="toast" role="status" aria-live="polite">Address copied to clipboard</div>`;
 
 const PROGRESS_HTML = `<div class="scroll-progress" id="scroll-progress"></div>`;
+
+// Informational only — we don't use advertising/analytics cookies, so there's
+// nothing to gate behind an opt-in. This just discloses the strictly-necessary
+// browser storage we do use (sign-in, theme, cart) and links the full policy.
+const COOKIE_BANNER_HTML = `<div class="cookie-banner" id="cookie-banner" role="region" aria-label="Cookie notice" hidden>
+  <p class="cookie-banner-text">We use strictly necessary browser storage to keep you signed in and remember your preferences — never for advertising or tracking. See our <a href="cookies.html">Cookie Policy</a>.</p>
+  <button type="button" class="cookie-banner-dismiss" id="cookie-banner-dismiss">Got it</button>
+</div>`;
 
 // Declared here (before the site-lock IIFE below) because that IIFE can call
 // injectNav() synchronously on some pages (e.g. admin.html, or ?preview=key),
@@ -214,11 +225,30 @@ window._mcaAuthReady = new Promise(r => { _mcaAuthResolve = r; });
   document.documentElement.style.visibility = 'hidden';
 })();
 
+// `fetch` rejects on a *failed* connection but not on a stalled one — a
+// captive portal, blackholed DNS or a hanging Supabase can leave it pending
+// for minutes. Both gate checks below run before the page is made visible
+// again, so without an explicit timeout a stalled connection meant a blank
+// white page site-wide, not the documented fail-open.
+function _fetchWithTimeout(url, opts, ms = 6000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+}
+
+// Last-resort failsafe: whatever happens above, the page must never stay
+// invisible. The two gate fetches run in sequence at 6s each, so 14s sits
+// past their combined worst case — this only fires if something entirely
+// unforeseen stalls the chain.
+const _visibilityFailsafe = setTimeout(() => {
+  document.documentElement.style.visibility = '';
+}, 14000);
+
 const _systemLockdownCheck = (async function checkSystemLockdown() {
   const SUPABASE_URL  = 'https://hjaywokvgdzhvsoygctc.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNzA2NTQsImV4cCI6MjA5NTg0NjY1NH0.nFqlc20iUDwE1sXLRi2Pev181v2RJKx_S6UcTkGgPWU';
   try {
-    const res = await fetch(
+    const res = await _fetchWithTimeout(
       `${SUPABASE_URL}/rest/v1/system_lockdown?select=locked,message&id=eq.1`,
       { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` } }
     );
@@ -226,11 +256,12 @@ const _systemLockdownCheck = (async function checkSystemLockdown() {
       const rows = await res.json();
       if (rows?.[0]?.locked === true) {
         if (window.stop) window.stop();
+        clearTimeout(_visibilityFailsafe);
         document.documentElement.style.visibility = '';
         document.documentElement.innerHTML = `<head><meta charset="utf-8"><title>Unavailable</title></head><body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#05070f;font-family:'Open Sans',sans-serif;padding:2rem;text-align:center;">
           <div>
             <h1 style="color:#fff;font-size:1.6rem;font-weight:700;margin:0 0 0.75rem;">Site Unavailable</h1>
-            <p style="color:#94a3b8;font-size:0.95rem;max-width:420px;line-height:1.6;margin:0 auto;">${(rows[0].message || 'This site is temporarily unavailable. Please check back later.').replace(/</g,'&lt;')}</p>
+            <p style="color:#94a3b8;font-size:0.95rem;max-width:420px;line-height:1.6;margin:0 auto;">${escapeHtml(rows[0].message || 'This site is temporarily unavailable. Please check back later.')}</p>
           </div>
         </body>`;
         return { locked: true };
@@ -246,6 +277,27 @@ const _systemLockdownCheck = (async function checkSystemLockdown() {
 const PREVIEW_KEY     = 'I-pG1idLnWhIjId9i1TLAumZkBQjVcvc';
 const SUPABASE_URL    = 'https://hjaywokvgdzhvsoygctc.supabase.co';
 const SUPABASE_ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNzA2NTQsImV4cCI6MjA5NTg0NjY1NH0.nFqlc20iUDwE1sXLRi2Pev181v2RJKx_S6UcTkGgPWU';
+
+// Kicked off immediately, in parallel with _systemLockdownCheck above, rather
+// than only starting after that check resolves. The page stays
+// visibility:hidden until both are accounted for, so previously these two
+// Supabase round trips ran back-to-back (lockdown fetch, then this one),
+// doubling the time before first paint on every single page load. Firing
+// both requests at once and letting checkLock() await this pre-started
+// promise removes that stacked latency without changing which checks run or
+// what they decide.
+const _siteLockRowFetch = (async function fetchSiteLockRow() {
+  try {
+    const res = await _fetchWithTimeout(
+      `${SUPABASE_URL}/rest/v1/settings?key=eq.site_lock&select=value`,
+      { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` } }
+    );
+    if (!res.ok) return { ok: false, rows: null };
+    return { ok: true, rows: await res.json() };
+  } catch (error) {
+    return { ok: false, rows: null, error };
+  }
+})();
 
 let _siteLocked = false;
 let _lockCheckResolve;
@@ -286,20 +338,15 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
   }
 
   try {
-    // Check lock state from Supabase settings table
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/settings?key=eq.site_lock&select=value`,
-      {
-        headers: {
-          'apikey': SUPABASE_ANON,
-          'Authorization': `Bearer ${SUPABASE_ANON}`,
-        }
-      }
-    );
+    // Site-lock row was already fetched in parallel with the lockdown check
+    // above (see _siteLockRowFetch, itself timeout-protected via
+    // _fetchWithTimeout) — reuse that in-flight request instead of firing a
+    // second, sequential one now.
+    const { ok, rows, error } = await _siteLockRowFetch;
+    if (error) throw error;
 
-    if (!res.ok) { document.documentElement.style.visibility = ''; _lockCheckResolve(); injectNav(); return; }
+    if (!ok) { document.documentElement.style.visibility = ''; _lockCheckResolve(); injectNav(); return; }
 
-    const rows = await res.json();
     if (!rows.length) { document.documentElement.style.visibility = ''; _lockCheckResolve(); injectNav(); return; }
 
     let cfg = {};
@@ -325,23 +372,14 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
           const token = session?.access_token;
           if (!token) return false;
 
-          // Check legacy profiles.role
-          const profileRes = await fetch(
-            `${SUPABASE_URL}/rest/v1/profiles?select=role&id=eq.${session.user.id}`,
-            {
-              headers: {
-                'apikey': SUPABASE_ANON,
-                'Authorization': `Bearer ${token}`,
-              }
-            }
-          );
-          if (profileRes.ok) {
-            const profiles = await profileRes.json();
-            const role = profiles?.[0]?.role;
-            if (role === 'admin' || role === 'owner') return true;
-          }
-
-          // Check new roles system via RPC
+          // Check via the server-side role/permission system (user_roles +
+          // roles.permissions) exclusively. profiles.role is legacy and must
+          // never be used for an access decision — it goes stale the moment
+          // a role is granted/revoked from the admin panel (assign_role_to_user
+          // only ever writes to user_roles), and a raw select on the table
+          // also bypasses the AAL2 (2FA) gate that user_has_permission()
+          // enforces server-side, so checking it here could let a
+          // since-demoted or MFA-unverified admin still bypass the site lock.
           const rpcRes = await fetch(
             `${SUPABASE_URL}/rest/v1/rpc/user_has_permission`,
             {
@@ -436,7 +474,7 @@ function showLockScreen(cfg) {
         max-width:560px;
         line-height:1.3;
       ">The MCA Website is<br>Temporarily Unavailable</h1>
-      ${cfg.reason ? `<p style="font-size:15px;color:#555;max-width:480px;line-height:1.6;margin:0 0 1rem;">${cfg.reason}</p>` : ''}
+      ${cfg.reason ? `<p style="font-size:15px;color:#555;max-width:480px;line-height:1.6;margin:0 0 1rem;">${escapeHtml(cfg.reason)}</p>` : ''}
       ${cfg.return_time ? `
       <div style="
         display:inline-block;
@@ -448,7 +486,7 @@ function showLockScreen(cfg) {
         font-size:13px;
         color:#18489e;
         font-weight:600;
-      ">Expected return: ${cfg.return_time}</div>` : ''}
+      ">Expected return: ${escapeHtml(cfg.return_time)}</div>` : ''}
       <p style="margin-top:3rem;font-size:11px;color:#aaa;letter-spacing:0.5px;" id="lock-footer-text">
         MINECRAFT CLUB OF AMERICA
       </p>
@@ -533,23 +571,22 @@ function showLockScreen(cfg) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Sign in failed.');
-      const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+      // Pinned to the same exact version as supabase.js — esm.sh silently
+      // serves whatever the newest 2.x release is for an unpinned "@2" tag,
+      // which is unreviewed supply-chain drift on every page load.
+      const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.112.4');
       const _sb = createClient(SUPABASE_URL, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNzA2NTQsImV4cCI6MjA5NTg0NjY1NH0.nFqlc20iUDwE1sXLRi2Pev181v2RJKx_S6UcTkGgPWU');
       const { error: sessionErr } = await _sb.auth.setSession({
         access_token: json.access_token,
         refresh_token: json.refresh_token,
       });
       if (sessionErr) throw sessionErr;
-      // Verify they're actually an admin — check legacy role first, then the
-      // newer permission system, matching the logic used for the lock bypass.
-      let verifiedAdmin = false;
-      const { data: profile } = await _sb.from('profiles').select('role').eq('id', json.user.id).single();
-      if (profile && ['admin', 'owner'].includes(profile.role)) {
-        verifiedAdmin = true;
-      } else {
-        const { data: hasAccess } = await _sb.rpc('user_has_permission', { perm: 'can_view_admin' });
-        if (hasAccess === true) verifiedAdmin = true;
-      }
+      // Verify they're actually an admin via the server-side permission
+      // system exclusively — never profiles.role, which is legacy, can be
+      // stale relative to a user's real current roles, and would bypass the
+      // AAL2 (2FA) gate that user_has_permission() enforces server-side.
+      const { data: hasAccess } = await _sb.rpc('user_has_permission', { perm: 'can_view_admin' });
+      const verifiedAdmin = hasAccess === true;
       if (!verifiedAdmin) {
         await _sb.auth.signOut();
         throw new Error('Sorry, this site is for admins only right now.');
@@ -604,6 +641,27 @@ async function injectNav() {
 
   // Inject footer + toast
   document.body.insertAdjacentHTML('beforeend', FOOTER_HTML() + TOAST_HTML);
+
+  // Cookie notice — shown once until dismissed, never on the Cookie Policy
+  // page itself (no point disclosing the page you're already reading).
+  if (!localStorage.getItem('mca_cookie_notice_dismissed') && !/\/cookies(\.html)?$/.test(window.location.pathname)) {
+    document.body.insertAdjacentHTML('beforeend', COOKIE_BANNER_HTML);
+    const banner = document.getElementById('cookie-banner');
+    banner.hidden = false;
+    // Publish the banner's real height (it wraps to two lines on narrow
+    // screens) so fixed bottom-anchored widgets — the shop's floating cart
+    // button, toasts — can sit above it instead of underneath.
+    const syncBannerHeight = () =>
+      document.documentElement.style.setProperty('--cookie-banner-h', banner.offsetHeight + 'px');
+    syncBannerHeight();
+    window.addEventListener('resize', syncBannerHeight);
+    document.getElementById('cookie-banner-dismiss').addEventListener('click', () => {
+      localStorage.setItem('mca_cookie_notice_dismissed', '1');
+      window.removeEventListener('resize', syncBannerHeight);
+      document.documentElement.style.removeProperty('--cookie-banner-h');
+      banner.remove();
+    });
+  }
 
   // Inject scroll progress bar
   document.body.insertAdjacentHTML('afterbegin', PROGRESS_HTML);
@@ -836,10 +894,11 @@ async function initNavAuth(_authReadyResolve) {
     // each page having to make its own duplicate (slow) profiles query.
     try {
       const mod0 = await import('./supabase.js');
-      const [{ data: roleData }, preview, canViewAdmin] = await Promise.all([
-        mod0.supabase.from('profiles').select('display_name, username, account_status').eq('id', user.id).single(),
+      const [{ data: roleData }, preview, canViewAdmin, canBypassMembership] = await Promise.all([
+        mod0.supabase.from('profiles').select('display_name, username, account_status, membership_status, membership_current_period_end').eq('id', user.id).single(),
         mod0.getMyRolePreview().catch(() => null),
-        mod0.hasPermission('can_view_admin').catch(() => false)
+        mod0.hasPermission('can_view_admin').catch(() => false),
+        mod0.hasPermission('can_bypass_membership').catch(() => false)
       ]);
       if (roleData) {
         label = roleData.display_name || roleData.username || label;
@@ -861,6 +920,29 @@ async function initNavAuth(_authReadyResolve) {
         const currentPage = window.location.pathname.split('/').pop() || 'index.html';
         if (!gateAllowedPages.includes(currentPage)) {
           window.location.replace('account.html');
+          return { isAdmin: false, canPublishNews: false };
+        }
+      }
+
+      // Membership gate: the Minecraft server and the website features tied
+      // to it are locked to paying members. Same client-side "check
+      // profiles, redirect if not allowed" idiom as the COPPA gate above —
+      // real enforcement for any mutation on these pages' data still depends
+      // on that table's own RLS (see user_meets_membership_gate() /
+      // require_active_membership() applied there). Exemption is the
+      // can_bypass_membership permission specifically, not can_view_admin —
+      // those used to be conflated here, which meant granting someone admin
+      // panel access silently exempted them from ever needing a membership.
+      // Owner and Admin have the bypass seeded by default; anyone else who
+      // needs it (e.g. a Congress/Court role without a paid membership) gets
+      // it granted explicitly via the Roles tab.
+      const memberGatedPages = ['server.html', 'economy.html', 'stocks.html', 'congress.html', 'court.html'];
+      const currentPageForMembers = window.location.pathname.split('/').pop() || 'index.html';
+      if (memberGatedPages.includes(currentPageForMembers) && !canBypassMembership) {
+        const periodEnd = roleData?.membership_current_period_end ? new Date(roleData.membership_current_period_end) : null;
+        const isActiveMember = roleData?.membership_status === 'active' && periodEnd && periodEnd.getTime() > Date.now();
+        if (!isActiveMember) {
+          window.location.replace('account.html?membership_required=1');
           return { isAdmin: false, canPublishNews: false };
         }
       }

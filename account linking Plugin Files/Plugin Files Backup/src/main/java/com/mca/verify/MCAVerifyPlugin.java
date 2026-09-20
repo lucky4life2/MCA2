@@ -9,11 +9,19 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
 
+/**
+ * One plugin, two jobs that now depend on each other: linking a player's
+ * Minecraft account to their MCA website account (/mcaverify, unchanged),
+ * and — since the $12/year membership system shipped — refusing to let
+ * anyone who isn't an active member join at all (MembershipGateListener).
+ * There is no separate "verify-only" plugin anymore; this replaces it.
+ */
 public class MCAVerifyPlugin extends JavaPlugin {
 
     private SupabaseClient supabase;
     private String minecraftUuidColumn;
     private final Set<UUID> hardcodedAdmins = new HashSet<>();
+    private boolean membershipGateEnabled;
 
     // NEW: heartbeat task handle + config, so the website's admin panel can
     // tell this plugin is actually alive (see SupabaseClient.sendHeartbeat()).
@@ -47,7 +55,9 @@ public class MCAVerifyPlugin extends JavaPlugin {
                 cfg.getString("columns.minecraft_verified", "minecraft_verified"),
                 minecraftUuidColumn,
                 cfg.getString("columns.verify_code", "mc_verify_code"),
-                cfg.getString("columns.verify_expires", "mc_verify_expires")
+                cfg.getString("columns.verify_expires", "mc_verify_expires"),
+                cfg.getString("columns.membership_status", "membership_status"),
+                cfg.getString("columns.membership_period_end", "membership_current_period_end")
         );
 
         supabase = new SupabaseClient(url, key, table, columns, getLogger());
@@ -60,6 +70,14 @@ public class MCAVerifyPlugin extends JavaPlugin {
         getCommand("mcalookup").setExecutor(adminCommands);
 
         getServer().getPluginManager().registerEvents(new HardcodedAdminListener(this), this);
+
+        membershipGateEnabled = cfg.getBoolean("membership.gate_enabled", true);
+        getServer().getPluginManager().registerEvents(new MembershipGateListener(this, supabase), this);
+        if (membershipGateEnabled) {
+            getLogger().info("Membership gate ENABLED — only active members (and hardcoded admins) may join.");
+        } else {
+            getLogger().warning("Membership gate DISABLED in config.yml (membership.gate_enabled: false) — anyone can join.");
+        }
 
         startHeartbeat(cfg);
 
@@ -115,5 +133,9 @@ public class MCAVerifyPlugin extends JavaPlugin {
 
     public boolean isHardcodedAdmin(UUID uuid) {
         return hardcodedAdmins.contains(uuid);
+    }
+
+    public boolean membershipGateEnabled() {
+        return membershipGateEnabled;
     }
 }

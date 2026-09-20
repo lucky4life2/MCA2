@@ -202,3 +202,49 @@ export async function signInWithEmail(email, password) {
 export async function signOut() {
   await supabase.auth.signOut();
 }
+
+/**
+ * Guards a protected page against the AAL1-only bypass: a session is
+ * live (and passes a plain getSession()/getUser() check) as soon as the
+ * password step succeeds, before any enrolled TOTP factor is verified.
+ * Call this right after confirming a session exists, on every page that
+ * requires being signed in. Returns true if the page should render;
+ * otherwise it has already redirected to the MFA challenge and the
+ * caller should stop.
+ */
+export async function requireAal2(returnPath) {
+  try {
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aal && aal.nextLevel === 'aal2' && aal.nextLevel !== aal.currentLevel) {
+      window.location.replace(`login.html?return=${encodeURIComponent(returnPath)}&mfa=1`);
+      return false;
+    }
+  } catch (e) {}
+  return true;
+}
+
+// ── Checkout ─────────────────────────────────────────────────
+
+/**
+ * Creates a Stripe Checkout Session for the given cart items via the
+ * create-checkout-session Edge Function, and returns the session URL to
+ * redirect the browser to. items: [{ id, qty }]. Throws on any failure
+ * (not signed in, empty cart, Stripe/Edge Function error).
+ */
+export async function createCheckoutSession(items) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error('You must be signed in to check out.');
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/create-checkout-session`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ items }),
+  });
+  const result = await res.json().catch(() => ({}));
+  if (!res.ok || !result.url) throw new Error(result.error || 'Could not start checkout.');
+  return result.url;
+}
