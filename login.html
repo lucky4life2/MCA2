@@ -461,9 +461,6 @@
   // returnTo.
   const { data: { session } } = await supabase.auth.getSession();
   if (session) {
-    // Always check AAL regardless of the mfa=1 param — a plain revisit/bookmark
-    // of login.html with only an AAL1 session (2FA enrolled but not yet
-    // verified this session) must not skip straight to returnTo.
     const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     if (!aal || aal.currentLevel === aal.nextLevel) {
       // Already at required level — nothing to do.
