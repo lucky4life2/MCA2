@@ -22,6 +22,7 @@ public class MCAVerifyPlugin extends JavaPlugin {
     private String minecraftUuidColumn;
     private final Set<UUID> hardcodedAdmins = new HashSet<>();
     private boolean membershipGateEnabled;
+    private boolean denyOnMembershipLookupError;
 
     // NEW: heartbeat task handle + config, so the website's admin panel can
     // tell this plugin is actually alive (see SupabaseClient.sendHeartbeat()).
@@ -72,6 +73,7 @@ public class MCAVerifyPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new HardcodedAdminListener(this), this);
 
         membershipGateEnabled = cfg.getBoolean("membership.gate_enabled", true);
+        denyOnMembershipLookupError = cfg.getBoolean("membership.deny_on_lookup_error", true);
         getServer().getPluginManager().registerEvents(new MembershipGateListener(this, supabase), this);
         if (membershipGateEnabled) {
             getLogger().info("Membership gate ENABLED — only active members (and hardcoded admins) may join.");
@@ -137,5 +139,15 @@ public class MCAVerifyPlugin extends JavaPlugin {
 
     public boolean membershipGateEnabled() {
         return membershipGateEnabled;
+    }
+
+    /**
+     * Whether a player should be refused when the membership lookup could
+     * not be completed (Supabase unreachable). True keeps the paywall shut
+     * during an outage; false keeps the server open and lets a lapsed
+     * member slip in until Supabase is back.
+     */
+    public boolean denyOnMembershipLookupError() {
+        return denyOnMembershipLookupError;
     }
 }

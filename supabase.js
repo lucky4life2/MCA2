@@ -250,6 +250,31 @@ export async function createCheckoutSession(items) {
 }
 
 /**
+ * Returns the signed-in user's membership state, or null when signed out.
+ * { status, source, periodEnd (Date|null), isActive }. An active membership
+ * is status 'active' AND a period end still in the future — the same rule
+ * nav.js, the account page and the Minecraft plugin all gate on, kept in
+ * one place so they can't drift apart.
+ */
+export async function getMembership() {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('membership_status, membership_source, membership_current_period_end')
+    .eq('id', user.id)
+    .single();
+  if (error) { console.error('getMembership error:', error.message); return null; }
+  const periodEnd = data?.membership_current_period_end ? new Date(data.membership_current_period_end) : null;
+  return {
+    status: data?.membership_status || 'none',
+    source: data?.membership_source || null,
+    periodEnd,
+    isActive: data?.membership_status === 'active' && !!periodEnd && periodEnd.getTime() > Date.now(),
+  };
+}
+
+/**
  * Opens the Stripe Billing Portal for the signed-in member and returns the
  * URL to redirect the browser to. This is the only way a paying member can
  * change their card, see an invoice, or cancel — the Edge Function has been

@@ -97,9 +97,21 @@ public class SupabaseClient {
     }
 
     /**
-     * Looks up membership status by linked Minecraft UUID. Returns null if
-     * no linked profile is found (or on error) — callers should treat that
-     * the same as "not an active member".
+     * Raised when the membership lookup could not be completed at all
+     * (Supabase unreachable, HTTP error, unparseable body). Distinct from
+     * "there is no linked profile", which is a definite answer — collapsing
+     * the two meant a Supabase blip locked every player out of the server
+     * and told them to go buy a membership they already had.
+     */
+    public static class MembershipLookupException extends RuntimeException {
+        public MembershipLookupException(String message, Throwable cause) { super(message, cause); }
+        public MembershipLookupException(String message) { super(message); }
+    }
+
+    /**
+     * Looks up membership status by linked Minecraft UUID. Returns null when
+     * there is definitively no linked profile; throws
+     * MembershipLookupException when the lookup itself failed.
      */
     public MembershipStatus findMembershipStatusByUuid(String minecraftUuid) {
         String select = String.join(",", "id", columns.membershipStatus, columns.membershipPeriodEnd);
@@ -111,10 +123,10 @@ public class SupabaseClient {
             HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 logger.log(Level.WARNING, "Supabase membership lookup failed (" + response.statusCode() + "): " + response.body());
-                return null;
+                throw new MembershipLookupException("Supabase returned HTTP " + response.statusCode());
             }
             JsonElement parsed = JsonParser.parseString(response.body());
-            if (!parsed.isJsonArray()) return null;
+            if (!parsed.isJsonArray()) throw new MembershipLookupException("Unexpected response body from Supabase");
             JsonArray arr = parsed.getAsJsonArray();
             if (arr.size() == 0) return null;
             JsonObject row = arr.get(0).getAsJsonObject();
@@ -130,10 +142,12 @@ public class SupabaseClient {
                 }
             }
             return new MembershipStatus(status, periodEnd);
+        } catch (MembershipLookupException e) {
+            throw e;
         } catch (Exception e) {
             logger.log(Level.WARNING, "Error contacting Supabase", e);
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-            return null;
+            throw new MembershipLookupException("Could not reach Supabase", e);
         }
     }
 

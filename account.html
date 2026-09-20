@@ -982,29 +982,6 @@ function likeEscape(value) {
 }
 
 // ── Membership ───────────────────────────────────────────────
-// Sends the member to Stripe's hosted billing portal — the only place a
-// card can be changed, an invoice downloaded, or the subscription
-// canceled. Called after renderMembership() paints a button, so it re-binds
-// each time the section re-renders.
-function wireManageBilling() {
-  const btn = document.getElementById('manage-billing-btn');
-  const err = document.getElementById('manage-billing-error');
-  if (!btn) return;
-  btn.addEventListener('click', async () => {
-    const original = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = 'Opening…';
-    if (err) { err.style.display = 'none'; err.textContent = ''; }
-    try {
-      window.location.href = await createBillingPortalSession('account.html');
-    } catch (e) {
-      btn.disabled = false;
-      btn.textContent = original;
-      if (err) { err.textContent = e.message || 'Could not open the billing portal.'; err.style.display = 'block'; }
-    }
-  });
-}
-
 function renderMembership() {
   const badge = document.getElementById('membership-badge');
   const body = document.getElementById('membership-body');
@@ -1039,6 +1016,7 @@ function renderMembership() {
         ${periodEnd ? `Your membership renews on <strong>${escapeHtml(periodEnd.toLocaleDateString())}</strong>. ` : ''}This unlocks the Minecraft server and the member-only pages of the site.
       </p>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-outline" type="button" onclick="openBillingPortal(this)">Manage Billing</button>
         <a class="btn btn-outline" href="shop.html" style="text-decoration:none;display:inline-block;">Manage in Shop</a>
         <button type="button" class="btn btn-outline" id="btn-cancel-membership">Cancel Membership</button>
       </div>
@@ -1051,9 +1029,7 @@ function renderMembership() {
       <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
         We couldn't process your last membership payment. Server and member-page access may be paused until this is resolved.
       </p>
-      <button class="btn btn-primary" type="button" id="manage-billing-btn">Update Payment</button>
-      <div id="manage-billing-error" style="display:none;font-size:13px;color:var(--red,#c0392b);margin-top:.75rem;"></div>`;
-    wireManageBilling();
+      <button class="btn btn-primary" type="button" onclick="openBillingPortal(this)">Update Payment</button>`;
   } else {
     badge.textContent = status === 'canceled' ? 'Canceled' : 'Not a Member';
     badge.className = 'account-section-badge badge-unlinked';
@@ -1070,6 +1046,20 @@ function renderMembership() {
       <a class="btn btn-primary" href="shop.html" style="text-decoration:none;display:inline-block;">Join Now — $12/yr</a>`;
   }
 }
+
+// Cancelling, changing a card or fetching an invoice all happen in the
+// Stripe-hosted billing portal — the site never handles card details. Until
+// this existed there was no self-serve way to cancel a subscription at all.
+window.openBillingPortal = async (btn) => {
+  const prev = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Opening…'; }
+  try {
+    window.location.href = await createBillingPortalSession('account.html');
+  } catch (err) {
+    alert(err.message || 'Could not open the billing portal.');
+    if (btn) { btn.disabled = false; btn.textContent = prev; }
+  }
+};
 
 // ── Order history ────────────────────────────────────────────
 async function loadOrderHistory() {
