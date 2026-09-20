@@ -999,21 +999,36 @@
     btn.textContent = 'Verifying…'; btn.disabled = true;
     const SUPABASE_URL = supabase.supabaseUrl;
     const ANON_KEY = supabase.supabaseKey;
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/verify-signup-code`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
-      body: JSON.stringify({ userId: _pendingSignupUserId, code }),
-    });
-    const json = await res.json();
-    if (!res.ok || json.error) {
-      errEl.textContent = json.error || 'Invalid or expired code.';
+    // Every step below was previously unguarded: a network blip, a non-JSON
+    // response, or a payload missing tokens threw past the error handling and
+    // left the button disabled on "Verifying…" with no way back but a reload.
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/verify-signup-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
+        body: JSON.stringify({ userId: _pendingSignupUserId, code }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        errEl.textContent = json.error || 'Invalid or expired code.';
+        errEl.style.display = 'block';
+        btn.textContent = 'Verify & Continue'; btn.disabled = false;
+        return;
+      }
+      if (!json.access_token || !json.refresh_token) {
+        errEl.textContent = 'Could not complete sign-in. Please try again.';
+        errEl.style.display = 'block';
+        btn.textContent = 'Verify & Continue'; btn.disabled = false;
+        return;
+      }
+      // Set the session manually from the tokens returned
+      await supabase.auth.setSession({ access_token: json.access_token, refresh_token: json.refresh_token });
+      window.location.replace(returnTo);
+    } catch (e) {
+      errEl.textContent = 'Could not reach the server. Please try again.';
       errEl.style.display = 'block';
       btn.textContent = 'Verify & Continue'; btn.disabled = false;
-      return;
     }
-    // Set the session manually from the tokens returned
-    await supabase.auth.setSession({ access_token: json.access_token, refresh_token: json.refresh_token });
-    window.location.replace(returnTo);
   });
 
   // Enter key on signup code field
@@ -1033,9 +1048,15 @@
     const originalText = link.textContent;
     link.textContent = 'Sending…';
     try {
+      // SUPABASE_URL/ANON_KEY are const-scoped inside the other handlers, so
+      // referencing them here threw a ReferenceError that the catch below
+      // swallowed — resend always reported a connection failure. The apikey
+      // header was missing too, which would have 401'd even once in scope.
+      const SUPABASE_URL = supabase.supabaseUrl;
+      const ANON_KEY = supabase.supabaseKey;
       const res = await fetch(`${SUPABASE_URL}/functions/v1/resend-signup-code`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
         body: JSON.stringify({ userId: _pendingSignupUserId }),
       });
       const json = await res.json();

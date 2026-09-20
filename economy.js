@@ -47,6 +47,16 @@ export function escapeHtml(str) {
   });
 }
 
+// Usernames are validated as /^[a-zA-Z0-9_]{3,32}$/, so `_` is both a legal
+// username character and LIKE's single-character wildcard. Passing a raw
+// username to .ilike() therefore matches other players ("bob_smith" also
+// matches "bob1smith"), and .limit(1) then picks an arbitrary one — which on
+// a Marks transfer or an officer grant means the wrong person. Escape the
+// LIKE metacharacters so the lookup is an exact, case-insensitive match.
+export function likeEscape(value) {
+  return String(value === null || value === undefined ? '' : value).replace(/([\\%_])/g, '\\$1');
+}
+
 // ── Errors ───────────────────────────────────────────────────
 
 // Postgres RAISE messages here are already written for humans, so surface
