@@ -2,8 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <script src="early-hide.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Archive Publishing — MCA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600&display=swap">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" type="image/x-icon" href="images/icon.ico">
   <link rel="manifest" href="/manifest.json">
@@ -304,7 +308,11 @@ function esc(s) {
 
 // Keep javascript:/data: URLs out of markdown links.
 function safeUrl(url) {
-  const u = String(url ?? '').trim();
+  // Strip ASCII tab/newline/CR before the scheme check — browsers strip
+  // these when parsing a URL for navigation, so "java\tscript:" would
+  // otherwise dodge the scheme regex below while still executing as
+  // javascript: once the browser normalizes it on click.
+  const u = String(url ?? '').replace(/[\t\n\r]/g, '').trim();
   if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return /^https?:\/\//i.test(u) ? u : '';
   return u;
 }

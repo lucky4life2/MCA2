@@ -1,5 +1,9 @@
 /* ── MCA Global Styles ── */
-@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600&display=swap');
+/* Open Sans is loaded via a <link> in each page's <head> (with a
+   preconnect) instead of an @import here — @import blocks the CSSOM on
+   this file finishing download AND parsing before the browser even
+   discovers the font stylesheet needs fetching, adding a full extra
+   round trip to first paint on every page. */
 
 :root {
   --blue:        #18489e;   /* headings, primary brand */

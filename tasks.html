@@ -2,8 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script src="early-hide.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tasks — Minecraft Club of America</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600&display=swap">
 <link rel="stylesheet" href="style.css">
 <link rel="icon" type="image/x-icon" href="images/icon.ico">
 <link rel="manifest" href="/manifest.json">
@@ -428,16 +432,6 @@ async function resolveAccess(userId) {
     access.checkoff = checkoff === true;
     access.test = test === true;
   } catch {}
-  if (!access.manage) {
-    const preview = await getMyRolePreview().catch(() => null);
-    if (!preview) {
-      // Only fall back to the raw profile role when no "view as" preview is
-      // active — otherwise a real admin/owner previewing a lower role would
-      // get management access back regardless of what they're previewing.
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).single();
-      if (profile?.role === 'admin' || profile?.role === 'owner') access.manage = true;
-    }
-  }
   return access;
 }
 
