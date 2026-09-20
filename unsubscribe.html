@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Unsubscribe — Minecraft Club of America</title>
+  <meta name="robots" content="noindex">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/x-icon" href="images/icon.ico">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#18489e">
+  <link rel="apple-touch-icon" href="/images/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="MCA">
+  <style>
+    .un-wrap { max-width: 440px; margin: 0 auto; padding: 3rem 1.5rem 5rem; text-align: center; }
+    .un-wrap h1 { font-family: 'Times New Roman', serif; font-size: 1.7rem; color: var(--blue); font-weight: normal; margin-bottom: 1rem; }
+    .un-wrap p { font-size: 14px; color: var(--muted); line-height: 1.6; margin-bottom: 1.5rem; }
+    .un-error { color: #c0392b; font-size: 13px; margin-top: 1rem; display: none; }
+  </style>
+</head>
+<body>
+
+<div class="page-wrap">
+  <div class="un-wrap">
+    <div id="un-invalid" style="display:none;">
+      <h1>Link Not Valid</h1>
+      <p>This unsubscribe link is missing information or is no longer valid. You can also change your email preferences any time from your account page, or email us at minecraftclubofamerica@gmail.com.</p>
+    </div>
+
+    <div id="un-ask" style="display:none;">
+      <h1>Unsubscribe</h1>
+      <p id="un-ask-copy">Stop receiving these emails from Minecraft Club of America?</p>
+      <button class="btn btn-primary" id="un-confirm">Confirm Unsubscribe</button>
+      <div class="un-error" id="un-error"></div>
+    </div>
+
+    <div id="un-done" style="display:none;">
+      <h1>Unsubscribed</h1>
+      <p>You've been unsubscribed. You can turn these emails back on any time from your account page.</p>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="nav.js"></script>
+<script type="module" src="unsubscribe.page.js"></script>
+</body>
+</html>
