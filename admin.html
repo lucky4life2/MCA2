@@ -2,8 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <script src="early-hide.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin — Minecraft Club of America</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600&display=swap">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" type="image/x-icon" href="images/icon.ico">
   <link rel="manifest" href="/manifest.json">
@@ -1327,7 +1331,7 @@
 
 <script type="module" src="nav.js"></script>
 <script type="module">
-import { supabase, isAdmin, isOwner, startRolePreview, getMyRolePreview } from './supabase.js';
+import { supabase, isAdmin, isOwner, startRolePreview, getMyRolePreview, requireAal2 } from './supabase.js';
 
 // ── State ─────────────────────────────────────────────────────
 let _allMembers   = [];
@@ -1380,6 +1384,7 @@ async function init() {
     _session = session;
 
     if (!session?.user) { show('denied'); return; }
+    if (!(await requireAal2('admin.html'))) return;
 
     await loadMyPermissions(session.user);
 

@@ -2,8 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script src="early-hide.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tasks — Minecraft Club of America</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600&display=swap">
 <link rel="stylesheet" href="style.css">
 <link rel="icon" type="image/x-icon" href="images/icon.ico">
 <link rel="manifest" href="/manifest.json">
@@ -324,7 +328,7 @@
 
 <script type="module" src="nav.js"></script>
 <script type="module">
-import { supabase, getMyRolePreview } from './supabase.js';
+import { supabase, getMyRolePreview, requireAal2 } from './supabase.js';
 
 // ── Tag / status / color system ─────────────────────────────────
 // A task's tag IS its status and its color — one field, no overrides.
@@ -440,6 +444,7 @@ function applyAccessUI() {
 async function init() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user) return show('denied');
+  if (!(await requireAal2('tasks.html'))) return;
   _me = session.user;
   _access = await resolveAccess(_me.id);
   if (!_access.manage && !_access.checkoff && !_access.test) return show('denied');

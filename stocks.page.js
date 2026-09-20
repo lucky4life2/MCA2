@@ -18,17 +18,31 @@ let _isEconAdmin = false;
 let _isTreasury = false;
 
 // ── Boot ─────────────────────────────────────────────────────
-const { data: { session } } = await supabase.auth.getSession();
+// These three calls don't depend on each other, so they're fired together
+// instead of one after another — same for the four below once we know
+// there's a session. Each keeps the same error handling it had before
+// (loadExchangeSettings still throws on failure, the rest still swallow
+// theirs), just no longer waiting in a queue behind unrelated requests.
+const [{ data: { session } }, settingsResult, companiesResult] = await Promise.all([
+  supabase.auth.getSession(),
+  loadExchangeSettings(),
+  loadCompanies().catch(() => []),
+]);
 _session = session;
-
-_settings = await loadExchangeSettings();
-try { _companies = await loadCompanies(); } catch (e) { _companies = []; }
+_settings = settingsResult;
+_companies = companiesResult;
 
 if (_session) {
-  try { _accounts = await loadMyAccounts(); } catch (e) { _accounts = []; }
-  _myRoles = await loadMyCompanyRoles();
-  _isEconAdmin = await hasPermission('can_manage_economy');
-  _isTreasury = await hasPermission('can_manage_treasury');
+  const [accountsResult, myRolesResult, isEconAdminResult, isTreasuryResult] = await Promise.all([
+    loadMyAccounts().catch(() => []),
+    loadMyCompanyRoles(),
+    hasPermission('can_manage_economy'),
+    hasPermission('can_manage_treasury'),
+  ]);
+  _accounts = accountsResult;
+  _myRoles = myRolesResult;
+  _isEconAdmin = isEconAdminResult;
+  _isTreasury = isTreasuryResult;
   document.getElementById('tab-manage').style.display = '';
   if (_isEconAdmin || _isTreasury) document.getElementById('tab-admin').style.display = '';
 }

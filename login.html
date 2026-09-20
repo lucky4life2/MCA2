@@ -2,8 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <script src="early-hide.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sign In — Minecraft Club of America</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600&display=swap">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" type="image/x-icon" href="images/icon.ico">
   <link rel="manifest" href="/manifest.json">
@@ -206,7 +210,7 @@
     <div class="login-card">
 
       <div class="login-card-header">
-        <img src="images/logo.png" alt="MCA" class="login-card-logo" onerror="this.style.display='none'">
+        <img src="images/logo.png" width="500" height="500" alt="MCA" class="login-card-logo" onerror="this.style.display='none'">
         <div class="login-card-eyebrow">MCA Account</div>
         <div class="login-card-title" id="card-title">Welcome Back</div>
       </div>
@@ -457,6 +461,9 @@
   // returnTo.
   const { data: { session } } = await supabase.auth.getSession();
   if (session) {
+    // Always check AAL regardless of the mfa=1 param — a plain revisit/bookmark
+    // of login.html with only an AAL1 session (2FA enrolled but not yet
+    // verified this session) must not skip straight to returnTo.
     const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     if (!aal || aal.currentLevel === aal.nextLevel) {
       // Already at required level — nothing to do.

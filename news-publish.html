@@ -2,8 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <script src="early-hide.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>News Publishing — MCA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600&display=swap">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" type="image/x-icon" href="images/icon.ico">
   <link rel="manifest" href="/manifest.json">
@@ -343,7 +347,7 @@ Regular paragraph text.
 <div id="np-toast"></div>
 
 <script type="module">
-import { supabase, getMyRolePreview } from './supabase.js';
+import { supabase, getMyRolePreview, requireAal2 } from './supabase.js';
 
 // Article metadata is author-supplied and rendered through innerHTML below.
 function esc(s) {
@@ -419,6 +423,7 @@ function toast(msg, isError = false) {
 async function init() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user) { showState('denied'); return; }
+  if (!(await requireAal2('news-publish.html'))) return;
   _user = session.user;
 
   // Check access via the server-side permission RPC only. A failed or
