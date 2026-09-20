@@ -2,8 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <script src="early-hide.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sign In — Minecraft Club of America</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600&display=swap">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" type="image/x-icon" href="images/icon.ico">
   <link rel="manifest" href="/manifest.json">
@@ -206,7 +210,7 @@
     <div class="login-card">
 
       <div class="login-card-header">
-        <img src="images/logo.png" alt="MCA" class="login-card-logo" onerror="this.style.display='none'">
+        <img src="images/logo.png" width="500" height="500" alt="MCA" class="login-card-logo" onerror="this.style.display='none'">
         <div class="login-card-eyebrow">MCA Account</div>
         <div class="login-card-title" id="card-title">Welcome Back</div>
       </div>
@@ -449,22 +453,20 @@
     window.location.replace(dest);
   }
 
-  // If already signed in, skip the login page entirely —
-  // unless this is an MFA challenge redirect (mfa=1), in which case we need
-  // to show the MFA panel to satisfy the AAL2 requirement.
+  // If already signed in, skip the login page entirely — unless the session
+  // hasn't cleared the AAL2 (2FA) requirement yet, in which case we need to
+  // show the MFA panel. Always check AAL regardless of the mfa=1 param — a
+  // plain revisit/bookmark of login.html with only an AAL1 session (2FA
+  // enrolled but not yet verified this session) must not skip straight to
+  // returnTo.
   const { data: { session } } = await supabase.auth.getSession();
   if (session) {
-    if (params.get('mfa') === '1') {
-      // Check if MFA is actually still needed; if it's already satisfied, just redirect.
-      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-      if (!aal || aal.currentLevel === aal.nextLevel) {
-        // Already at required level — nothing to do.
-        finishLogin(returnTo);
-      }
-      // Otherwise fall through: the MFA panel will be shown below after init.
-    } else {
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (!aal || aal.currentLevel === aal.nextLevel) {
+      // Already at required level — nothing to do.
       finishLogin(returnTo);
     }
+    // Otherwise fall through: the MFA panel will be shown below after init.
   }
 
   // Pending email addresses for the code-entry steps below
@@ -997,21 +999,36 @@
     btn.textContent = 'Verifying…'; btn.disabled = true;
     const SUPABASE_URL = supabase.supabaseUrl;
     const ANON_KEY = supabase.supabaseKey;
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/verify-signup-code`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
-      body: JSON.stringify({ userId: _pendingSignupUserId, code }),
-    });
-    const json = await res.json();
-    if (!res.ok || json.error) {
-      errEl.textContent = json.error || 'Invalid or expired code.';
+    // Every step below was previously unguarded: a network blip, a non-JSON
+    // response, or a payload missing tokens threw past the error handling and
+    // left the button disabled on "Verifying…" with no way back but a reload.
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/verify-signup-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
+        body: JSON.stringify({ userId: _pendingSignupUserId, code }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        errEl.textContent = json.error || 'Invalid or expired code.';
+        errEl.style.display = 'block';
+        btn.textContent = 'Verify & Continue'; btn.disabled = false;
+        return;
+      }
+      if (!json.access_token || !json.refresh_token) {
+        errEl.textContent = 'Could not complete sign-in. Please try again.';
+        errEl.style.display = 'block';
+        btn.textContent = 'Verify & Continue'; btn.disabled = false;
+        return;
+      }
+      // Set the session manually from the tokens returned
+      await supabase.auth.setSession({ access_token: json.access_token, refresh_token: json.refresh_token });
+      window.location.replace(returnTo);
+    } catch (e) {
+      errEl.textContent = 'Could not reach the server. Please try again.';
       errEl.style.display = 'block';
       btn.textContent = 'Verify & Continue'; btn.disabled = false;
-      return;
     }
-    // Set the session manually from the tokens returned
-    await supabase.auth.setSession({ access_token: json.access_token, refresh_token: json.refresh_token });
-    window.location.replace(returnTo);
   });
 
   // Enter key on signup code field
@@ -1031,9 +1048,15 @@
     const originalText = link.textContent;
     link.textContent = 'Sending…';
     try {
+      // SUPABASE_URL/ANON_KEY are const-scoped inside the other handlers, so
+      // referencing them here threw a ReferenceError that the catch below
+      // swallowed — resend always reported a connection failure. The apikey
+      // header was missing too, which would have 401'd even once in scope.
+      const SUPABASE_URL = supabase.supabaseUrl;
+      const ANON_KEY = supabase.supabaseKey;
       const res = await fetch(`${SUPABASE_URL}/functions/v1/resend-signup-code`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
         body: JSON.stringify({ userId: _pendingSignupUserId }),
       });
       const json = await res.json();

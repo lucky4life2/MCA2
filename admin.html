@@ -2,8 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <script src="early-hide.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin — Minecraft Club of America</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600&display=swap">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" type="image/x-icon" href="images/icon.ico">
   <link rel="manifest" href="/manifest.json">
@@ -481,8 +485,8 @@
           <!-- Active Now stat disabled — see commented block below stats-row
           <div class="stat-cell"><div class="stat-label">Active Now</div><div class="stat-value" id="stat-active-now" style="color:#22c55e;">—</div></div>
           -->
-          <div class="stat-cell" id="stat-news-pending-cell" style="display:none;cursor:pointer;" onclick="document.querySelector('[data-tab=news]').click();"><div class="stat-label">News Awaiting Review</div><div class="stat-value" id="stat-news-pending" style="color:#c0392b;">—</div></div>
-          <div class="stat-cell" id="stat-company-pending-cell" style="display:none;cursor:pointer;" onclick="document.querySelector('[data-tab=economy]').click();"><div class="stat-label">Companies Awaiting Review</div><div class="stat-value" id="stat-company-pending" style="color:#c0392b;">—</div></div>
+          <div class="stat-cell" id="stat-news-pending-cell" style="display:none;cursor:pointer;" onclick="document.querySelector('[data-tab=news]').click();" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.querySelector('[data-tab=news]').click();}" role="button" tabindex="0"><div class="stat-label">News Awaiting Review</div><div class="stat-value" id="stat-news-pending" style="color:#c0392b;">—</div></div>
+          <div class="stat-cell" id="stat-company-pending-cell" style="display:none;cursor:pointer;" onclick="document.querySelector('[data-tab=economy]').click();" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.querySelector('[data-tab=economy]').click();}" role="button" tabindex="0"><div class="stat-label">Companies Awaiting Review</div><div class="stat-value" id="stat-company-pending" style="color:#c0392b;">—</div></div>
         </div>
       </div>
 
@@ -1327,7 +1331,7 @@
 
 <script type="module" src="nav.js"></script>
 <script type="module">
-import { supabase, isAdmin, isOwner, startRolePreview, getMyRolePreview } from './supabase.js';
+import { supabase, isAdmin, isOwner, startRolePreview, getMyRolePreview, requireAal2 } from './supabase.js';
 
 // ── State ─────────────────────────────────────────────────────
 let _allMembers   = [];
@@ -1380,6 +1384,7 @@ async function init() {
     _session = session;
 
     if (!session?.user) { show('denied'); return; }
+    if (!(await requireAal2('admin.html'))) return;
 
     await loadMyPermissions(session.user);
 
@@ -1621,12 +1626,12 @@ function renderMembers(members) {
     const overflowRoles = sortedRoles.slice(VISIBLE_ROLE_COUNT);
     const roleBadgesHtml = visibleRoles.map(roleBadge).join('') +
       (overflowRoles.length
-        ? `<span class="role-badge role-more-toggle" style="cursor:pointer;background:var(--bg);color:var(--muted);border:1px dashed var(--border);" title="${overflowRoles.map(r=>r.label).join(', ')}" onclick="
+        ? `<span class="role-badge role-more-toggle" style="cursor:pointer;background:var(--bg);color:var(--muted);border:1px dashed var(--border);" title="${escapeHtml(overflowRoles.map(r=>r.label).join(', '))}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" onclick="
             const hidden=this.nextElementSibling, less=hidden.nextElementSibling;
-            this.style.display='none'; hidden.style.display='inline'; less.style.display='inline-flex';
-          ">+${overflowRoles.length} more</span><span style="display:none;">${overflowRoles.map(roleBadge).join('')}</span><span class="role-badge role-less-toggle" style="display:none;cursor:pointer;background:var(--bg);color:var(--muted);border:1px dashed var(--border);" onclick="
+            this.style.display='none'; hidden.style.display='inline'; less.style.display='inline-flex'; less.focus();
+          ">+${overflowRoles.length} more</span><span style="display:none;">${overflowRoles.map(roleBadge).join('')}</span><span class="role-badge role-less-toggle" style="display:none;cursor:pointer;background:var(--bg);color:var(--muted);border:1px dashed var(--border);" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" onclick="
             const less=this, hidden=less.previousElementSibling, more=hidden.previousElementSibling;
-            less.style.display='none'; hidden.style.display='none'; more.style.display='inline';
+            less.style.display='none'; hidden.style.display='none'; more.style.display='inline'; more.focus();
           ">− less</span>`
         : '');
 
@@ -1703,7 +1708,7 @@ function renderMembers(members) {
         <div class="member-name">${escapeHtml(name)}</div>
         ${m.username && m.display_name ? `<div class="member-email">@${escapeHtml(m.username)}</div>` : ''}
       </td>
-      <td><div class="member-email">${m.email||'—'}</div></td>
+      <td><div class="member-email">${escapeHtml(m.email||'—')}</div></td>
       <td>${rolesCell}</td>
       <td style="white-space:nowrap;">
         <div style="display:flex;flex-direction:column;gap:4px;">${emailBadge}${discordBadge}${googleBadge}${statusBadge}</div>
@@ -1749,7 +1754,7 @@ window.openRolePopup = (event, userId) => {
   function renderItems() {
     return assignableRoles.map(r => {
       const has = stagedRoleIds.has(r.id);
-      return `<div class="role-popup-item" data-role-id="${r.id}" onclick="event.stopPropagation();_toggleStagedRole('${r.id}')">
+      return `<div class="role-popup-item" data-role-id="${r.id}" onclick="event.stopPropagation();_toggleStagedRole('${r.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();_toggleStagedRole('${r.id}')}" role="checkbox" aria-checked="${has}" tabindex="0">
         <span class="role-popup-dot" style="background:${safeColor(r.color)};"></span>
         <span style="flex:1;">${escapeHtml(r.label)}</span>
         ${has ? `<span class="role-popup-check">✓</span>` : ''}
@@ -1885,7 +1890,7 @@ function renderRoles() {
             <div class="role-card-meta">Level ${escapeHtml(r.level)} · <code style="font-family:monospace;font-size:11px;">${escapeHtml(r.name)}</code> · ${memberCount} member${memberCount !== 1 ? 's' : ''}</div>
           </div>
           <div style="display:flex;gap:6px;">
-            ${canViewAs ? `<button class="btn btn-outline btn-sm" onclick="viewAsRole('${r.id}', '${r.label.replace(/'/g, "\\'")}')" title="Browse the live site with exactly this role's real permissions">View as</button>` : ''}
+            ${canViewAs ? `<button class="btn btn-outline btn-sm" onclick="viewAsRole('${r.id}', '${escapeHtml(r.label.replace(/\\/g, '\\\\').replace(/'/g, "\\'"))}')" title="Browse the live site with exactly this role's real permissions">View as</button>` : ''}
             ${canEdit ? `<button class="btn btn-outline btn-sm" onclick="openRoleModal('${r.id}')">Edit</button>` : ''}
             ${canDelete ? `<button class="btn btn-danger btn-sm" onclick="deleteRole('${r.id}')">Delete</button>` : ''}
           </div>
@@ -2047,7 +2052,7 @@ function renderNewsAdmin() {
           <span class="status-dot ${escapeHtml(a.status)}"></span>${escapeHtml(a.title)}
         </div>
         <div class="news-article-meta">
-          ${a.category || 'General'} · By ${a.author_name||'Unknown'} · Created ${created}
+          ${escapeHtml(a.category || 'General')} · By ${escapeHtml(a.author_name||'Unknown')} · Created ${escapeHtml(created)}
           ${a.status === 'published' && pub ? ` · Published ${pub}` : ''}
           ${a.status === 'pending_review' ? ` · <span style="color:#c0392b;font-weight:600;">${escapeHtml(statusLabel)}</span>` : ''}
         </div>
@@ -2101,7 +2106,25 @@ document.getElementById('btn-new-article').addEventListener('click', () => openN
 document.getElementById('nm2-close').addEventListener('click',  closeNewsModal);
 document.getElementById('nm2-cancel').addEventListener('click', closeNewsModal);
 
+// Double-clicking Publish on a new article used to run the insert twice —
+// two published articles, and notifySubscribers() firing a second email blast
+// to every subscriber. The generated slug carries a timestamp, so there was no
+// unique constraint to fall back on.
+let _savingArticle = false;
+
 async function saveArticle(forceStatus = null) {
+  if (_savingArticle) return;
+  _savingArticle = true;
+  const saveBtns = ['nm2-save-draft', 'nm2-save-publish'].map(x => document.getElementById(x)).filter(Boolean);
+  saveBtns.forEach(b => { b.disabled = true; });
+  try { await saveArticleInner(forceStatus); }
+  finally {
+    _savingArticle = false;
+    saveBtns.forEach(b => { b.disabled = false; });
+  }
+}
+
+async function saveArticleInner(forceStatus) {
   const id      = document.getElementById('nm2-id').value;
   const title   = document.getElementById('nm2-title-input').value.trim();
   const errEl   = document.getElementById('nm2-error');
@@ -2202,13 +2225,17 @@ window.publishArticle = async (id) => {
 };
 window.approveArticle = window.publishArticle; // same action, different entry point
 window.rejectArticle = async (id) => {
-  const reason = prompt("Optional note for the author on why this was sent back (leave blank to skip):") || null;
+  // This prompt is the only gate on rejecting — there is no preceding
+  // confirm() — so Cancel has to abort. `|| null` swallowed the null and sent
+  // the article back to draft anyway, with no way to back out once clicked.
+  const reason = prompt("Send this article back to the author? Optional note on why (leave blank to skip):", '');
+  if (reason === null) return;
   const { data: { user } } = await supabase.auth.getUser();
   await supabase.from('news_articles').update({
     status: 'draft',
     reviewed_by: user.id,
     reviewed_at: new Date().toISOString(),
-    rejection_note: reason,
+    rejection_note: reason || null,
   }).eq('id', id);
   loadNewsAdmin();
   loadPendingNewsCount();
@@ -2291,7 +2318,7 @@ function renderArchiveAdmin() {
           <span class="status-dot ${escapeHtml(d.status)}"></span>${escapeHtml(d.title)}
         </div>
         <div class="news-article-meta">
-          ${d.category || 'Uncategorized'} · By ${d.author_name||'Unknown'} · Created ${created}
+          ${escapeHtml(d.category || 'Uncategorized')} · By ${escapeHtml(d.author_name||'Unknown')} · Created ${escapeHtml(created)}
           ${d.status === 'published' && pub ? ` · Ratified ${pub}` : ''}
         </div>
       </div>
@@ -2470,7 +2497,7 @@ function renderFaqAdmin() {
         <div class="news-article-title">
           <span class="status-dot ${escapeHtml(f.status)}"></span>${escapeHtml(f.question)}
         </div>
-        <div class="news-article-meta">${f.category || 'General'} · Sort ${escapeHtml(f.sort_order)} · ${f.status === 'published' ? 'Published' : 'Draft'}</div>
+        <div class="news-article-meta">${escapeHtml(f.category || 'General')} · Sort ${escapeHtml(f.sort_order)} · ${f.status === 'published' ? 'Published' : 'Draft'}</div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;">
         ${f.status !== 'published' ? `<button class="btn btn-success btn-sm" onclick="publishFaq('${f.id}')">Publish</button>` : `<button class="btn btn-outline btn-sm" onclick="unpublishFaq('${f.id}')">Unpublish</button>`}
@@ -2616,7 +2643,7 @@ function verifyCard(m, isVerified) {
   return `<div class="verify-card">
     <div class="verify-card-info">
       <div class="verify-card-name">${escapeHtml(name)}</div>
-      <div class="verify-card-detail">MC username: <span class="verify-card-mc">${escapeHtml(m.minecraft_username)}</span><br>${m.email||'No email'}</div>
+      <div class="verify-card-detail">MC username: <span class="verify-card-mc">${escapeHtml(m.minecraft_username)}</span><br>${escapeHtml(m.email||'No email')}</div>
     </div>
     <div class="btn-actions">
       ${!isVerified ? `<button class="btn btn-success btn-sm" onclick="approveMC('${m.id}')">Approve</button>` : ''}
@@ -2960,7 +2987,10 @@ async function pmUploadPendingImages(productIdHint) {
 function openProductModal(product = null) {
   ['id','name','desc','price','inventory','category','weight','dimensions','material','sizes','colors','sku','notes'].forEach(k => {
     const el = document.getElementById('pm-'+k);
-    if (el) el.value = product?.[k === 'desc' ? 'description' : k === 'notes' ? 'admin_notes' : k] || '';
+    // `??`, not `||`: a price of 0 (free) or inventory of 0 (out of stock) are
+    // legitimate stored values, and `||` blanked the field so saving an
+    // otherwise-untouched product failed with "price/inventory is required".
+    if (el) el.value = product?.[k === 'desc' ? 'description' : k === 'notes' ? 'admin_notes' : k] ?? '';
   });
   document.getElementById('pm-product-type').value = product?.product_type || 'physical';
   document.getElementById('pm-billing-cycle').value = product?.billing_cycle || 'monthly';
@@ -3163,7 +3193,7 @@ function renderOwnerDropdownList() {
   const list = document.getElementById('nm-owner-dropdown-list');
   const matches = _allMembers.filter(m => !q || (m.display_name || '').toLowerCase().includes(q) || (m.username || '').toLowerCase().includes(q));
   list.innerHTML = matches.length
-    ? matches.map(m => `<div onclick="toggleNationOwner('${m.id}')" style="padding:8px 10px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px;" onmouseover="this.style.background='var(--bg-alt,#f5f7fa)'" onmouseout="this.style.background=''"><input type="checkbox" ${_nmOwnerIds.includes(m.id) ? 'checked' : ''} style="pointer-events:none;">${m.display_name || m.username}${m.username && m.display_name ? ' <span style="color:var(--muted);">@'+m.username+'</span>' : ''}</div>`).join('')
+    ? matches.map(m => `<div onclick="toggleNationOwner('${m.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleNationOwner('${m.id}')}" role="checkbox" aria-checked="${_nmOwnerIds.includes(m.id)}" tabindex="0" style="padding:8px 10px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px;" onmouseover="this.style.background='var(--bg-alt,#f5f7fa)'" onmouseout="this.style.background=''"><input type="checkbox" tabindex="-1" aria-hidden="true" ${_nmOwnerIds.includes(m.id) ? 'checked' : ''} style="pointer-events:none;">${escapeHtml(m.display_name || m.username)}${m.username && m.display_name ? ' <span style="color:var(--muted);">@'+escapeHtml(m.username)+'</span>' : ''}</div>`).join('')
     : '<div style="padding:8px 10px;font-size:13px;color:var(--muted);">No matches</div>';
 }
 window.toggleNationOwner = (id) => {
@@ -3211,7 +3241,7 @@ async function loadLeadershipAdmin() {
         <div class="leadership-branch-heading">${BRANCH_LABEL[branch]} <span class="leadership-branch-count">${rows.length}</span></div>
         ${rows.map(l => `
           <div class="leadership-row" style="display:flex;align-items:center;justify-content:space-between;padding:10px 1.5rem;border-bottom:1px solid var(--border);">
-            <div><div style="font-weight:600;font-size:14px;">${escapeHtml(l.name)}</div><div style="font-size:12px;color:var(--muted);">${escapeHtml(l.title)}${l.subtitle?' · '+l.subtitle:''} · Order ${escapeHtml(l.sort_order)}${l.show_in_team?' · Team grid':''}</div></div>
+            <div><div style="font-weight:600;font-size:14px;">${escapeHtml(l.name)}</div><div style="font-size:12px;color:var(--muted);">${escapeHtml(l.title)}${l.subtitle?' · '+escapeHtml(l.subtitle):''} · Order ${escapeHtml(l.sort_order)}${l.show_in_team?' · Team grid':''}</div></div>
             <div style="display:flex;gap:8px;"><button class="btn btn-outline btn-sm" onclick="openLeaderModal('${l.id}')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteLeader('${l.id}')">Delete</button></div>
           </div>`).join('')}
       </div>`;
@@ -3579,7 +3609,11 @@ function safeColor(c) {
 
 // Only http(s) and relative URLs may reach an href/src.
 function safeUrl(url) {
-  const u = String(url ?? '').trim();
+  // Strip ASCII tab/newline/CR before the scheme check — browsers strip
+  // these when parsing a URL for navigation, so "java\tscript:" would
+  // otherwise dodge the scheme regex below while still executing as
+  // javascript: once the browser normalizes it on click.
+  const u = String(url ?? '').replace(/[\t\n\r]/g, '').trim();
   if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return /^https?:\/\//i.test(u) ? u : '';
   return u;
 }
@@ -3704,13 +3738,13 @@ function renderMessages() {
     return `<div class="msg-row ${unread ? 'unread' : ''}" data-id="${m.id}">
       <div class="msg-dot"></div>
       <div class="msg-content">
-        <div class="msg-meta" style="cursor:pointer;" onclick="toggleThreadExpand('${m.id}')">
+        <div class="msg-meta" style="cursor:pointer;" onclick="toggleThreadExpand('${m.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleThreadExpand('${m.id}')}" role="button" tabindex="0" aria-expanded="${expanded ? 'true' : 'false'}">
           <span class="msg-sender">${sender}</span>
           ${claimBadge}
           <span style="margin-left:auto;font-size:11px;color:var(--muted);">${expanded ? '▲' : '▼'}</span>
         </div>
-        <div class="msg-subject" style="cursor:pointer;" onclick="toggleThreadExpand('${m.id}')">${subject}</div>
-        ${expanded ? '' : `<div style="font-size:12px;color:var(--muted);margin-top:2px;cursor:pointer;" onclick="toggleThreadExpand('${m.id}')">${lastPreview} ${lastPreview ? '· ' + lastTime : ''}</div>`}
+        <div class="msg-subject" style="cursor:pointer;" onclick="toggleThreadExpand('${m.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleThreadExpand('${m.id}')}" role="button" tabindex="0">${subject}</div>
+        ${expanded ? '' : `<div style="font-size:12px;color:var(--muted);margin-top:2px;cursor:pointer;" onclick="toggleThreadExpand('${m.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleThreadExpand('${m.id}')}" role="button" tabindex="0">${lastPreview} ${lastPreview ? '· ' + lastTime : ''}</div>`}
         ${expanded ? `
         ${itemsHtml}
         <div class="msg-reply-form" style="margin-top:10px;">
@@ -4069,7 +4103,7 @@ async function renderAuditLog() {
     const actorType = r.actor_type || 'system';
     const hasDetail = r.old_data || r.new_data;
     return `<div class="audit-row">
-      <div class="audit-row-top" ${hasDetail ? `onclick="toggleAuditDetail(${idx})"` : ''}>
+      <div class="audit-row-top" ${hasDetail ? `onclick="toggleAuditDetail(${idx})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAuditDetail(${idx})}" role="button" tabindex="0" aria-expanded="false" aria-controls="audit-detail-${idx}"` : ''}>
         <div class="audit-row-main">
           <div class="audit-summary">
             <span class="audit-actor-badge audit-actor-${escapeHtml(actorType)}">${escapeHtml(actorType)}</span><span class="audit-action-badge audit-action-${escapeHtml(r.action)}">${escapeHtml(r.action)}</span>${escapeHtml(r.summary || auditTableLabel(r.table_name))}
@@ -4092,6 +4126,8 @@ function toggleAuditDetail(idx) {
   if (!detail) return;
   const open = detail.classList.toggle('open');
   if (toggle) toggle.textContent = open ? 'Details ▴' : 'Details ▾';
+  const row = detail.previousElementSibling;
+  if (row && row.hasAttribute('aria-expanded')) row.setAttribute('aria-expanded', String(open));
 }
 window.toggleAuditDetail = toggleAuditDetail;
 

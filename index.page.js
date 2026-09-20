@@ -19,10 +19,13 @@
         if (el && cfg[`${s}_${p}`]) el.textContent = cfg[`${s}_${p}`];
       });
     });
-    // Discord button
-    if (cfg.discord_url) {
+    // Discord button — site_config is admin-editable, so its URL is
+    // untrusted input. Only accept http(s); anything else (e.g. a
+    // javascript: scheme) is dropped and the button keeps its default href,
+    // matching the safeLinkUrl() guard nav.js applies to this same field.
+    if (cfg.discord_url && /^https?:\/\//i.test(String(cfg.discord_url).trim())) {
       const btn = document.getElementById('hero-discord-btn');
-      if (btn) btn.href = cfg.discord_url;
+      if (btn) btn.href = String(cfg.discord_url).trim();
     }
   } catch(e) {}
 })();

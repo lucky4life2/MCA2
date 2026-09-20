@@ -1,5 +1,9 @@
 /* ── MCA Global Styles ── */
-@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600&display=swap');
+/* Open Sans is loaded via a <link> in each page's <head> (with a
+   preconnect) instead of an @import here — @import blocks the CSSOM on
+   this file finishing download AND parsing before the browser even
+   discovers the font stylesheet needs fetching, adding a full extra
+   round trip to first paint on every page. */
 
 :root {
   --blue:        #18489e;   /* headings, primary brand */
@@ -8,7 +12,7 @@
   --green-dark:  #4db84f;   /* hover on green elements */
   --black:       #111111;
   --mid:         #444444;
-  --muted:       #888888;
+  --muted:       #6b7280;   /* WCAG AA 4.5:1+ against --white/--bg (was #888, ~3.9:1 — failed AA for normal text) */
   --border:      #dde3ee;   /* slightly blue-tinted border */
   --bg:          #f8f9fc;   /* faint blue-white background */
   --white:       #ffffff;
@@ -773,13 +777,33 @@ footer {
 
 /* ── TOAST ── */
 .toast {
-  position: fixed; bottom: 2rem; left: 50%;
+  position: fixed; bottom: calc(2rem + var(--cookie-banner-h, 0px)); left: 50%;
   transform: translateX(-50%) translateY(10px);
   background: var(--blue); color: white; font-size: 13px; font-weight: 500;
   padding: 10px 22px; border-radius: 4px; opacity: 0; pointer-events: none;
   transition: all 0.25s; z-index: 9999;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── COOKIE NOTICE BANNER ───────────────────────────────────── */
+/* z-index sits above page content but below drawers (300/301), modals (400+)
+   and the site-lock overlay (9000+), so it can never cover their controls.
+   While visible it publishes its own height as --cookie-banner-h (set in
+   nav.js) so bottom-anchored widgets can shift clear of it. */
+.cookie-banner {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 250;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px;
+  background: var(--white); border-top: 1px solid var(--border);
+  padding: 14px 20px; box-shadow: 0 -4px 16px rgba(0,0,0,0.08);
+}
+.cookie-banner[hidden] { display: none; }
+.cookie-banner-text { margin: 0; font-size: 13px; color: var(--mid); line-height: 1.5; max-width: 62ch; }
+.cookie-banner-text a { color: var(--blue); }
+.cookie-banner-dismiss {
+  flex-shrink: 0; background: var(--blue); color: #fff; border: none; border-radius: 4px;
+  font-size: 13px; font-weight: 600; padding: 8px 18px; cursor: pointer; transition: background .15s;
+}
+.cookie-banner-dismiss:hover { background: var(--blue-dark); }
 
 /* ── HAMBURGER MENU ─────────────────────────────────────────── */
 .nav-hamburger {

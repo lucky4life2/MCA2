@@ -55,7 +55,7 @@ function renderGrid(nations) {
         : `<span class="flag-placeholder">No flag</span>`
     }</div>`;
     return `
-      <div class="nation-flag-item" data-season="${esc(n.season || '')}" onclick="openNationDetail(${i})" style="cursor:pointer;" title="View ${esc(n.name)}">
+      <div class="nation-flag-item" data-season="${esc(n.season || '')}" onclick="openNationDetail(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openNationDetail(${i})}" role="button" tabindex="0" style="cursor:pointer;" title="View ${esc(n.name)}">
         ${flagHtml}
         <div class="nation-name">${esc(n.name)}</div>
         ${n.season ? `<div class="nation-season-tag">${esc(n.season)}</div>` : ''}
@@ -102,9 +102,15 @@ function isEditableSeason(season) {
   return _currentServerNames.includes(s);
 }
 
+// Index of the nation whose detail view is currently open, or null. Tracked so
+// the ownership lookup — which resolves after the grid is already clickable —
+// can re-render an already-open detail once it knows whether to show Edit.
+let _openDetailIndex = null;
+
 function openNationDetail(i) {
   const n = _nations[i];
   if (!n) return;
+  _openDetailIndex = i;
 
   document.getElementById('nations-grid').closest('.section').style.display = 'none';
   const detail = document.getElementById('nation-detail-section');
@@ -223,6 +229,7 @@ function openNationDetail(i) {
 }
 
 function closeNationDetail() {
+  _openDetailIndex = null;
   document.getElementById('nations-grid').closest('.section').style.display = '';
   document.getElementById('nation-detail-section').style.display = 'none';
 }
@@ -259,6 +266,19 @@ window.applyFlagDetailClass = applyFlagDetailClass;
    .then(rows => { _currentServerNames = rows.map(r => (r.name || '').trim().toLowerCase()).filter(Boolean); })
    .catch(() => { /* leave empty — the RPC still enforces the rule on save */ });
 
+  // Started here rather than after the render below: the grid becomes
+  // clickable as soon as it renders, and an owner who clicks straight into
+  // their own nation before this resolved used to get a detail view with no
+  // Edit button at all.
+  const ownershipPromise = (async () => {
+    try {
+      const user = await getUser();
+      if (!user) return;
+      const { data } = await supabase.from('nation_owners').select('nation_id').eq('user_id', user.id);
+      _myOwnedNationIds = (data || []).map(r => r.nation_id);
+    } catch(e) { /* not logged in / owner lookup failed — no edit access, fine */ }
+  })();
+
   try {
     const res = await fetch(
       `${SUPABASE_URL_N}/rest/v1/nations?select=*&order=sort_order.asc`,
@@ -288,13 +308,9 @@ window.applyFlagDetailClass = applyFlagDetailClass;
     grid.innerHTML = '<p style="grid-column:1/-1;color:var(--mid);font-size:14px;">Could not load nations. Check back soon.</p>';
   }
 
-  await currentServersPromise;
+  await Promise.all([currentServersPromise, ownershipPromise]);
 
-  try {
-    const user = await getUser();
-    if (user) {
-      const { data } = await supabase.from('nation_owners').select('nation_id').eq('user_id', user.id);
-      _myOwnedNationIds = (data || []).map(r => r.nation_id);
-    }
-  } catch(e) { /* not logged in / owner lookup failed — no edit access, fine */ }
+  // If the visitor already clicked into a nation while the lookups were in
+  // flight, re-render that detail now that edit rights are actually known.
+  if (_openDetailIndex !== null) openNationDetail(_openDetailIndex);
 })();
