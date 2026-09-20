@@ -271,6 +271,10 @@
   import { supabase, signOut, hasPermission, createCheckoutSession } from './supabase.js';
 
   let _isAdmin = false, _isLoggedIn = false, _userId = null, _initialized = false;
+  // Whether the signed-in user already holds a membership seat (paid or
+  // admin-comped). create-checkout-session refuses a second subscription
+  // server-side, so without this the Subscribe button stayed live for
+  // existing members and only failed once they'd been sent to checkout.
   let _isActiveMember = false;
   let _products = [];
 

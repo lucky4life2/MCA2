@@ -248,3 +248,30 @@ export async function createCheckoutSession(items) {
   if (!res.ok || !result.url) throw new Error(result.error || 'Could not start checkout.');
   return result.url;
 }
+
+/**
+ * Opens the Stripe Billing Portal for the signed-in member and returns the
+ * URL to redirect the browser to. This is the only way a paying member can
+ * change their card, see an invoice, or cancel — the Edge Function has been
+ * deployed since the membership launch but nothing on the site called it.
+ * returnTo is a bare page name on this site (validated server-side too).
+ * Throws on any failure (not signed in, comped membership with no Stripe
+ * customer behind it, Stripe/Edge Function error).
+ */
+export async function createBillingPortalSession(returnTo = 'account.html') {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error('You must be signed in to manage billing.');
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/create-billing-portal-session`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ return_to: returnTo }),
+  });
+  const result = await res.json().catch(() => ({}));
+  if (!res.ok || !result.url) throw new Error(result.error || 'Could not open the billing portal.');
+  return result.url;
+}
