@@ -811,9 +811,10 @@ async function showAgeGate() {
   if (!_profile.age_band) {
     // Never answered the age question yet (every OAuth signup lands here,
     // since a provider's consent screen can't carry a custom DOB field).
-    // Keyed on age_band rather than date_of_birth: the two are written
-    // together by submit-age-check, and date_of_birth is deliberately not
-    // readable by the client.
+    // age_band, not date_of_birth, is the signal: the raw DOB is not
+    // readable by the client at all, and it is cleared for under-13
+    // accounts once their band is recorded — reading it here re-asked
+    // those accounts for a birthday they had already given.
     document.getElementById('agegate-dob').style.display = 'block';
   } else if (_profile.age_band === 'under_13') {
     const status = await myMinorConsentStatus();
@@ -926,15 +927,19 @@ function showRecoveryBanner() {
   }, 300);
 }
 
-// profiles has column-level SELECT grants, not a table-wide one, so
-// select('*') asks for columns this role may not read and PostgREST answers
-// 403 — which this function used to swallow into an empty _profile, blanking
-// the whole account page. Name the columns the page actually uses instead.
+// Every column this page reads, listed explicitly. `select('*')` used to
+// stand here, but profiles no longer carries a table-wide SELECT grant —
+// only a per-column allowlist (date_of_birth and the credential/token
+// columns are deliberately off it). Postgres rejects `SELECT *` outright
+// in that situation ("permission denied for table profiles"), so the query
+// failed for every signed-in user and _profile silently fell back to {} —
+// which is why the membership section always read "Not a Member", even for
+// an admin-granted member.
 const PROFILE_COLUMNS = [
-  'id', 'username', 'display_name', 'minecraft_username', 'minecraft_verified',
-  'role', 'created_at', 'discord_id', 'google_id', 'email', 'account_status',
-  'deletion_scheduled_at', 'deactivated_at', 'news_email_opt_in',
-  'task_email_opt_in', 'public_listing_opt_in', 'age_band',
+  'id', 'display_name', 'username', 'email', 'role', 'account_status',
+  'age_band', 'deletion_scheduled_at', 'discord_id', 'google_id',
+  'minecraft_username', 'minecraft_verified', 'news_email_opt_in',
+  'task_email_opt_in', 'public_listing_opt_in',
   'membership_status', 'membership_source', 'membership_current_period_end',
 ].join(', ');
 
@@ -944,7 +949,7 @@ async function loadProfile() {
     .select(PROFILE_COLUMNS)
     .eq('id', _user.id)
     .single();
-  if (error) console.error('loadProfile error:', error.message);
+  if (error) console.error('Could not load your profile:', error.message);
   _profile = data || {};
 }
 
@@ -994,13 +999,17 @@ function renderMembership() {
   const isActive = status === 'active' || status === 'trialing';
 
   if (isActive) {
+    // A comped membership has no Stripe customer behind it, so it has no
+    // renewal date and nothing to manage — saying it "renews" on a date a
+    // century out, next to a billing button that can only error, is worse
+    // than saying plainly that it was granted.
     const comped = _profile.membership_source === 'admin_grant';
     badge.textContent = comped ? 'Complimentary' : 'Active';
     badge.className = 'account-section-badge badge-verified';
     body.innerHTML = comped
       ? `
       <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
-        An MCA admin gave you a complimentary membership — there's nothing to pay and nothing to renew. This unlocks the Minecraft server and the member-only pages of the site.
+        An admin granted you a complimentary membership — there's nothing to pay and nothing to renew. This unlocks the Minecraft server and the member-only pages of the site.
       </p>`
       : `
       <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">

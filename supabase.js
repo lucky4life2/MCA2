@@ -275,16 +275,18 @@ export async function getMembership() {
 }
 
 /**
- * Opens the Stripe-hosted billing portal, where a member can update their
- * card, see invoices or cancel. Returns the URL to send the browser to.
- * Throws with a readable message when there's nothing to manage (comped
- * membership, never subscribed) or Stripe isn't connected yet.
- * returnTo is a bare page name on this site, e.g. 'account.html'.
+ * Opens the Stripe Billing Portal for the signed-in member and returns the
+ * URL to redirect the browser to. This is the only way a paying member can
+ * change their card, see an invoice, or cancel — the Edge Function has been
+ * deployed since the membership launch but nothing on the site called it.
+ * returnTo is a bare page name on this site (validated server-side too).
+ * Throws on any failure (not signed in, comped membership with no Stripe
+ * customer behind it, Stripe/Edge Function error).
  */
 export async function createBillingPortalSession(returnTo = 'account.html') {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
-  if (!token) throw new Error('You must be signed in.');
+  if (!token) throw new Error('You must be signed in to manage billing.');
   const res = await fetch(`${SUPABASE_URL}/functions/v1/create-billing-portal-session`, {
     method: 'POST',
     headers: {
