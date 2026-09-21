@@ -11,10 +11,10 @@
 import Stripe from 'https://esm.sh/stripe@17.4.0?target=deno';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
+const BASE_CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Vary': 'Origin',
 };
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -43,14 +43,17 @@ function returnOrigin(req: Request): string {
   return SITE_URL || ALLOWED_ORIGINS[0] || new URL(req.url).origin;
 }
 
-const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-  });
+// Only reflect an Origin this site actually recognises — never '*'. A
+// disallowed/absent Origin gets no Allow-Origin header at all, which the
+// browser treats as a CORS failure rather than granting access.
+function corsHeadersFor(req: Request): Record<string, string> {
+  const origin = (req.headers.get('Origin') ?? '').replace(/\/+$/, '');
+  const headers: Record<string, string> = { ...BASE_CORS_HEADERS };
+  if (origin && ALLOWED_ORIGINS.includes(origin)) headers['Access-Control-Allow-Origin'] = origin;
+  return headers;
 }
+
+const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
 // Maps the shop's admin-configurable billing_cycle to a Stripe recurring
 // interval + count. Only 'yearly' is used by the membership product today,
@@ -101,7 +104,15 @@ function billingCycleAnchor(
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
+  const cors = corsHeadersFor(req);
+  function json(body: unknown, status = 200): Response {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { ...cors, 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
   if (!STRIPE_SECRET_KEY || STRIPE_SECRET_KEY.startsWith('sk_placeholder')) {
@@ -115,12 +126,27 @@ Deno.serve(async (req: Request) => {
   const { data: { user }, error: userError } = await userClient.auth.getUser();
   if (userError || !user) return json({ error: 'You must be signed in to check out.' }, 401);
 
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+  // Checkout creates a real Stripe session (and, on success, a subscription)
+  // per call — 10/5min per account is generous for a human clicking a
+  // button and stops a compromised/scripted session from hammering Stripe.
+  // Fail closed: an error checking the limit is treated as "not allowed"
+  // rather than silently skipping the throttle.
+  const { data: withinLimit, error: rateLimitError } = await admin.rpc('check_rate_limit', {
+    p_key: `checkout:${user.id}`,
+    p_max_count: 10,
+    p_window_seconds: 300,
+  });
+  if (rateLimitError || !withinLimit) {
+    return json({ error: 'Too many checkout attempts — please wait a few minutes and try again.' }, 429);
+  }
+
   const body = await req.json().catch(() => ({}));
   const requested: { id?: string; qty?: number }[] = Array.isArray(body?.items) ? body.items : [];
   const ids = requested.map((i) => i.id).filter((id): id is string => !!id);
   if (!ids.length) return json({ error: 'Your cart is empty.' }, 400);
 
-  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const { data: products, error: productsError } = await admin
     .from('products')
     .select('id, name, description, price, product_type, billing_cycle, billing_anchor, billing_anchor_date, active, inventory, cart_enabled')

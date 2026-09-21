@@ -11,10 +11,10 @@
 import Stripe from 'https://esm.sh/stripe@17.4.0?target=deno';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
+const BASE_CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Vary': 'Origin',
 };
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -33,13 +33,6 @@ const ALLOWED_ORIGINS = [
 
 const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-  });
-}
-
 // Same rule as create-checkout-session: the Origin header decides where the
 // member lands afterwards, so it is only honoured when it is this site.
 function returnOrigin(req: Request): string {
@@ -48,8 +41,26 @@ function returnOrigin(req: Request): string {
   return SITE_URL || ALLOWED_ORIGINS[0] || new URL(req.url).origin;
 }
 
+// Only reflect an Origin this site actually recognises — never '*'. A
+// disallowed/absent Origin gets no Allow-Origin header at all, which the
+// browser treats as a CORS failure rather than granting access.
+function corsHeadersFor(req: Request): Record<string, string> {
+  const origin = (req.headers.get('Origin') ?? '').replace(/\/+$/, '');
+  const headers: Record<string, string> = { ...BASE_CORS_HEADERS };
+  if (origin && ALLOWED_ORIGINS.includes(origin)) headers['Access-Control-Allow-Origin'] = origin;
+  return headers;
+}
+
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
+  const cors = corsHeadersFor(req);
+  function json(body: unknown, status = 200): Response {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { ...cors, 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
   if (!STRIPE_SECRET_KEY || STRIPE_SECRET_KEY.startsWith('sk_placeholder')) {
@@ -64,6 +75,18 @@ Deno.serve(async (req: Request) => {
   if (userError || !user) return json({ error: 'You must be signed in.' }, 401);
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+  // Fail closed: an error checking the limit is treated as "not allowed"
+  // rather than silently skipping the throttle.
+  const { data: withinLimit, error: rateLimitError } = await admin.rpc('check_rate_limit', {
+    p_key: `billing-portal:${user.id}`,
+    p_max_count: 10,
+    p_window_seconds: 300,
+  });
+  if (rateLimitError || !withinLimit) {
+    return json({ error: 'Too many requests — please wait a few minutes and try again.' }, 429);
+  }
+
   const { data: profile, error: profileError } = await admin
     .from('profiles')
     .select('stripe_customer_id, membership_source')
