@@ -1004,12 +1004,18 @@ function renderMembership() {
     // century out, next to a billing button that can only error, is worse
     // than saying plainly that it was granted.
     const comped = _profile.membership_source === 'admin_grant';
-    badge.textContent = comped ? 'Complimentary' : 'Active';
+    const isTestCheckout = _profile.membership_source === 'test_checkout';
+    badge.textContent = comped ? 'Complimentary' : isTestCheckout ? 'Active (Test)' : 'Active';
     badge.className = 'account-section-badge badge-verified';
     body.innerHTML = comped
       ? `
       <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
         An admin granted you a complimentary membership — there's nothing to pay and nothing to renew. This unlocks the Minecraft server and the member-only pages of the site.
+      </p>`
+      : isTestCheckout
+      ? `
+      <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
+        This membership came from a TEST_CHECKOUT_MODE checkout (no real payment, no Stripe account behind it) — it renews on <strong>${periodEnd ? escapeHtml(periodEnd.toLocaleDateString()) : 'n/a'}</strong> for testing purposes. This unlocks the Minecraft server and the member-only pages of the site.
       </p>`
       : `
       <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">

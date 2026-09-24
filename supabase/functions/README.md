@@ -3,7 +3,10 @@
 These three functions are the whole payment path. They are deployed to the
 Supabase project directly (same convention as `supabase/migrations/` — this
 folder is a copy of what is live, not a `supabase functions deploy` source of
-truth), and they are inert until real Stripe keys are set.
+truth), and they are inert until real Stripe keys are set — except for
+`create-checkout-session`'s `TEST_CHECKOUT_MODE`, a way to test checkout (and
+anything downstream of it, like the Minecraft membership-gate plugin) before
+Stripe is connected; see below.
 
 | Function | verify_jwt | What it does |
 |---|---|---|
@@ -57,6 +60,43 @@ truth), and they are inert until real Stripe keys are set.
    Buy the $12 membership with card `4242 4242 4242 4242`, then check that
    `profiles.membership_status` is `active`, `membership_current_period_end`
    is a year out, and a row landed in `orders`.
+
+## Testing checkout and the Minecraft plugin without Stripe
+
+`create-checkout-session` supports a `TEST_CHECKOUT_MODE` that exercises the
+whole shop → checkout → membership/order → plugin-gate flow with no Stripe
+account at all:
+
+```
+supabase secrets set TEST_CHECKOUT_MODE=true
+```
+
+With `STRIPE_SECRET_KEY` still unset/placeholder and this flag on, clicking
+Checkout on the live site runs every real check (signed in, rate limit, cart
+validity, stock, `cart_enabled`, the one-membership-per-account rule) exactly
+as normal, then — instead of creating a Stripe session — does directly what
+`stripe-webhook` would do once Stripe confirmed payment: inserts a row into
+`orders`, decrements stock for goods, or sets `profiles.membership_status =
+'active'` (`membership_source = 'test_checkout'`) with a real period end for
+a subscription. The browser is sent straight to `shop.html?checkout=success`,
+same as a real payment.
+
+Because that flips `profiles.membership_status` for real, it is enough to
+test the Minecraft membership-gate plugin (`MembershipGateListener` in the
+account-linking plugin) end to end too — link a Minecraft account on the
+account page, run a test subscription checkout, and the plugin's own
+Supabase read of `membership_status`/`membership_current_period_end` sees an
+active member, no different from a real Stripe purchase.
+
+This path is dead code the instant `STRIPE_SECRET_KEY` is a real key
+(`stripeConfigured` short-circuits it), so it can't accidentally stay on in
+production — only ever set `TEST_CHECKOUT_MODE=true` on a dev/staging
+Supabase project, and unset it (or just set the real Stripe key) before that
+project ever takes real payments. Test orders/memberships are clearly marked
+(`membership_source = 'test_checkout'`, and the order's
+`stripe_checkout_session_id` is a `test_...` id rather than Stripe's `cs_...`)
+so they're never mistaken for a real purchase in the admin panel or account
+page.
 
 ## Things worth knowing
 
