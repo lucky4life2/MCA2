@@ -168,11 +168,15 @@ const FOOTER_HTML = () => {
         <div class="footer-col-title">Legal</div>
         <a href="privacy.html">Privacy Policy</a>
         <a href="terms.html">Terms of Service</a>
+        <a href="accessibility.html">Accessibility</a>
+        <a href="cookies.html">Cookie Policy</a>
+        <a href="refund.html">Refund Policy</a>
       </div>
     </div>
 
   </div>
   <div class="footer-disclaimer">
+    Minecraft Club of America is a volunteer-run, non-commercial community club.
     Not affiliated with, endorsed by, or associated with Mojang Studios or Microsoft.
     Minecraft is a trademark of Mojang Studios.
     <span class="footer-version">v2.5.67</span>
@@ -183,6 +187,14 @@ const FOOTER_HTML = () => {
 const TOAST_HTML = `<div class="toast" id="toast" role="status" aria-live="polite">Address copied to clipboard</div>`;
 
 const PROGRESS_HTML = `<div class="scroll-progress" id="scroll-progress"></div>`;
+
+// Informational only — we don't use advertising/analytics cookies, so there's
+// nothing to gate behind an opt-in. This just discloses the strictly-necessary
+// browser storage we do use (sign-in, theme, cart) and links the full policy.
+const COOKIE_BANNER_HTML = `<div class="cookie-banner" id="cookie-banner" role="region" aria-label="Cookie notice" hidden>
+  <p class="cookie-banner-text">We use strictly necessary browser storage to keep you signed in and remember your preferences — never for advertising or tracking. See our <a href="cookies.html">Cookie Policy</a>.</p>
+  <button type="button" class="cookie-banner-dismiss" id="cookie-banner-dismiss">Got it</button>
+</div>`;
 
 // Declared here (before the site-lock IIFE below) because that IIFE can call
 // injectNav() synchronously on some pages (e.g. admin.html, or ?preview=key),
@@ -213,11 +225,30 @@ window._mcaAuthReady = new Promise(r => { _mcaAuthResolve = r; });
   document.documentElement.style.visibility = 'hidden';
 })();
 
+// `fetch` rejects on a *failed* connection but not on a stalled one — a
+// captive portal, blackholed DNS or a hanging Supabase can leave it pending
+// for minutes. Both gate checks below run before the page is made visible
+// again, so without an explicit timeout a stalled connection meant a blank
+// white page site-wide, not the documented fail-open.
+function _fetchWithTimeout(url, opts, ms = 6000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+}
+
+// Last-resort failsafe: whatever happens above, the page must never stay
+// invisible. The two gate fetches run in sequence at 6s each, so 14s sits
+// past their combined worst case — this only fires if something entirely
+// unforeseen stalls the chain.
+const _visibilityFailsafe = setTimeout(() => {
+  document.documentElement.style.visibility = '';
+}, 14000);
+
 const _systemLockdownCheck = (async function checkSystemLockdown() {
   const SUPABASE_URL  = 'https://hjaywokvgdzhvsoygctc.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNzA2NTQsImV4cCI6MjA5NTg0NjY1NH0.nFqlc20iUDwE1sXLRi2Pev181v2RJKx_S6UcTkGgPWU';
   try {
-    const res = await fetch(
+    const res = await _fetchWithTimeout(
       `${SUPABASE_URL}/rest/v1/system_lockdown?select=locked,message&id=eq.1`,
       { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` } }
     );
@@ -225,6 +256,7 @@ const _systemLockdownCheck = (async function checkSystemLockdown() {
       const rows = await res.json();
       if (rows?.[0]?.locked === true) {
         if (window.stop) window.stop();
+        clearTimeout(_visibilityFailsafe);
         document.documentElement.style.visibility = '';
         document.documentElement.innerHTML = `<head><meta charset="utf-8"><title>Unavailable</title></head><body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#05070f;font-family:'Open Sans',sans-serif;padding:2rem;text-align:center;">
           <div>
@@ -256,7 +288,7 @@ const SUPABASE_ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 // what they decide.
 const _siteLockRowFetch = (async function fetchSiteLockRow() {
   try {
-    const res = await fetch(
+    const res = await _fetchWithTimeout(
       `${SUPABASE_URL}/rest/v1/settings?key=eq.site_lock&select=value`,
       { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` } }
     );
@@ -307,8 +339,9 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
 
   try {
     // Site-lock row was already fetched in parallel with the lockdown check
-    // above (see _siteLockRowFetch) — reuse that in-flight request instead
-    // of firing a second, sequential one now.
+    // above (see _siteLockRowFetch, itself timeout-protected via
+    // _fetchWithTimeout) — reuse that in-flight request instead of firing a
+    // second, sequential one now.
     const { ok, rows, error } = await _siteLockRowFetch;
     if (error) throw error;
 
@@ -609,6 +642,27 @@ async function injectNav() {
   // Inject footer + toast
   document.body.insertAdjacentHTML('beforeend', FOOTER_HTML() + TOAST_HTML);
 
+  // Cookie notice — shown once until dismissed, never on the Cookie Policy
+  // page itself (no point disclosing the page you're already reading).
+  if (!localStorage.getItem('mca_cookie_notice_dismissed') && !/\/cookies(\.html)?$/.test(window.location.pathname)) {
+    document.body.insertAdjacentHTML('beforeend', COOKIE_BANNER_HTML);
+    const banner = document.getElementById('cookie-banner');
+    banner.hidden = false;
+    // Publish the banner's real height (it wraps to two lines on narrow
+    // screens) so fixed bottom-anchored widgets — the shop's floating cart
+    // button, toasts — can sit above it instead of underneath.
+    const syncBannerHeight = () =>
+      document.documentElement.style.setProperty('--cookie-banner-h', banner.offsetHeight + 'px');
+    syncBannerHeight();
+    window.addEventListener('resize', syncBannerHeight);
+    document.getElementById('cookie-banner-dismiss').addEventListener('click', () => {
+      localStorage.setItem('mca_cookie_notice_dismissed', '1');
+      window.removeEventListener('resize', syncBannerHeight);
+      document.documentElement.style.removeProperty('--cookie-banner-h');
+      banner.remove();
+    });
+  }
+
   // Inject scroll progress bar
   document.body.insertAdjacentHTML('afterbegin', PROGRESS_HTML);
 
@@ -852,7 +906,29 @@ async function initNavAuth(_authReadyResolve) {
     // each page having to make its own duplicate (slow) profiles query.
     try {
       const mod0 = await import('./supabase.js');
-      const [{ data: roleData }, preview, canViewAdmin, canBypassMembership] = await Promise.all([
+
+      // Sitewide 2FA (AAL2) enforcement. Previously the AAL2 check was
+      // opt-in per page (account.html's own inline check, and requireAal2()
+      // on the four staff pages) — every other page skipped it entirely.
+      // OAuth sign-in (Discord/Google) redirects straight from the provider
+      // to the destination page, never back through login.html's own
+      // post-password AAL2 check, so an MFA-enrolled user landed fully
+      // "signed in" on an AAL1-only session and could browse freely until
+      // they happened to hit one of the few pages that checked. This runs
+      // in the one auth path every page executes, so the challenge is
+      // issued immediately after sign-in regardless of how the session was
+      // established or which page it lands on. login.html is excluded
+      // because it already drives its own MFA panel in place.
+      const currentPageForMfa = window.location.pathname.split('/').pop() || 'index.html';
+      if (currentPageForMfa !== 'login.html') {
+        const { data: aal } = await mod0.supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (aal && aal.nextLevel === 'aal2' && aal.nextLevel !== aal.currentLevel) {
+          window.location.replace(`login.html?return=${encodeURIComponent(currentPageForMfa)}&mfa=1`);
+          return { isAdmin: false, canPublishNews: false };
+        }
+      }
+
+      const [{ data: roleData, error: roleError }, preview, canViewAdmin, canBypassMembership] = await Promise.all([
         mod0.supabase.from('profiles').select('display_name, username, account_status, membership_status, membership_current_period_end').eq('id', user.id).single(),
         mod0.getMyRolePreview().catch(() => null),
         mod0.hasPermission('can_view_admin').catch(() => false),
@@ -896,9 +972,14 @@ async function initNavAuth(_authReadyResolve) {
       // it granted explicitly via the Roles tab.
       const memberGatedPages = ['server.html', 'economy.html', 'stocks.html', 'congress.html', 'court.html'];
       const currentPageForMembers = window.location.pathname.split('/').pop() || 'index.html';
-      if (memberGatedPages.includes(currentPageForMembers) && !canBypassMembership) {
-        const periodEnd = roleData?.membership_current_period_end ? new Date(roleData.membership_current_period_end) : null;
-        const isActiveMember = roleData?.membership_status === 'active' && periodEnd && periodEnd.getTime() > Date.now();
+      // A failed profile read is not proof of a lapsed membership, and this
+      // redirect is UX rather than enforcement (RLS is what actually gates
+      // the data). Bouncing a paid member to "you need a membership" on a
+      // transient error is worse than letting the page load and come up
+      // empty, so the gate only fires on a profile we actually read.
+      if (memberGatedPages.includes(currentPageForMembers) && !canBypassMembership && roleData && !roleError) {
+        const periodEnd = roleData.membership_current_period_end ? new Date(roleData.membership_current_period_end) : null;
+        const isActiveMember = roleData.membership_status === 'active' && periodEnd && periodEnd.getTime() > Date.now();
         if (!isActiveMember) {
           window.location.replace('account.html?membership_required=1');
           return { isAdmin: false, canPublishNews: false };

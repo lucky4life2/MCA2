@@ -544,7 +544,7 @@
 </div>
 
 <script type="module">
-import { supabase, signOut } from './supabase.js';
+import { supabase, signOut, createBillingPortalSession } from './supabase.js';
 
 const elLoading      = document.getElementById('account-loading');
 const elNotSignedIn  = document.getElementById('account-not-signed-in');
@@ -808,9 +808,13 @@ async function showAgeGate() {
     document.getElementById(id).style.display = 'none';
   });
 
-  if (!_profile.date_of_birth) {
+  if (!_profile.age_band) {
     // Never answered the age question yet (every OAuth signup lands here,
     // since a provider's consent screen can't carry a custom DOB field).
+    // age_band, not date_of_birth, is the signal: the raw DOB is not
+    // readable by the client at all, and it is cleared for under-13
+    // accounts once their band is recorded — reading it here re-asked
+    // those accounts for a birthday they had already given.
     document.getElementById('agegate-dob').style.display = 'block';
   } else if (_profile.age_band === 'under_13') {
     const status = await myMinorConsentStatus();
@@ -923,12 +927,29 @@ function showRecoveryBanner() {
   }, 300);
 }
 
+// Every column this page reads, listed explicitly. `select('*')` used to
+// stand here, but profiles no longer carries a table-wide SELECT grant —
+// only a per-column allowlist (date_of_birth and the credential/token
+// columns are deliberately off it). Postgres rejects `SELECT *` outright
+// in that situation ("permission denied for table profiles"), so the query
+// failed for every signed-in user and _profile silently fell back to {} —
+// which is why the membership section always read "Not a Member", even for
+// an admin-granted member.
+const PROFILE_COLUMNS = [
+  'id', 'display_name', 'username', 'email', 'role', 'account_status',
+  'age_band', 'deletion_scheduled_at', 'discord_id', 'google_id',
+  'minecraft_username', 'minecraft_verified', 'news_email_opt_in',
+  'task_email_opt_in', 'public_listing_opt_in',
+  'membership_status', 'membership_source', 'membership_current_period_end',
+].join(', ');
+
 async function loadProfile() {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
-    .select('*')
+    .select(PROFILE_COLUMNS)
     .eq('id', _user.id)
     .single();
+  if (error) console.error('Could not load your profile:', error.message);
   _profile = data || {};
 }
 
@@ -951,6 +972,15 @@ function escapeHtml(str) {
   return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// `_` is legal in both site and Minecraft usernames and is also LIKE's
+// single-character wildcard, so an unescaped ilike "is this taken?" check
+// matched unrelated accounts — wrongly rejecting a free username, or (when
+// the wildcard matched 2+ rows) making maybeSingle() return null and letting
+// a genuine duplicate through.
+function likeEscape(value) {
+  return String(value == null ? '' : value).replace(/([\\%_])/g, '\\$1');
+}
+
 // ── Membership ───────────────────────────────────────────────
 function renderMembership() {
   const badge = document.getElementById('membership-badge');
@@ -958,17 +988,46 @@ function renderMembership() {
   if (!badge || !body) return;
 
   const status = _profile.membership_status || 'none';
-  const periodEnd = _profile.membership_current_period_end ? new Date(_profile.membership_current_period_end) : null;
-  const isActive = status === 'active' && periodEnd && periodEnd.getTime() > Date.now();
+  const rawPeriodEnd = _profile.membership_current_period_end ? new Date(_profile.membership_current_period_end) : null;
+  // Only trust the date if it actually parsed — an unparseable value used to
+  // make NaN > now false.
+  const periodEnd = rawPeriodEnd && !isNaN(rawPeriodEnd.getTime()) ? rawPeriodEnd : null;
+  // Membership state follows the Stripe-synced status, not the date: a null or
+  // briefly-stale period end (webhook lag right after a renewal) used to drop
+  // a paying member into the "Not a Member — Join Now" branch, from where they
+  // could buy a second subscription.
+  const isActive = status === 'active' || status === 'trialing';
 
   if (isActive) {
-    badge.textContent = 'Active';
+    // A comped membership has no Stripe customer behind it, so it has no
+    // renewal date and nothing to manage — saying it "renews" on a date a
+    // century out, next to a billing button that can only error, is worse
+    // than saying plainly that it was granted.
+    const comped = _profile.membership_source === 'admin_grant';
+    const isTestCheckout = _profile.membership_source === 'test_checkout';
+    badge.textContent = comped ? 'Complimentary' : isTestCheckout ? 'Active (Test)' : 'Active';
     badge.className = 'account-section-badge badge-verified';
-    body.innerHTML = `
+    body.innerHTML = comped
+      ? `
       <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
-        Your membership renews on <strong>${escapeHtml(periodEnd.toLocaleDateString())}</strong>. This unlocks the Minecraft server and the member-only pages of the site.
+        An admin granted you a complimentary membership — there's nothing to pay and nothing to renew. This unlocks the Minecraft server and the member-only pages of the site.
+      </p>`
+      : isTestCheckout
+      ? `
+      <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
+        This membership came from a TEST_CHECKOUT_MODE checkout (no real payment, no Stripe account behind it) — it renews on <strong>${periodEnd ? escapeHtml(periodEnd.toLocaleDateString()) : 'n/a'}</strong> for testing purposes. This unlocks the Minecraft server and the member-only pages of the site.
+      </p>`
+      : `
+      <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
+        ${periodEnd ? `Your membership renews on <strong>${escapeHtml(periodEnd.toLocaleDateString())}</strong>. ` : ''}This unlocks the Minecraft server and the member-only pages of the site.
       </p>
-      <a class="btn btn-outline" href="shop.html" style="text-decoration:none;display:inline-block;">Manage in Shop</a>`;
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-outline" type="button" onclick="openBillingPortal(this)">Manage Billing</button>
+        <a class="btn btn-outline" href="shop.html" style="text-decoration:none;display:inline-block;">Manage in Shop</a>
+        <button type="button" class="btn btn-outline" id="btn-cancel-membership">Cancel Membership</button>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-top:0.75rem;">Cancelling stops future renewal charges — you keep access through the end of the period you already paid for. See our <a href="refund.html">Refund &amp; Cancellation Policy</a>.</p>`;
+    wireCancelMembershipButton();
   } else if (status === 'past_due') {
     badge.textContent = 'Payment Issue';
     badge.className = 'account-section-badge badge-pending';
@@ -976,17 +1035,37 @@ function renderMembership() {
       <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
         We couldn't process your last membership payment. Server and member-page access may be paused until this is resolved.
       </p>
-      <a class="btn btn-primary" href="shop.html" style="text-decoration:none;display:inline-block;">Update Payment</a>`;
+      <button class="btn btn-primary" type="button" onclick="openBillingPortal(this)">Update Payment</button>`;
   } else {
     badge.textContent = status === 'canceled' ? 'Canceled' : 'Not a Member';
     badge.className = 'account-section-badge badge-unlinked';
+    // A just-cancelled member keeps access to the end of the period they paid
+    // for — saying nothing here read as though it had been cut off immediately.
+    const stillCovered = status === 'canceled' && periodEnd && periodEnd.getTime() > Date.now();
     body.innerHTML = `
+      ${stillCovered ? `<p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
+        Your membership is cancelled and won't renew, but you keep access until <strong>${escapeHtml(periodEnd.toLocaleDateString())}</strong>.
+      </p>` : ''}
       <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
         Membership is $12/year and is required to join the Minecraft server and access member-only pages.
       </p>
       <a class="btn btn-primary" href="shop.html" style="text-decoration:none;display:inline-block;">Join Now — $12/yr</a>`;
   }
 }
+
+// Cancelling, changing a card or fetching an invoice all happen in the
+// Stripe-hosted billing portal — the site never handles card details. Until
+// this existed there was no self-serve way to cancel a subscription at all.
+window.openBillingPortal = async (btn) => {
+  const prev = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Opening…'; }
+  try {
+    window.location.href = await createBillingPortalSession('account.html');
+  } catch (err) {
+    alert(err.message || 'Could not open the billing portal.');
+    if (btn) { btn.disabled = false; btn.textContent = prev; }
+  }
+};
 
 // ── Order history ────────────────────────────────────────────
 async function loadOrderHistory() {
@@ -999,7 +1078,13 @@ async function loadOrderHistory() {
     .order('created_at', { ascending: false })
     .limit(25);
 
-  if (error || !data || !data.length) {
+  // An RLS or network failure used to render as "No orders yet", telling a
+  // paying member their order history was empty.
+  if (error) {
+    body.innerHTML = '<div class="orders-empty"><div class="orders-empty-icon">⚠️</div><p>Could not load your orders just now. Please refresh to try again.</p></div>';
+    return;
+  }
+  if (!data || !data.length) {
     body.innerHTML = '<div class="orders-empty"><div class="orders-empty-icon">📦</div><p>No orders yet.</p></div>';
     return;
   }
@@ -1585,7 +1670,7 @@ function renderMinecraft() {
     const { data: existing } = await supabase
       .from('profiles')
       .select('id')
-      .ilike('minecraft_username', username)
+      .ilike('minecraft_username', likeEscape(username))
       .neq('id', _user.id)
       .maybeSingle();
     if (existing) {
@@ -1897,7 +1982,7 @@ document.getElementById('btn-save-profile').addEventListener('click', async () =
   // Check for duplicate username (only if changed)
   if (username && username !== _profile.username) {
     const { data: existing } = await supabase
-      .from('profiles').select('id').ilike('username', username).neq('id', _user.id).maybeSingle();
+      .from('profiles').select('id').ilike('username', likeEscape(username)).neq('id', _user.id).maybeSingle();
     if (existing) {
       errEl.textContent = `"${username}" is already taken. Please choose a different username.`;
       errEl.style.display = 'block'; return;
@@ -2364,11 +2449,11 @@ function renderMyMessages() {
     }).join('');
     const hasReply = items.some(it => it.sender_type === 'admin');
     return `<div style="border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:10px;">
-      <div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="toggleMyThreadExpand('${m.id}')">
+      <div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="toggleMyThreadExpand('${m.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleMyThreadExpand('${m.id}')}" role="button" tabindex="0" aria-expanded="${expanded ? 'true' : 'false'}">
         <span style="flex:1;">${escapeHtml(m.subject)}</span>
         <span style="font-size:11px;color:var(--muted);font-weight:400;">${expanded ? '▲' : '▼'}</span>
       </div>
-      ${expanded ? '' : `<div style="font-size:12px;color:var(--muted);margin-top:4px;cursor:pointer;" onclick="toggleMyThreadExpand('${m.id}')">${escapeHtml(lastPreview)} ${lastPreview ? '· ' + escapeHtml(lastTime) : ''}</div>`}
+      ${expanded ? '' : `<div style="font-size:12px;color:var(--muted);margin-top:4px;cursor:pointer;" onclick="toggleMyThreadExpand('${m.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleMyThreadExpand('${m.id}')}" role="button" tabindex="0">${escapeHtml(lastPreview)} ${lastPreview ? '· ' + escapeHtml(lastTime) : ''}</div>`}
       ${expanded ? `
       ${itemsHtml}
       ${hasReply ? '' : '<div style="font-size:12px;color:var(--muted);margin-top:6px;font-style:italic;">Awaiting reply...</div>'}
@@ -2426,6 +2511,22 @@ document.getElementById('btn-contact-admin').addEventListener('click', () => {
   document.getElementById('contact-modal').classList.remove('hidden');
   document.getElementById('contact-subject').focus();
 });
+
+// "Cancel Membership" opens the same staff-message form used for support
+// requests, pre-filled so cancelling takes one click to send rather than
+// requiring the member to know who to contact or what to say — this is the
+// self-service cancellation path referenced in the Refund & Cancellation Policy.
+function wireCancelMembershipButton() {
+  const btn = document.getElementById('btn-cancel-membership');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    document.getElementById('contact-modal').classList.remove('hidden');
+    document.getElementById('contact-subject').value = 'Cancel my membership';
+    document.getElementById('contact-body').value = 'Please cancel my MCA membership so it does not renew. I understand I will keep access through the end of the period I already paid for.';
+    document.getElementById('contact-char-count').textContent = document.getElementById('contact-body').value.length + ' / 2000';
+    document.getElementById('contact-send').focus();
+  });
+}
 function closeContactModal() {
   document.getElementById('contact-modal').classList.add('hidden');
   document.getElementById('contact-error').style.display = 'none';

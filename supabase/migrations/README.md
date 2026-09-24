@@ -59,6 +59,21 @@ never enrolled MFA is unaffected.
 The full text of the five audit migrations, with the reasoning behind each, is
 kept in `20260828_backend_audit_fixes.sql`.
 
+### Shop / membership audit (2026-09-10)
+
+Applied as three migrations; the full text is in
+`20260910_shop_membership_hardening.sql`.
+
+| Version | Name | What it does |
+|---|---|---|
+| 20260910034308 | `shop_membership_hardening` | grants `authenticated` SELECT on `membership_status` / `membership_source` / `membership_current_period_end` (plus `age_band`, `public_listing_opt_in`), which were never added to the column allowlist, so every read that named them 403'd; `private.profiles_guard_columns()` now rejects client writes to the membership + Stripe columns; `can_manage_shop` can actually insert/update/delete `products`; staff can read `orders`; `orders` gains `customer_email` + `shipping`; adds the service-role-only `shop_consume_inventory()` |
+| 20260910034406 | `profiles_column_level_update_grants` | replaces the table-wide UPDATE grant on `profiles` with an explicit column list, so the server-only columns are refused at the privilege layer and not just by the trigger. Same trap as `profiles_column_select_allowlist_fix`: a column-level REVOKE cannot narrow a table-level GRANT |
+| 20260910034632 | `orders_stripe_invoice_id` | `orders.stripe_invoice_id` + unique index, so subscription renewals (which have no Checkout Session) get an order row of their own |
+
+The Stripe Edge Functions those changes go with are in
+`supabase/functions/` — see the README there for what to set before switching
+payments on.
+
 ### Not yet applied
 
 `20260828_backend_audit_followups.sql` — the audit's remaining four items,
@@ -92,6 +107,29 @@ grant execute on function public.your_new_function(<argtypes>) to authenticated;
 Internal `_economy_*` helpers should get `service_role` only. Run
 `select * from public.economy_audit_exposed_internals();` after any economy
 migration — it returns rows only when an internal has become reachable again.
+
+## Data API grants (2026-09-24)
+
+Supabase is removing the implicit "new table -> auto-granted to anon/
+authenticated/service_role" behavior that currently exposes every `public`
+table to the Data API. Enforced on all projects, including this one, on
+2026-10-30. `20260924_explicit_data_api_grants.sql` restates every table's
+*current* grants explicitly (verified against `information_schema` before
+and after — nothing changed) so nothing gets silently revoked on that date.
+
+Same rule as the function-grant note above, now for tables too: **a new
+table is not guaranteed to be reachable via the Data API unless its
+migration grants explicitly.** End a new table's migration with the
+appropriate:
+
+```sql
+grant select on table public.your_new_table to anon, authenticated;
+grant select, insert, update, delete on table public.your_new_table to authenticated;
+```
+
+(scope columns/roles to whatever that table actually needs — see
+`20260924_explicit_data_api_grants.sql` for the column-level pattern used
+on `profiles`).
 
 ## Exporting the real SQL
 

@@ -485,8 +485,8 @@
           <!-- Active Now stat disabled — see commented block below stats-row
           <div class="stat-cell"><div class="stat-label">Active Now</div><div class="stat-value" id="stat-active-now" style="color:#22c55e;">—</div></div>
           -->
-          <div class="stat-cell" id="stat-news-pending-cell" style="display:none;cursor:pointer;" onclick="document.querySelector('[data-tab=news]').click();"><div class="stat-label">News Awaiting Review</div><div class="stat-value" id="stat-news-pending" style="color:#c0392b;">—</div></div>
-          <div class="stat-cell" id="stat-company-pending-cell" style="display:none;cursor:pointer;" onclick="document.querySelector('[data-tab=economy]').click();"><div class="stat-label">Companies Awaiting Review</div><div class="stat-value" id="stat-company-pending" style="color:#c0392b;">—</div></div>
+          <div class="stat-cell" id="stat-news-pending-cell" style="display:none;cursor:pointer;" onclick="document.querySelector('[data-tab=news]').click();" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.querySelector('[data-tab=news]').click();}" role="button" tabindex="0"><div class="stat-label">News Awaiting Review</div><div class="stat-value" id="stat-news-pending" style="color:#c0392b;">—</div></div>
+          <div class="stat-cell" id="stat-company-pending-cell" style="display:none;cursor:pointer;" onclick="document.querySelector('[data-tab=economy]').click();" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.querySelector('[data-tab=economy]').click();}" role="button" tabindex="0"><div class="stat-label">Companies Awaiting Review</div><div class="stat-value" id="stat-company-pending" style="color:#c0392b;">—</div></div>
         </div>
       </div>
 
@@ -775,6 +775,16 @@
         </div>
         <div id="shop-product-list" style="min-height:80px;">
           <div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">Loading products...</div>
+        </div>
+      </div>
+
+      <div class="admin-section">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Orders</div>
+          <button class="btn btn-outline btn-sm" id="btn-refresh-orders">Refresh</button>
+        </div>
+        <div id="shop-order-list" style="min-height:80px;">
+          <div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">Loading orders...</div>
         </div>
       </div>
     </div>
@@ -1626,12 +1636,12 @@ function renderMembers(members) {
     const overflowRoles = sortedRoles.slice(VISIBLE_ROLE_COUNT);
     const roleBadgesHtml = visibleRoles.map(roleBadge).join('') +
       (overflowRoles.length
-        ? `<span class="role-badge role-more-toggle" style="cursor:pointer;background:var(--bg);color:var(--muted);border:1px dashed var(--border);" title="${escapeHtml(overflowRoles.map(r=>r.label).join(', '))}" onclick="
+        ? `<span class="role-badge role-more-toggle" style="cursor:pointer;background:var(--bg);color:var(--muted);border:1px dashed var(--border);" title="${escapeHtml(overflowRoles.map(r=>r.label).join(', '))}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" onclick="
             const hidden=this.nextElementSibling, less=hidden.nextElementSibling;
-            this.style.display='none'; hidden.style.display='inline'; less.style.display='inline-flex';
-          ">+${overflowRoles.length} more</span><span style="display:none;">${overflowRoles.map(roleBadge).join('')}</span><span class="role-badge role-less-toggle" style="display:none;cursor:pointer;background:var(--bg);color:var(--muted);border:1px dashed var(--border);" onclick="
+            this.style.display='none'; hidden.style.display='inline'; less.style.display='inline-flex'; less.focus();
+          ">+${overflowRoles.length} more</span><span style="display:none;">${overflowRoles.map(roleBadge).join('')}</span><span class="role-badge role-less-toggle" style="display:none;cursor:pointer;background:var(--bg);color:var(--muted);border:1px dashed var(--border);" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" onclick="
             const less=this, hidden=less.previousElementSibling, more=hidden.previousElementSibling;
-            less.style.display='none'; hidden.style.display='none'; more.style.display='inline';
+            less.style.display='none'; hidden.style.display='none'; more.style.display='inline'; more.focus();
           ">− less</span>`
         : '');
 
@@ -1677,7 +1687,7 @@ function renderMembers(members) {
     const periodEnd = m.membership_current_period_end ? new Date(m.membership_current_period_end) : null;
     const isActiveMember = m.membership_status === 'active' && periodEnd && periodEnd.getTime() > Date.now();
     const membershipBadge = isActiveMember
-      ? `<span class="badge badge-verified">${m.membership_source === 'admin_grant' ? 'Comped' : 'Active'}</span>`
+      ? `<span class="badge badge-verified">${m.membership_source === 'admin_grant' ? 'Comped' : m.membership_source === 'test_checkout' ? 'Active (Test)' : 'Active'}</span>`
       : m.membership_status === 'past_due'
         ? `<span class="badge badge-pending">Past Due</span>`
         : `<span class="badge badge-unlinked">None</span>`;
@@ -1754,7 +1764,7 @@ window.openRolePopup = (event, userId) => {
   function renderItems() {
     return assignableRoles.map(r => {
       const has = stagedRoleIds.has(r.id);
-      return `<div class="role-popup-item" data-role-id="${r.id}" onclick="event.stopPropagation();_toggleStagedRole('${r.id}')">
+      return `<div class="role-popup-item" data-role-id="${r.id}" onclick="event.stopPropagation();_toggleStagedRole('${r.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();_toggleStagedRole('${r.id}')}" role="checkbox" aria-checked="${has}" tabindex="0">
         <span class="role-popup-dot" style="background:${safeColor(r.color)};"></span>
         <span style="flex:1;">${escapeHtml(r.label)}</span>
         ${has ? `<span class="role-popup-check">✓</span>` : ''}
@@ -2106,7 +2116,25 @@ document.getElementById('btn-new-article').addEventListener('click', () => openN
 document.getElementById('nm2-close').addEventListener('click',  closeNewsModal);
 document.getElementById('nm2-cancel').addEventListener('click', closeNewsModal);
 
+// Double-clicking Publish on a new article used to run the insert twice —
+// two published articles, and notifySubscribers() firing a second email blast
+// to every subscriber. The generated slug carries a timestamp, so there was no
+// unique constraint to fall back on.
+let _savingArticle = false;
+
 async function saveArticle(forceStatus = null) {
+  if (_savingArticle) return;
+  _savingArticle = true;
+  const saveBtns = ['nm2-save-draft', 'nm2-save-publish'].map(x => document.getElementById(x)).filter(Boolean);
+  saveBtns.forEach(b => { b.disabled = true; });
+  try { await saveArticleInner(forceStatus); }
+  finally {
+    _savingArticle = false;
+    saveBtns.forEach(b => { b.disabled = false; });
+  }
+}
+
+async function saveArticleInner(forceStatus) {
   const id      = document.getElementById('nm2-id').value;
   const title   = document.getElementById('nm2-title-input').value.trim();
   const errEl   = document.getElementById('nm2-error');
@@ -2207,13 +2235,17 @@ window.publishArticle = async (id) => {
 };
 window.approveArticle = window.publishArticle; // same action, different entry point
 window.rejectArticle = async (id) => {
-  const reason = prompt("Optional note for the author on why this was sent back (leave blank to skip):") || null;
+  // This prompt is the only gate on rejecting — there is no preceding
+  // confirm() — so Cancel has to abort. `|| null` swallowed the null and sent
+  // the article back to draft anyway, with no way to back out once clicked.
+  const reason = prompt("Send this article back to the author? Optional note on why (leave blank to skip):", '');
+  if (reason === null) return;
   const { data: { user } } = await supabase.auth.getUser();
   await supabase.from('news_articles').update({
     status: 'draft',
     reviewed_by: user.id,
     reviewed_at: new Date().toISOString(),
-    rejection_note: reason,
+    rejection_note: reason || null,
   }).eq('id', id);
   loadNewsAdmin();
   loadPendingNewsCount();
@@ -2791,7 +2823,12 @@ window.unfreezeAccount = async (id) => {
 window.grantMembership = async (id) => {
   const member = _allMembers.find(m => m.id === id);
   const name = member?.display_name || member?.username || 'this member';
-  if (!confirm(`Grant ${name} a complimentary MCA membership? They'll get server + member-page access without paying.`)) return;
+  // Comping over a live Stripe subscription rewrites membership_source, but
+  // Stripe keeps billing — and the next renewal webhook writes 'stripe' back
+  // over the comp. Say so before it happens.
+  if (member?.membership_source === 'stripe') {
+    if (!confirm(`${name} already pays for a membership through Stripe.\n\nComping them here does NOT cancel that subscription — they will keep being charged, and the next renewal will overwrite the comp. Cancel the subscription in the Stripe dashboard first.\n\nComp them anyway?`)) return;
+  } else if (!confirm(`Grant ${name} a complimentary MCA membership? They'll get server + member-page access without paying.`)) return;
   const { error } = await supabase.rpc('admin_set_membership', { p_user_id: id, p_grant: true });
   if (error) { alert('Error: ' + error.message); return; }
   await loadAll();
@@ -2799,7 +2836,15 @@ window.grantMembership = async (id) => {
 window.revokeMembership = async (id) => {
   const member = _allMembers.find(m => m.id === id);
   const name = member?.display_name || member?.username || 'this member';
-  if (!confirm(`Revoke ${name}'s membership? They'll lose server + member-page access immediately.`)) return;
+  // Revoking only clears the columns on the profile. A Stripe subscription
+  // is billed by Stripe, not by this table, so it keeps charging (and the
+  // next renewal webhook flips them back to active) until it is cancelled
+  // in Stripe — by the member in the billing portal, or by an admin.
+  const stripeBacked = member?.membership_source === 'stripe';
+  const warning = stripeBacked
+    ? `Revoke ${name}'s membership?\n\nThey lose server + member-page access immediately, but their Stripe subscription is NOT cancelled — they will keep being charged and the next renewal will restore their access. Cancel it in the Stripe dashboard as well.\n\nRevoke anyway?`
+    : `Revoke ${name}'s membership? They'll lose server + member-page access immediately.`;
+  if (!confirm(warning)) return;
   const { error } = await supabase.rpc('admin_set_membership', { p_user_id: id, p_grant: false });
   if (error) { alert('Error: ' + error.message); return; }
   await loadAll();
@@ -2880,6 +2925,61 @@ async function loadAdminProducts() {
       </div>
     </div>`).join('');
 }
+// Orders had no admin view at all: a paid order for a physical item landed
+// in the orders table and nobody could see it, let alone the address to post
+// it to. Staff visibility comes from the orders_select_staff RLS policy.
+async function loadAdminOrders() {
+  const list = document.getElementById('shop-order-list');
+  if (!list) return;
+  const { data, error } = await supabase
+    .from('orders')
+    .select('id, user_id, kind, amount_total, currency, status, line_items, customer_email, shipping, created_at, stripe_checkout_session_id, stripe_invoice_id')
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (error) { list.innerHTML = `<div style="padding:1.5rem;color:#c0392b;font-size:13px;">Error: ${escapeHtml(error.message)}</div>`; return; }
+  const orders = data || [];
+  if (!orders.length) { list.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--muted);font-size:14px;">No orders yet.</div>`; return; }
+
+  const nameFor = (userId) => {
+    const m = _allMembers.find(x => x.id === userId);
+    return m?.display_name || m?.username || m?.email || userId;
+  };
+  const addressOf = (shipping) => {
+    const a = shipping?.address;
+    if (!a) return '';
+    return [shipping.name, a.line1, a.line2, [a.city, a.state, a.postal_code].filter(Boolean).join(' '), a.country]
+      .filter(Boolean).join(', ');
+  };
+
+  list.innerHTML = orders.map(o => {
+    const items = Array.isArray(o.line_items) ? o.line_items : [];
+    const itemText = items.length
+      ? items.map(i => `${escapeHtml(String(i.quantity ?? 1))}× ${escapeHtml(i.name || 'Item')}`).join(', ')
+      : (o.kind === 'membership' ? 'MCA Membership' : '—');
+    const address = addressOf(o.shipping);
+    return `
+    <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;gap:12px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
+      <div style="min-width:0;flex:1;">
+        <div style="font-weight:600;font-size:14px;color:var(--black);">
+          ${o.kind === 'membership' ? 'Membership' : 'Shop order'} · ${escapeHtml(nameFor(o.user_id))}
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">${itemText}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">
+          ${escapeHtml(new Date(o.created_at).toLocaleString())}
+          ${o.customer_email ? ' · ' + escapeHtml(o.customer_email) : ''}
+        </div>
+        ${address ? `<div style="font-size:12px;color:var(--mid);margin-top:4px;">📦 ${escapeHtml(address)}</div>` : ''}
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div style="font-weight:600;font-size:14px;color:var(--black);">$${Number(o.amount_total || 0).toFixed(2)}</div>
+        <div style="font-size:11px;color:${o.status === 'paid' ? '#2d7d2f' : 'var(--muted)'};text-transform:uppercase;letter-spacing:.5px;">${escapeHtml(o.status || '')}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+window.loadAdminOrders = loadAdminOrders;
+document.getElementById('btn-refresh-orders')?.addEventListener('click', loadAdminOrders);
+
 function toggleInventoryField() {
   const type = document.getElementById('pm-product-type').value;
   document.getElementById('pm-inventory-group').style.display = type === 'subscription' ? 'none' : '';
@@ -2965,7 +3065,10 @@ async function pmUploadPendingImages(productIdHint) {
 function openProductModal(product = null) {
   ['id','name','desc','price','inventory','category','weight','dimensions','material','sizes','colors','sku','notes'].forEach(k => {
     const el = document.getElementById('pm-'+k);
-    if (el) el.value = product?.[k === 'desc' ? 'description' : k === 'notes' ? 'admin_notes' : k] || '';
+    // `??`, not `||`: a price of 0 (free) or inventory of 0 (out of stock) are
+    // legitimate stored values, and `||` blanked the field so saving an
+    // otherwise-untouched product failed with "price/inventory is required".
+    if (el) el.value = product?.[k === 'desc' ? 'description' : k === 'notes' ? 'admin_notes' : k] ?? '';
   });
   document.getElementById('pm-product-type').value = product?.product_type || 'physical';
   document.getElementById('pm-billing-cycle').value = product?.billing_cycle || 'monthly';
@@ -3168,7 +3271,7 @@ function renderOwnerDropdownList() {
   const list = document.getElementById('nm-owner-dropdown-list');
   const matches = _allMembers.filter(m => !q || (m.display_name || '').toLowerCase().includes(q) || (m.username || '').toLowerCase().includes(q));
   list.innerHTML = matches.length
-    ? matches.map(m => `<div onclick="toggleNationOwner('${m.id}')" style="padding:8px 10px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px;" onmouseover="this.style.background='var(--bg-alt,#f5f7fa)'" onmouseout="this.style.background=''"><input type="checkbox" ${_nmOwnerIds.includes(m.id) ? 'checked' : ''} style="pointer-events:none;">${escapeHtml(m.display_name || m.username)}${m.username && m.display_name ? ' <span style="color:var(--muted);">@'+escapeHtml(m.username)+'</span>' : ''}</div>`).join('')
+    ? matches.map(m => `<div onclick="toggleNationOwner('${m.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleNationOwner('${m.id}')}" role="checkbox" aria-checked="${_nmOwnerIds.includes(m.id)}" tabindex="0" style="padding:8px 10px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px;" onmouseover="this.style.background='var(--bg-alt,#f5f7fa)'" onmouseout="this.style.background=''"><input type="checkbox" tabindex="-1" aria-hidden="true" ${_nmOwnerIds.includes(m.id) ? 'checked' : ''} style="pointer-events:none;">${escapeHtml(m.display_name || m.username)}${m.username && m.display_name ? ' <span style="color:var(--muted);">@'+escapeHtml(m.username)+'</span>' : ''}</div>`).join('')
     : '<div style="padding:8px 10px;font-size:13px;color:var(--muted);">No matches</div>';
 }
 window.toggleNationOwner = (id) => {
@@ -3453,7 +3556,7 @@ function switchTab(tabName) {
   }
 
   // Lazy-load hooks
-  if (tabName === 'shop')       loadAdminProducts();
+  if (tabName === 'shop')       { loadAdminProducts(); loadAdminOrders(); }
   if (tabName === 'config')     loadConfigTab();
   if (tabName === 'news')       loadNewsAdmin();
   if (tabName === 'archive')    loadArchiveAdmin();
@@ -3713,13 +3816,13 @@ function renderMessages() {
     return `<div class="msg-row ${unread ? 'unread' : ''}" data-id="${m.id}">
       <div class="msg-dot"></div>
       <div class="msg-content">
-        <div class="msg-meta" style="cursor:pointer;" onclick="toggleThreadExpand('${m.id}')">
+        <div class="msg-meta" style="cursor:pointer;" onclick="toggleThreadExpand('${m.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleThreadExpand('${m.id}')}" role="button" tabindex="0" aria-expanded="${expanded ? 'true' : 'false'}">
           <span class="msg-sender">${sender}</span>
           ${claimBadge}
           <span style="margin-left:auto;font-size:11px;color:var(--muted);">${expanded ? '▲' : '▼'}</span>
         </div>
-        <div class="msg-subject" style="cursor:pointer;" onclick="toggleThreadExpand('${m.id}')">${subject}</div>
-        ${expanded ? '' : `<div style="font-size:12px;color:var(--muted);margin-top:2px;cursor:pointer;" onclick="toggleThreadExpand('${m.id}')">${lastPreview} ${lastPreview ? '· ' + lastTime : ''}</div>`}
+        <div class="msg-subject" style="cursor:pointer;" onclick="toggleThreadExpand('${m.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleThreadExpand('${m.id}')}" role="button" tabindex="0">${subject}</div>
+        ${expanded ? '' : `<div style="font-size:12px;color:var(--muted);margin-top:2px;cursor:pointer;" onclick="toggleThreadExpand('${m.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleThreadExpand('${m.id}')}" role="button" tabindex="0">${lastPreview} ${lastPreview ? '· ' + lastTime : ''}</div>`}
         ${expanded ? `
         ${itemsHtml}
         <div class="msg-reply-form" style="margin-top:10px;">
@@ -4078,7 +4181,7 @@ async function renderAuditLog() {
     const actorType = r.actor_type || 'system';
     const hasDetail = r.old_data || r.new_data;
     return `<div class="audit-row">
-      <div class="audit-row-top" ${hasDetail ? `onclick="toggleAuditDetail(${idx})"` : ''}>
+      <div class="audit-row-top" ${hasDetail ? `onclick="toggleAuditDetail(${idx})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAuditDetail(${idx})}" role="button" tabindex="0" aria-expanded="false" aria-controls="audit-detail-${idx}"` : ''}>
         <div class="audit-row-main">
           <div class="audit-summary">
             <span class="audit-actor-badge audit-actor-${escapeHtml(actorType)}">${escapeHtml(actorType)}</span><span class="audit-action-badge audit-action-${escapeHtml(r.action)}">${escapeHtml(r.action)}</span>${escapeHtml(r.summary || auditTableLabel(r.table_name))}
@@ -4101,6 +4204,8 @@ function toggleAuditDetail(idx) {
   if (!detail) return;
   const open = detail.classList.toggle('open');
   if (toggle) toggle.textContent = open ? 'Details ▴' : 'Details ▾';
+  const row = detail.previousElementSibling;
+  if (row && row.hasAttribute('aria-expanded')) row.setAttribute('aria-expanded', String(open));
 }
 window.toggleAuditDetail = toggleAuditDetail;
 

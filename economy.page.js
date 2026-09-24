@@ -1,7 +1,7 @@
 import { supabase } from './supabase.js';
 import {
   fmtMarks, fmtDate, escapeHtml, showError, showSuccess, clearMessages,
-  confirmAction, loadMyAccounts
+  confirmAction, loadMyAccounts, likeEscape
 } from './economy.js';
 
 let _accounts = [];
@@ -203,6 +203,7 @@ async function sendMarks() {
 
   // Resolve the destination: one of your own wallets by name, else a username.
   let toAccountId = null;
+  let toLabel = toRaw;
   const own = _accounts.find(a => a.name.toLowerCase() === toRaw.toLowerCase() && a.id !== fromId);
   if (own) {
     toAccountId = own.id;
@@ -212,13 +213,20 @@ async function sendMarks() {
     // empty and every transfer failed with "No player or wallet found".
     const { data: profile } = await supabase
       .from('public_profiles').select('id,username,display_name')
-      .ilike('username', toRaw).limit(1).maybeSingle();
-    if (!profile) { showError(errEl, { message: 'No player or wallet found called "' + toRaw + '".' }); return; }
+      .ilike('username', likeEscape(toRaw)).limit(1).maybeSingle();
+    // Belt and braces on top of the escaping: this path moves real currency
+    // irreversibly, so never act on a row whose username isn't an exact
+    // (case-insensitive) match for what was typed.
+    if (!profile || String(profile.username || '').toLowerCase() !== toRaw.toLowerCase()) {
+      showError(errEl, { message: 'No player or wallet found called "' + toRaw + '".' }); return;
+    }
     const { data: acctId } = await supabase.rpc('economy_get_personal_account_id', {
       p_target_user_id: profile.id
     });
     if (!acctId) { showError(errEl, { message: 'That player does not have a wallet yet.' }); return; }
     toAccountId = acctId;
+    // Show who the name actually resolved to, not just what was typed.
+    toLabel = profile.display_name ? `${profile.username} (${profile.display_name})` : profile.username;
   }
 
   const from = _accounts.find(a => a.id === fromId);
@@ -226,7 +234,7 @@ async function sendMarks() {
     title: 'Send Marks?',
     lines: [
       { label: 'From', value: from ? from.name : 'wallet' },
-      { label: 'To', value: toRaw },
+      { label: 'To', value: toLabel },
       { label: 'Amount', value: fmtMarks(amount) },
       { label: 'Memo', value: memo || '—' }
     ],

@@ -38,6 +38,12 @@ columns:
 # e.g. while testing before Stripe is fully configured).
 membership:
   gate_enabled: true
+  # What to do when the membership lookup itself fails (Supabase down or
+  # unreachable) — which is NOT the same as "this player isn't a member".
+  # true  = refuse the join, with the membership_check_unavailable message
+  #         below (keeps the paywall shut during an outage).
+  # false = let them in until Supabase is reachable again.
+  deny_on_lookup_error: true
 
 # NEW: periodic heartbeat so the website's admin panel can tell this plugin
 # is actually running (vs. just the Supabase Edge Function being deployed).
@@ -62,3 +68,4 @@ messages:
   unverify_done: "&aUnverified %player_name%'s Minecraft link."
   membership_required: "&cYour MCA membership isn't active.\n&7Renew for $12/year at the website (My Account) to rejoin."
   membership_required_unlinked: "&cYou need an active MCA membership to join.\n&7Sign up on the website, verify with /mcaverify, then purchase a membership."
+  membership_check_unavailable: "&cWe couldn't check your membership right now.\n&7This is a problem on our end, not yours — please try again in a few minutes."
