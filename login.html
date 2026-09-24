@@ -616,22 +616,8 @@
     }
     btn.textContent = 'Signing in…'; btn.disabled = true;
     try {
-    // If it doesn't look like an email, treat it as a username and look up the email.
-    // NOTE: this must go through a SECURITY DEFINER RPC, not a direct table select —
-    // anonymous visitors can't read the profiles table under RLS, so a direct
-    // `.from('profiles').select(...)` here always comes back empty and every
-    // username-based sign-in fails with "No account found", even for real accounts.
-    if (!identifier.includes('@')) {
-      const { data: resolved, error: lookupErr } = await supabase.rpc('get_email_by_username', { p_username: identifier });
-
-      if (lookupErr || !resolved) {
-        errEl.textContent   = 'No account found with that username.';
-        errEl.style.display = 'block';
-        btn.textContent = 'Sign In'; btn.disabled = false;
-        return;
-      }
-      identifier = resolved;
-    }
+    // A username is sent as-is: sign-in-with-email resolves it to an email
+    // server-side (service role), so no email address ever reaches the browser.
     errEl.style.display = 'none';
     if (!identifier || !password) {
       errEl.textContent = 'Please enter your email or username and password.';
