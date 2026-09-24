@@ -2208,3 +2208,29 @@ footer {
   .econ-tab { padding: 11px 14px; }
   .btn { padding: 11px 18px; }
 }
+
+/* ── Member-only page gate (member-gate.js) ── */
+/* While the membership check is pending, or when it blocks, hide the page's
+   own content but keep the injected nav/footer/chrome and the gate message. */
+html[data-member-gate] body > :not(nav):not(footer):not(script):not(.member-gate-panel):not(.skip-link):not(.toast):not(.cookie-banner):not(.scroll-progress) {
+  display: none !important;
+}
+.member-gate-panel {
+  max-width: 560px; margin: 4rem auto; padding: 2rem 1.5rem;
+  text-align: center; background: var(--white); border: 1px solid var(--border); border-radius: 8px;
+}
+.member-gate-panel h1 {
+  font-family: 'Times New Roman', serif; font-weight: normal;
+  font-size: clamp(1.5rem, 4vw, 2rem); color: var(--blue); margin-bottom: 0.75rem;
+}
+.member-gate-panel p { color: var(--mid); font-size: 15px; line-height: 1.6; margin-bottom: 1.5rem; }
+.member-gate-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.member-gate-actions .btn { text-decoration: none; display: inline-block; }
+.member-gate-banner {
+  padding: 10px 16px; text-align: center; font-size: 14px;
+  background: var(--bg); color: var(--black); border-bottom: 1px solid var(--border);
+}
+.member-gate-banner a { color: var(--blue); font-weight: 600; }
+@media (max-width: 480px) {
+  .member-gate-panel { margin: 2rem 16px; }
+}

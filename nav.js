@@ -936,7 +936,7 @@ async function initNavAuth(_authReadyResolve) {
         }
       }
 
-      const [{ data: roleData, error: roleError }, preview, canViewAdmin, canBypassMembership] = await Promise.all([
+      const [{ data: roleData, error: roleError }, preview, canViewAdmin] = await Promise.all([
         mod0.supabase.from('profiles').select('display_name, username, account_status, membership_status, membership_current_period_end').eq('id', user.id).single(),
         mod0.getMyRolePreview().catch(() => null),
         mod0.hasPermission('can_view_admin').catch(() => false),
@@ -966,33 +966,8 @@ async function initNavAuth(_authReadyResolve) {
         }
       }
 
-      // Membership gate: the Minecraft server and the website features tied
-      // to it are locked to paying members. Same client-side "check
-      // profiles, redirect if not allowed" idiom as the COPPA gate above —
-      // real enforcement for any mutation on these pages' data still depends
-      // on that table's own RLS (see user_meets_membership_gate() /
-      // require_active_membership() applied there). Exemption is the
-      // can_bypass_membership permission specifically, not can_view_admin —
-      // those used to be conflated here, which meant granting someone admin
-      // panel access silently exempted them from ever needing a membership.
-      // Owner and Admin have the bypass seeded by default; anyone else who
-      // needs it (e.g. a Congress/Court role without a paid membership) gets
-      // it granted explicitly via the Roles tab.
-      const memberGatedPages = ['server.html', 'economy.html', 'stocks.html', 'congress.html', 'court.html'];
-      const currentPageForMembers = window.location.pathname.split('/').pop() || 'index.html';
-      // A failed profile read is not proof of a lapsed membership, and this
-      // redirect is UX rather than enforcement (RLS is what actually gates
-      // the data). Bouncing a paid member to "you need a membership" on a
-      // transient error is worse than letting the page load and come up
-      // empty, so the gate only fires on a profile we actually read.
-      if (memberGatedPages.includes(currentPageForMembers) && !canBypassMembership && roleData && !roleError) {
-        const periodEnd = roleData.membership_current_period_end ? new Date(roleData.membership_current_period_end) : null;
-        const isActiveMember = roleData.membership_status === 'active' && periodEnd && periodEnd.getTime() > Date.now();
-        if (!isActiveMember) {
-          window.location.replace('account.html?membership_required=1');
-          return { isAdmin: false, canPublishNews: false };
-        }
-      }
+      // Membership gating for member-only pages lives in member-gate.js (loaded
+      // in each gated page's <head>) so content never flashes before the check.
       // isAdmin comes exclusively from the server-side role/permission
       // system (user_roles + roles.permissions) via the can_view_admin
       // permission — never from the legacy profiles.role column.

@@ -1689,12 +1689,16 @@ function renderMembers(members) {
     const membershipBadge = isActiveMember
       ? `<span class="badge badge-verified">${m.membership_source === 'admin_grant' ? 'Comped' : m.membership_source === 'test_checkout' ? 'Active (Test)' : 'Active'}</span>`
       : m.membership_status === 'past_due'
-        ? `<span class="badge badge-pending">Past Due</span>`
-        : `<span class="badge badge-unlinked">None</span>`;
+        ? `<span class="badge badge-pending">${periodEnd && periodEnd.getTime() > Date.now() ? 'Grace' : 'Expired'}</span>`
+        : m.membership_status && m.membership_status !== 'none'
+          ? `<span class="badge badge-unlinked">${m.membership_status === 'canceled' && periodEnd && periodEnd.getTime() > Date.now() ? 'Cancelled' : 'Expired'}</span>`
+          : `<span class="badge badge-unlinked">None</span>`;
     const grantMembershipBtn = !isActiveMember && _myPermissions.can_manage_memberships
       ? `<button class="btn btn-outline btn-sm" onclick="grantMembership('${m.id}')">Grant</button>` : '';
     const revokeMembershipBtn = isActiveMember && _myPermissions.can_manage_memberships
       ? `<button class="btn btn-danger btn-sm" onclick="revokeMembership('${m.id}')">Revoke</button>` : '';
+    const extendMembershipBtn = _myPermissions.can_manage_memberships
+      ? `<button class="btn btn-outline btn-sm" onclick="extendMembership('${m.id}')">Extend…</button>` : '';
 
     const allowEmailBtn = !emailVerified && m.email && _myPermissions.can_manage_users
       ? `<button class="btn btn-secondary btn-sm" onclick="allowEmail('${m.id}')">Allow Email</button>` : '';
@@ -1727,7 +1731,7 @@ function renderMembers(members) {
       <td>
         <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;">
           ${membershipBadge}
-          ${grantMembershipBtn}${revokeMembershipBtn}
+          ${grantMembershipBtn}${revokeMembershipBtn}${extendMembershipBtn}
         </div>
       </td>
       <td>
@@ -2830,6 +2834,19 @@ window.grantMembership = async (id) => {
     if (!confirm(`${name} already pays for a membership through Stripe.\n\nComping them here does NOT cancel that subscription — they will keep being charged, and the next renewal will overwrite the comp. Cancel the subscription in the Stripe dashboard first.\n\nComp them anyway?`)) return;
   } else if (!confirm(`Grant ${name} a complimentary MCA membership? They'll get server + member-page access without paying.`)) return;
   const { error } = await supabase.rpc('admin_set_membership', { p_user_id: id, p_grant: true });
+  if (error) { alert('Error: ' + error.message); return; }
+  await loadAll();
+};
+// Grant or extend a membership until a specific date (admin_set_membership p_expires_at).
+window.extendMembership = async (id) => {
+  const member = _allMembers.find(m => m.id === id);
+  const name = member?.display_name || member?.username || 'this member';
+  const input = prompt(`Give ${name} membership access until which date? (YYYY-MM-DD)`);
+  if (!input) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.trim()) || isNaN(new Date(input.trim() + 'T23:59:59').getTime())) { alert('Please enter a date like 2027-06-30.'); return; }
+  const until = new Date(input.trim() + 'T23:59:59');
+  if (until.getTime() <= Date.now()) { alert('The date must be in the future.'); return; }
+  const { error } = await supabase.rpc('admin_set_membership', { p_user_id: id, p_grant: true, p_expires_at: until.toISOString() });
   if (error) { alert('Error: ' + error.message); return; }
   await loadAll();
 };

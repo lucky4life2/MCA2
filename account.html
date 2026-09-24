@@ -998,6 +998,20 @@ function renderMembership() {
   // could buy a second subscription.
   const isActive = status === 'active' || status === 'trialing';
 
+  // Same rule as the server's private.membership_state(): any non-'none'
+  // membership whose period end has passed is expired, whatever its status.
+  if (status !== 'none' && (!periodEnd || periodEnd.getTime() <= Date.now())) {
+    badge.textContent = 'Expired';
+    badge.className = 'account-section-badge badge-unlinked';
+    body.innerHTML = `
+      <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
+        ${periodEnd ? `Your membership expired on <strong>${escapeHtml(periodEnd.toLocaleDateString())}</strong>.` : 'Your membership has expired.'}
+        Renew to get back into the Minecraft server and the member-only pages.
+      </p>
+      <a class="btn btn-primary" href="shop.html" style="text-decoration:none;display:inline-block;">Renew membership</a>`;
+    return;
+  }
+
   if (isActive) {
     // A comped membership has no Stripe customer behind it, so it has no
     // renewal date and nothing to manage — saying it "renews" on a date a
@@ -1033,7 +1047,7 @@ function renderMembership() {
     badge.className = 'account-section-badge badge-pending';
     body.innerHTML = `
       <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
-        We couldn't process your last membership payment. Server and member-page access may be paused until this is resolved.
+        We couldn't process your last membership payment. You keep access until <strong>${periodEnd ? escapeHtml(periodEnd.toLocaleDateString()) : 'the end of your current period'}</strong> while we retry. Update your payment method so it doesn't lapse.
       </p>
       <button class="btn btn-primary" type="button" onclick="openBillingPortal(this)">Update Payment</button>`;
   } else {
