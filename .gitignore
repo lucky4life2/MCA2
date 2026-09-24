@@ -12,3 +12,5 @@ target/
 *.csv
 /supabase
 /supabase/migrations
+# Private audit working notes (open findings; public repo)
+audit/private/

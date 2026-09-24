@@ -14,3 +14,17 @@ Guidance applied to this stack:
 - **Supabase production checklist**: RLS everywhere, CAPTCHA on auth endpoints (Turnstile already present), OTP expiry ≤ 3600s, custom SMTP, rate limits, leaked-password protection (dashboard setting, manual).
 
 Sources: see the final report, §6.
+
+## Phase 2: Audit and fix (in progress)
+Public repo policy: this log records **fixed** issues only. Open findings are tracked privately, outside the repo, until they are fixed.
+
+Blocker: DB migrations and edge-function deploys are refused by the Claude Code auto-mode classifier until the owner adds a permission rule. Pending SQL is in `audit/migrations/`, with rollbacks in `audit/rollback/`.
+
+Verified OK (live DB): RLS is enabled on all 86 public tables. Membership/billing/role/status columns cannot be written by clients (`private.profiles_guard_columns`). Storage writes are permission-gated.
+
+Fixed (branch commit 83eb395; the security part is also in hotfix PR #33):
+- URL sanitizer `safeUrl()` (10 copies) now uses a `URL()`-parser http(s) allowlist
+- `account.html` `escapeHtml` escapes quotes
+- removed dead `getProfile()` (legacy `profiles.role`) and unused `signInWithEmail()`
+- WCAG AA contrast for green labels and muted text in light mode
+- Escape-to-close on nav dropdowns; outage-screen logo path; economy table overflow at 375px
