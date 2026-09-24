@@ -945,10 +945,10 @@ function safeAttachmentUrl(u) {
   return /^https:\/\//i.test(String(u ?? '')) ? String(u) : '';
 }
 
+// Regex escaper (not textContent/innerHTML) so quotes are escaped too — this
+// is used inside attribute values, where an unescaped " breaks out.
 function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str == null ? '' : String(str);
-  return div.innerHTML;
+  return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 // ── Membership ───────────────────────────────────────────────

@@ -394,7 +394,7 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
       document.documentElement.style.visibility = '';
       document.body.innerHTML = `
         <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0f1e;font-family:'Open Sans',sans-serif;padding:2rem;text-align:center;">
-          <img src="assets/mca-logo.png" alt="MCA" style="width:72px;height:72px;border-radius:12px;margin-bottom:1.5rem;" onerror="this.style.display='none'">
+          <img src="images/logo.png" alt="MCA" style="width:72px;height:72px;border-radius:12px;margin-bottom:1.5rem;" onerror="this.style.display='none'">
           <h1 style="color:#fff;font-size:1.6rem;font-weight:700;margin:0 0 0.5rem;">Site Temporarily Unavailable</h1>
           <p style="color:#94a3b8;font-size:0.95rem;max-width:420px;line-height:1.6;margin:0 0 1.5rem;">
             We're unable to load the site right now because Supabase — the service we use for our database — appears to be unreachable. This is likely due to an ongoing outage.
@@ -687,6 +687,18 @@ async function injectNav() {
     document.querySelectorAll('.nav-has-dropdown').forEach(item => {
       if (!item.contains(e.target)) closeDropdown(item);
     });
+  });
+  // Escape closes every nav/account dropdown and returns focus to the
+  // trigger that owned the focused item (WCAG 2.1.1 keyboard access).
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    const owner = document.activeElement?.closest('.nav-has-dropdown, .nav-account-submenu, .nav-account-dropdown');
+    document.querySelectorAll('.nav-has-dropdown').forEach(closeDropdown);
+    document.querySelectorAll('.nav-account-dropdown, .nav-account-submenu').forEach(d => d.classList.remove('open'));
+    const trigger = owner?.matches('.nav-account-dropdown')
+      ? owner.previousElementSibling
+      : owner?.querySelector('.nav-dropdown-trigger, #nav-staff-trigger');
+    trigger?.focus();
   });
 
   // Hamburger menu toggle

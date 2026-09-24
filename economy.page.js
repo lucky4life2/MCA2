@@ -90,7 +90,7 @@ async function renderHistory() {
   if (error) { el.innerHTML = '<div class="econ-muted">Could not load history.</div>'; return; }
   if (!data.length) { el.innerHTML = '<div class="econ-muted">No transactions yet.</div>'; return; }
 
-  el.innerHTML = '<table class="econ-table"><thead><tr>' +
+  el.innerHTML = '<div class="history-table-wrap"><table class="econ-table"><thead><tr>' +
     '<th>When</th><th>Type</th><th>Detail</th><th class="econ-num">Amount</th>' +
     '</tr></thead><tbody>' +
     data.map(t => {
@@ -104,7 +104,7 @@ async function renderHistory() {
         '<td class="econ-num" style="color:' + color + ';">' + sign + ' ' + fmtMarks(t.amount) + '</td>' +
       '</tr>';
     }).join('') +
-    '</tbody></table>';
+    '</tbody></table></div>';
 }
 
 // ── Actions ──────────────────────────────────────────────────

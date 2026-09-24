@@ -19,20 +19,6 @@ export async function getUser() {
 }
 
 /** Returns the profile row for a given user id, or null */
-export async function getProfile(userId, accessToken) {
-  if (!userId) return null;
-  const client = accessToken
-    ? createClient(SUPABASE_URL, SUPABASE_KEY, { global: { headers: { Authorization: `Bearer ${accessToken}` } } })
-    : supabase;
-  const { data, error } = await client
-    .from('profiles')
-    .select('role, display_name, username, email')
-    .eq('id', userId)
-    .single();
-  if (error) console.error('getProfile error:', error.message);
-  return data;
-}
-
 // ── New role/permission helpers ──────────────────────────────
 
 /**
@@ -192,12 +178,6 @@ export async function signInWithGoogle() {
 }
 
 /** Sign in with email + password */
-export async function signInWithEmail(email, password) {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) throw error;
-  return data;
-}
-
 /** Sign out */
 export async function signOut() {
   await supabase.auth.signOut();
