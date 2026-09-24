@@ -1687,7 +1687,7 @@ function renderMembers(members) {
     const periodEnd = m.membership_current_period_end ? new Date(m.membership_current_period_end) : null;
     const isActiveMember = m.membership_status === 'active' && periodEnd && periodEnd.getTime() > Date.now();
     const membershipBadge = isActiveMember
-      ? `<span class="badge badge-verified">${m.membership_source === 'admin_grant' ? 'Comped' : 'Active'}</span>`
+      ? `<span class="badge badge-verified">${m.membership_source === 'admin_grant' ? 'Comped' : m.membership_source === 'test_checkout' ? 'Active (Test)' : 'Active'}</span>`
       : m.membership_status === 'past_due'
         ? `<span class="badge badge-pending">Past Due</span>`
         : `<span class="badge badge-unlinked">None</span>`;

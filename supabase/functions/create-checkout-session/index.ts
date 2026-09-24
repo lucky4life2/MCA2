@@ -22,6 +22,15 @@ const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
 
+// Lets the whole shop → checkout → membership/order → Minecraft-plugin-gate
+// flow be exercised end to end before a real Stripe account exists, without
+// touching Stripe at all. Only takes effect when STRIPE_SECRET_KEY is still
+// the placeholder (see stripeConfigured below) — the moment a real key is
+// set, this whole path is dead code, so there's no way to leave it on by
+// accident in production. Enable with `supabase secrets set
+// TEST_CHECKOUT_MODE=true` in a dev/staging project only.
+const TEST_CHECKOUT_MODE = (Deno.env.get('TEST_CHECKOUT_MODE') ?? '').toLowerCase() === 'true';
+
 // Where the browser is sent back to after Checkout. The Origin header is
 // attacker-controllable (this endpoint can be called from anywhere with a
 // valid user token), so it is only honoured when it matches the site; any
@@ -115,7 +124,8 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
-  if (!STRIPE_SECRET_KEY || STRIPE_SECRET_KEY.startsWith('sk_placeholder')) {
+  const stripeConfigured = !!STRIPE_SECRET_KEY && !STRIPE_SECRET_KEY.startsWith('sk_placeholder');
+  if (!stripeConfigured && !TEST_CHECKOUT_MODE) {
     return json({ error: 'The shop is not accepting payments yet — Stripe has not been connected.' }, 503);
   }
 
@@ -157,7 +167,12 @@ Deno.serve(async (req: Request) => {
   let hasSubscription = false;
   let hasGoods = false;
   let subscriptionAnchor: number | null = null;
+  let subscriptionProduct: { billing_cycle: string | null } | null = null;
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
+  // Same shape purchasedLines() in stripe-webhook builds from a real Stripe
+  // session — kept in step here so a TEST_CHECKOUT_MODE order looks exactly
+  // like a real one to the admin panel and account page.
+  const mockLines: { product_id: string | null; name: string; quantity: number; amount_total: number }[] = [];
   const seen = new Set<string>();
 
   for (const item of requested) {
@@ -222,8 +237,15 @@ Deno.serve(async (req: Request) => {
     if (isSubscription) {
       priceData.recurring = recurringFor(product.billing_cycle);
       subscriptionAnchor = billingCycleAnchor(product.billing_anchor, product.billing_anchor_date, product.billing_cycle);
+      subscriptionProduct = { billing_cycle: product.billing_cycle };
     }
     lineItems.push({ price_data: priceData, quantity });
+    mockLines.push({
+      product_id: product.id,
+      name: product.name,
+      quantity,
+      amount_total: (unitAmount * quantity) / 100,
+    });
   }
 
   if (hasSubscription && hasGoods) {
@@ -262,6 +284,69 @@ Deno.serve(async (req: Request) => {
   }
 
   const origin = returnOrigin(req);
+
+  // TEST_CHECKOUT_MODE: everything above this line (auth, rate limit, cart
+  // validation, stock, duplicate-membership check) has already run exactly
+  // as it would for a real purchase. From here, instead of talking to
+  // Stripe, do directly what stripe-webhook's handleCompletedSession() /
+  // syncSubscription() would do once Stripe told it the payment succeeded —
+  // record the order and (for a subscription) flip the profile to an active
+  // member — then send the browser straight to the same success URL Stripe
+  // would have redirected to. This is what lets the whole shop → checkout →
+  // membership flow, and anything downstream that reads membership_status
+  // (the account page, the admin panel, the Minecraft membership-gate
+  // plugin), be tested before a real Stripe account exists.
+  if (!stripeConfigured) {
+    const amountTotal = mockLines.reduce((sum, l) => sum + l.amount_total, 0);
+    const fakeSessionId = `test_${crypto.randomUUID()}`;
+
+    const { error: orderError } = await admin.from('orders').insert({
+      user_id: user.id,
+      kind: hasSubscription ? 'membership' : 'goods',
+      stripe_checkout_session_id: fakeSessionId,
+      stripe_payment_intent_id: null,
+      stripe_subscription_id: null,
+      amount_total: amountTotal,
+      currency: 'usd',
+      status: 'paid',
+      line_items: mockLines,
+      customer_email: user.email ?? null,
+      shipping: null,
+    });
+    if (orderError) {
+      console.error('TEST_CHECKOUT_MODE: failed to record mock order:', orderError.message);
+      return json({ error: 'Could not complete the test checkout.' }, 500);
+    }
+
+    if (!hasSubscription) {
+      const stockItems = mockLines
+        .filter((l) => l.product_id)
+        .map((l) => ({ id: l.product_id, qty: l.quantity }));
+      if (stockItems.length) {
+        const { error: stockError } = await admin.rpc('shop_consume_inventory', { p_items: stockItems });
+        if (stockError) console.error('TEST_CHECKOUT_MODE: failed to decrement inventory:', stockError.message);
+      }
+    } else {
+      const { interval, interval_count } = recurringFor(subscriptionProduct?.billing_cycle ?? null);
+      const periodEnd = new Date();
+      if (interval === 'day') periodEnd.setUTCDate(periodEnd.getUTCDate() + interval_count);
+      else if (interval === 'week') periodEnd.setUTCDate(periodEnd.getUTCDate() + 7 * interval_count);
+      else if (interval === 'month') periodEnd.setUTCMonth(periodEnd.getUTCMonth() + interval_count);
+      else periodEnd.setUTCFullYear(periodEnd.getUTCFullYear() + interval_count);
+
+      const { error: membershipError } = await admin.from('profiles').update({
+        membership_status: 'active',
+        membership_source: 'test_checkout',
+        membership_current_period_end: periodEnd.toISOString(),
+      }).eq('id', user.id);
+      if (membershipError) {
+        console.error('TEST_CHECKOUT_MODE: failed to update membership:', membershipError.message);
+        return json({ error: 'Could not complete the test checkout.' }, 500);
+      }
+    }
+
+    return json({ url: `${origin}/shop.html?checkout=success` });
+  }
 
   // Reuse the Stripe customer this account already has, so a renewing or
   // returning member keeps one customer record (and one saved card, and one
