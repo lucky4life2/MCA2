@@ -73,7 +73,7 @@ const NAV_HTML = () => {
   <ul class="nav-links" id="nav-links">
     <li><a href="index.html"      data-page="index">Home</a></li>
     <li class="nav-has-dropdown" id="nav-server-item">
-      <a href="#" class="nav-dropdown-trigger" data-page="server-hub" aria-expanded="false" onclick="return false;">Server <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></a>
+      <a href="#" class="nav-dropdown-trigger" data-page="server-hub" aria-expanded="false">Server <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></a>
       <ul class="nav-dropdown" id="nav-server-dropdown">
         <li><a href="server.html"  data-page="server">Server</a></li>
         <li><a href="economy.html" data-page="economy">Economy</a></li>
@@ -81,7 +81,7 @@ const NAV_HTML = () => {
       </ul>
     </li>
     <li class="nav-has-dropdown" id="nav-community-item">
-      <a href="#" class="nav-dropdown-trigger" data-page="community" aria-expanded="false" onclick="return false;">Community <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></a>
+      <a href="#" class="nav-dropdown-trigger" data-page="community" aria-expanded="false">Community <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></a>
       <ul class="nav-dropdown" id="nav-community-dropdown">
         <li><a href="news.html"    data-page="news">News</a></li>
         <li><a href="nations.html" data-page="nations">Nations</a></li>
@@ -90,7 +90,7 @@ const NAV_HTML = () => {
       </ul>
     </li>
     <li class="nav-has-dropdown" id="nav-about-item">
-      <a href="#" class="nav-dropdown-trigger" data-page="about" aria-expanded="false" onclick="return false;">About <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></a>
+      <a href="#" class="nav-dropdown-trigger" data-page="about" aria-expanded="false">About <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></a>
       <ul class="nav-dropdown" id="nav-about-dropdown">
         <li><a href="leadership.html" data-page="leadership">Leadership</a></li>
         <li><a href="archive.html"    data-page="archive">Archive</a></li>
@@ -158,7 +158,7 @@ const FOOTER_HTML = () => {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
           YouTube
         </a>
-        <a href="#" id="footer-email-btn" onclick="copyEmail(this);return false;">
+        <a href="#" id="footer-email-btn" data-copy-email>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
           Email Us
         </a>
@@ -427,7 +427,7 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
       document.documentElement.style.visibility = '';
       document.body.innerHTML = `
         <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0f1e;font-family:'Open Sans',sans-serif;padding:2rem;text-align:center;">
-          <img src="images/logo.png" alt="MCA" style="width:72px;height:72px;border-radius:12px;margin-bottom:1.5rem;" onerror="this.style.display='none'">
+          <img src="images/logo.png" alt="MCA" style="width:72px;height:72px;border-radius:12px;margin-bottom:1.5rem;">
           <h1 style="color:#fff;font-size:1.6rem;font-weight:700;margin:0 0 0.5rem;">Site Temporarily Unavailable</h1>
           <p style="color:#94a3b8;font-size:0.95rem;max-width:420px;line-height:1.6;margin:0 0 1.5rem;">
             We're unable to load the site right now because Supabase — the service we use for our database — appears to be unreachable. This is likely due to an ongoing outage.
@@ -456,7 +456,7 @@ function showLockScreen(cfg) {
       padding:2rem;
       text-align:center;
     ">
-      <img src="/images/logo-light.png" alt="MCA Logo" id="lock-logo-img" style="width:72px;height:72px;object-fit:contain;margin-bottom:1.5rem;" onerror="this.style.display='none'">
+      <img src="/images/logo-light.png" alt="MCA Logo" id="lock-logo-img" style="width:72px;height:72px;object-fit:contain;margin-bottom:1.5rem;">
       <div id="lock-eyebrow" style="
         font-size:11px;
         font-weight:700;
@@ -814,6 +814,14 @@ function copyEmail(el) {
   setTimeout(() => { el.innerHTML = orig; }, 2000);
 }
 window.copyEmail = copyEmail;
+// Delegated so no inline onclick is needed (inline handlers are blocked by
+// the strict CSP in _headers). Any element with data-copy-email works.
+document.addEventListener('click', e => {
+  const el = e.target.closest?.('[data-copy-email]');
+  if (!el) return;
+  e.preventDefault();
+  copyEmail(el);
+});
 
 // ── Nav auth + cart ───────────────────────────────────────────
 async function initNavAuth(_authReadyResolve) {
