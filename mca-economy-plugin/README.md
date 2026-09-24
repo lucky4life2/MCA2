@@ -102,15 +102,20 @@ The output jar (with `gson` shaded in) lands in `target/mca-economy-1.0.0.jar`.
 
 ## Design notes / trade-offs worth knowing about
 
-- **An active MCA membership is required for every economy interaction** —
-  `/bank`, `/company`, `/shop create`, and buying/selling at a chest shop all
-  call `EconomyService.isActiveMember()` right after resolving the acting
-  player's actor id, and Vault's cache (`VaultEconomyProvider.refresh()`)
-  drops a player's cached account the moment they stop being an active
-  member. This is deliberately independent of the account-linking plugin's
-  join-time gate (`MembershipGateListener`) — that plugin keeps non-members
-  off the server at all, but this plugin can't assume it's installed,
-  enabled, or unmodified on every server it runs on, so it checks
+- **An active MCA membership is required to *do* anything in the economy —
+  but not to *see* it.** Read-only lookups (`/bank balance`, `/bank list`,
+  `/company list`, `/company info`, `/shop info`, Vault's `getBalance()`/
+  `hasAccount()`) only require the Minecraft account to be linked/verified
+  (or nothing at all, for the public company list). Everything that moves
+  money, creates an account, or changes economy state — `/bank create|pay|
+  invite|use`, `/company found|buy|sell|setprice`, `/shop create`, buying/
+  selling at a chest shop, and Vault's `withdrawPlayer()`/`depositPlayer()`/
+  `createPlayerAccount()` — calls `EconomyService.isActiveMember()` right
+  after resolving the acting player's actor id and refuses if it's false.
+  This is deliberately independent of the account-linking plugin's join-time
+  gate (`MembershipGateListener`) — that plugin keeps non-members off the
+  server at all, but this plugin can't assume it's installed, enabled, or
+  unmodified on every server it runs on, so it checks
   `profiles.membership_status`/`membership_current_period_end` itself rather
   than trusting that a player who made it in-game is paid up. (Not to be
   confused with "account membership" a few bullets down — that's about who's

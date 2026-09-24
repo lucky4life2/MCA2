@@ -47,20 +47,19 @@ public class VaultEconomyProvider implements Economy {
 
     // ── Cache management — called by the plugin, not part of the Vault interface ──
 
-    /** Refreshes the cached personal account for a player. Safe to call from any thread. */
+    /**
+     * Refreshes the cached personal account for a player. Safe to call from
+     * any thread.
+     *
+     * Deliberately does NOT check membership here: hasAccount()/getBalance()
+     * are read-only, and a lapsed or never-purchased membership can still
+     * see their own balance (e.g. on a scoreboard). Membership is enforced
+     * where money actually moves — withdrawPlayer()/depositPlayer() below.
+     */
     public void refresh(UUID minecraftUuid) {
         try {
             UUID actorId = service.resolveActor(minecraftUuid);
             if (actorId == null) return; // not linked/verified on the website yet
-            if (!service.isActiveMember(actorId)) {
-                // A lapsed/never-purchased membership must not keep trading
-                // through Vault (ChestShop, etc.) just because this cache
-                // still remembers their account from before — drop it so
-                // hasAccount()/getBalance()/withdrawPlayer()/depositPlayer()
-                // all read back as "no account" until they're a member again.
-                personalAccounts.remove(minecraftUuid);
-                return;
-            }
             List<EconomyAccount> accounts = service.myAccounts(actorId);
             accounts.stream()
                     .filter(a -> "personal".equals(a.type))
@@ -122,6 +121,10 @@ public class VaultEconomyProvider implements Economy {
         }
         try {
             UUID actorId = service.resolveActor(player.getUniqueId());
+            if (actorId == null || !service.isActiveMember(actorId)) {
+                return new EconomyResponse(0, account.balance.doubleValue(), EconomyResponse.ResponseType.FAILURE,
+                        "Your MCA membership isn't active — renew on the website to use the economy.");
+            }
             service.withdraw(actorId, account.id, BigDecimal.valueOf(amount).setScale(2, RoundingMode.HALF_UP), "Vault withdrawal");
             refresh(player.getUniqueId());
             return new EconomyResponse(amount, getBalance(player), EconomyResponse.ResponseType.SUCCESS, "");
@@ -141,6 +144,10 @@ public class VaultEconomyProvider implements Economy {
         }
         try {
             UUID actorId = service.resolveActor(player.getUniqueId());
+            if (actorId == null || !service.isActiveMember(actorId)) {
+                return new EconomyResponse(0, account.balance.doubleValue(), EconomyResponse.ResponseType.FAILURE,
+                        "Your MCA membership isn't active — renew on the website to use the economy.");
+            }
             service.deposit(actorId, account.id, BigDecimal.valueOf(amount).setScale(2, RoundingMode.HALF_UP), "Vault deposit");
             refresh(player.getUniqueId());
             return new EconomyResponse(amount, getBalance(player), EconomyResponse.ResponseType.SUCCESS, "");

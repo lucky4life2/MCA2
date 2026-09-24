@@ -125,7 +125,7 @@ public class BankCommand implements CommandExecutor, TabCompleter {
         }
         String name = String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length));
 
-        UUID actorId = requireActor(player);
+        UUID actorId = requireActiveMember(player);
         if (actorId == null) return;
 
         if (type.equals("nation")) {
@@ -142,7 +142,7 @@ public class BankCommand implements CommandExecutor, TabCompleter {
             plugin.runSync(() -> player.sendMessage(err("Usage: /bank pay <player-or-account> <amount> [memo...]")));
             return;
         }
-        UUID actorId = requireActor(player);
+        UUID actorId = requireActiveMember(player);
         if (actorId == null) return;
 
         List<EconomyAccount> myAccounts = service.myAccounts(actorId);
@@ -184,7 +184,7 @@ public class BankCommand implements CommandExecutor, TabCompleter {
             plugin.runSync(() -> player.sendMessage(err("Usage: /bank use <account> — sets which account chest shops buy/sell from for you")));
             return;
         }
-        UUID actorId = requireActor(player);
+        UUID actorId = requireActiveMember(player);
         if (actorId == null) return;
 
         List<EconomyAccount> accounts = service.myAccounts(actorId);
@@ -202,7 +202,7 @@ public class BankCommand implements CommandExecutor, TabCompleter {
             plugin.runSync(() -> player.sendMessage(err("Usage: /bank invite <account-name> <player>")));
             return;
         }
-        UUID actorId = requireActor(player);
+        UUID actorId = requireActiveMember(player);
         if (actorId == null) return;
 
         List<EconomyAccount> myAccounts = service.myAccounts(actorId);
@@ -225,14 +225,27 @@ public class BankCommand implements CommandExecutor, TabCompleter {
 
     // ── Helpers ──
 
+    /**
+     * For read-only lookups (balance, list) — only requires the Minecraft
+     * account to be linked/verified. A lapsed or never-purchased membership
+     * can still see their own accounts and balances; it's spending, moving,
+     * or creating money that's off-limits without an active membership (see
+     * requireActiveMember()).
+     */
     private UUID requireActor(Player player) throws EconomyException {
         UUID actorId = service.resolveActor(player.getUniqueId());
         if (actorId == null) {
             plugin.runSync(() -> player.sendMessage(err("Link and verify your Minecraft account on the website first.")));
-            return null;
         }
+        return actorId;
+    }
+
+    /** For anything that moves money, creates an account, or changes economy state. */
+    private UUID requireActiveMember(Player player) throws EconomyException {
+        UUID actorId = requireActor(player);
+        if (actorId == null) return null;
         if (!service.isActiveMember(actorId)) {
-            plugin.runSync(() -> player.sendMessage(err("Your MCA membership isn't active — renew on the website to use the economy.")));
+            plugin.runSync(() -> player.sendMessage(err("Your MCA membership isn't active — renew on the website to use the economy. You can still check /bank balance and /bank list.")));
             return null;
         }
         return actorId;
