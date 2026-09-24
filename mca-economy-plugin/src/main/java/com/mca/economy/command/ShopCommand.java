@@ -121,6 +121,10 @@ public class ShopCommand implements CommandExecutor, TabCompleter {
                     plugin.runSync(() -> player.sendMessage(err("Link and verify your Minecraft account on the website first.")));
                     return;
                 }
+                if (!service.isActiveMember(actorId)) {
+                    plugin.runSync(() -> player.sendMessage(err("Your MCA membership isn't active — renew on the website to use the economy.")));
+                    return;
+                }
                 List<EconomyAccount> accounts = service.myAccounts(actorId);
                 EconomyAccount account = accounts.stream()
                         .filter(a -> a.name.equalsIgnoreCase(accountToken) || a.type.equalsIgnoreCase(accountToken))

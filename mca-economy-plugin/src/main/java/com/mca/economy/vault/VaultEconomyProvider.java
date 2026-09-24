@@ -52,6 +52,15 @@ public class VaultEconomyProvider implements Economy {
         try {
             UUID actorId = service.resolveActor(minecraftUuid);
             if (actorId == null) return; // not linked/verified on the website yet
+            if (!service.isActiveMember(actorId)) {
+                // A lapsed/never-purchased membership must not keep trading
+                // through Vault (ChestShop, etc.) just because this cache
+                // still remembers their account from before — drop it so
+                // hasAccount()/getBalance()/withdrawPlayer()/depositPlayer()
+                // all read back as "no account" until they're a member again.
+                personalAccounts.remove(minecraftUuid);
+                return;
+            }
             List<EconomyAccount> accounts = service.myAccounts(actorId);
             accounts.stream()
                     .filter(a -> "personal".equals(a.type))
@@ -166,6 +175,7 @@ public class VaultEconomyProvider implements Economy {
         try {
             UUID actorId = service.resolveActor(player.getUniqueId());
             if (actorId == null) return false; // not linked/verified on the website
+            if (!service.isActiveMember(actorId)) return false; // linked, but not a paying member
             String name = (player.getName() != null ? player.getName() : "Player") + "'s Account";
             service.createAccount(actorId, "personal", name, null);
             refresh(player.getUniqueId());

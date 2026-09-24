@@ -127,6 +127,10 @@ public class ShopInteractListener implements Listener {
                     plugin.runSync(() -> rollbackBuy(player, chestInv, material, "Link and verify your Minecraft account on the website first."));
                     return;
                 }
+                if (!service.isActiveMember(buyerActorId)) {
+                    plugin.runSync(() -> rollbackBuy(player, chestInv, material, "Your MCA membership isn't active — renew on the website to use the economy."));
+                    return;
+                }
                 List<EconomyAccount> accounts = service.myAccounts(buyerActorId);
                 EconomyAccount buyerAccount = service.getActiveAccount(player.getUniqueId(), accounts);
                 if (buyerAccount == null) {
@@ -168,6 +172,10 @@ public class ShopInteractListener implements Listener {
                 UUID sellerActorId = service.resolveActor(player.getUniqueId());
                 if (sellerActorId == null) {
                     plugin.runSync(() -> rollbackSell(player, chestInv, material, "Link and verify your Minecraft account on the website first."));
+                    return;
+                }
+                if (!service.isActiveMember(sellerActorId)) {
+                    plugin.runSync(() -> rollbackSell(player, chestInv, material, "Your MCA membership isn't active — renew on the website to use the economy."));
                     return;
                 }
                 List<EconomyAccount> accounts = service.myAccounts(sellerActorId);

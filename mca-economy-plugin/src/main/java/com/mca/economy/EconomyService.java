@@ -11,6 +11,7 @@ import com.mca.economy.supabase.SupabaseClient;
 import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -69,6 +70,39 @@ public class EconomyService {
 
     public void invalidateActor(UUID minecraftUuid) {
         actorCache.remove(minecraftUuid);
+    }
+
+    /**
+     * True if the given actor (a website profile id, from resolveActor())
+     * currently has an active MCA membership — the same rule the website
+     * itself gates on (profiles.membership_status = 'active' AND an
+     * unexpired membership_current_period_end). resolveActor() alone only
+     * proves the Minecraft account is linked and verified, not that it's
+     * paid up; the account-linking plugin's join-time gate is the normal
+     * front door, but this plugin cannot assume that gate is installed,
+     * enabled, or unmodified on every server it runs on (a hardcoded admin
+     * bypasses it entirely), so every economy interaction checks membership
+     * again here, independently.
+     */
+    public boolean isActiveMember(UUID actorId) throws EconomyException {
+        JsonElement result = client.select("profiles",
+                "id=eq." + actorId + "&select=membership_status,membership_current_period_end&limit=1");
+        if (result == null || !result.isJsonArray() || result.getAsJsonArray().isEmpty()) return false;
+        JsonObject row = result.getAsJsonArray().get(0).getAsJsonObject();
+
+        boolean active = row.has("membership_status") && !row.get("membership_status").isJsonNull()
+                && "active".equals(row.get("membership_status").getAsString());
+        if (!active) return false;
+
+        if (!row.has("membership_current_period_end") || row.get("membership_current_period_end").isJsonNull()) {
+            return false;
+        }
+        try {
+            Instant periodEnd = Instant.parse(row.get("membership_current_period_end").getAsString());
+            return Instant.now().isBefore(periodEnd);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**

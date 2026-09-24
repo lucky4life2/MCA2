@@ -229,6 +229,11 @@ public class BankCommand implements CommandExecutor, TabCompleter {
         UUID actorId = service.resolveActor(player.getUniqueId());
         if (actorId == null) {
             plugin.runSync(() -> player.sendMessage(err("Link and verify your Minecraft account on the website first.")));
+            return null;
+        }
+        if (!service.isActiveMember(actorId)) {
+            plugin.runSync(() -> player.sendMessage(err("Your MCA membership isn't active — renew on the website to use the economy.")));
+            return null;
         }
         return actorId;
     }
