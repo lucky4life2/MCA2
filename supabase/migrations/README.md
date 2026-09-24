@@ -108,6 +108,29 @@ Internal `_economy_*` helpers should get `service_role` only. Run
 `select * from public.economy_audit_exposed_internals();` after any economy
 migration — it returns rows only when an internal has become reachable again.
 
+## Data API grants (2026-09-24)
+
+Supabase is removing the implicit "new table -> auto-granted to anon/
+authenticated/service_role" behavior that currently exposes every `public`
+table to the Data API. Enforced on all projects, including this one, on
+2026-10-30. `20260924_explicit_data_api_grants.sql` restates every table's
+*current* grants explicitly (verified against `information_schema` before
+and after — nothing changed) so nothing gets silently revoked on that date.
+
+Same rule as the function-grant note above, now for tables too: **a new
+table is not guaranteed to be reachable via the Data API unless its
+migration grants explicitly.** End a new table's migration with the
+appropriate:
+
+```sql
+grant select on table public.your_new_table to anon, authenticated;
+grant select, insert, update, delete on table public.your_new_table to authenticated;
+```
+
+(scope columns/roles to whatever that table actually needs — see
+`20260924_explicit_data_api_grants.sql` for the column-level pattern used
+on `profiles`).
+
 ## Exporting the real SQL
 
 Supabase keeps the statements it applied. To dump any of the above:
