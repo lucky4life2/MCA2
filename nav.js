@@ -132,7 +132,7 @@ const FOOTER_HTML = () => {
         <span class="footer-logo-text">Minecraft Club of America</span>
       </div>
       <p class="footer-tagline">Trade · Build · Govern · Create</p>
-      <span class="footer-copy">© <span id="year"></span> Minecraft Club of America · Ratified May 13, 2025</span>
+      <span class="footer-copy">© <span id="year"></span> MCA Inc. · Ratified May 13, 2025</span>
     </div>
 
     <div class="footer-links">
@@ -176,8 +176,8 @@ const FOOTER_HTML = () => {
 
   </div>
   <div class="footer-disclaimer">
-    Minecraft Club of America is a volunteer-run, non-commercial community club.
-    Not affiliated with, endorsed by, or associated with Mojang Studios or Microsoft.
+    Operated by MCA Inc., a volunteer-run North Dakota nonprofit.
+    NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.
     Minecraft is a trademark of Mojang Studios.
     <span class="footer-version">v2.5.67</span>
   </div>

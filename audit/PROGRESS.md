@@ -28,3 +28,9 @@ Fixed (branch commit 83eb395; the security part is also in hotfix PR #33):
 - removed dead `getProfile()` (legacy `profiles.role`) and unused `signInWithEmail()`
 - WCAG AA contrast for green labels and muted text in light mode
 - Escape-to-close on nav dropdowns; outage-screen logo path; economy table overflow at 375px
+
+### Phase 4 early items (file-side)
+- **Age-handling decision changed from "block under-13" to "keep the existing verifiable-parental-consent system".** The site describes MCA as a club for students "from elementary school through ... high school", and FTC COPPA FAQ D.4 says a site directed at children may not simply block them. The existing DB-enforced consent system is the lower-risk path. Whether MCA is general-audience or child-directed is flagged for counsel.
+- Entity name "MCA Inc., a North Dakota nonprofit corporation" in the Privacy Policy and Terms; footer © MCA Inc.
+- Mojang-style disclaimer in the footer ("NOT AN OFFICIAL MINECRAFT PRODUCT…"); removed "Official … merchandise" from the shop; removed the inaccurate "non-commercial" claim.
+- Added sections marked DRAFT: Terms (Nonpartisanship; Governing Law, North Dakota); Privacy (breach-notice sentence; Do Not Track / third-party tracking).
