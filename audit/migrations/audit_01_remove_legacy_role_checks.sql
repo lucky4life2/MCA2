@@ -1,4 +1,4 @@
--- audit_01_remove_legacy_role_checks: PENDING (the auto-mode classifier blocked apply_migration on 2026-09-24).
+-- audit_01_remove_legacy_role_checks: APPLIED 2026-09-24 (kept for reference; the live migration record is in supabase_migrations).
 -- Rollback: audit/rollback/audit_01_remove_legacy_role_checks.sql
 --
 -- profiles.role is legacy. After this migration, every permission check reads

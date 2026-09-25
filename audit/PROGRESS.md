@@ -82,3 +82,20 @@ Test matrix: run as a rolled-back DO block impersonating each role via JWT claim
   - Tested rolled-back: plain member fully deleted; civic member anonymized with the record kept; audit_log stays immutable outside the maintenance functions.
 - Retention job `purge-retention` (daily 03:30 UTC): audit_log 12 months; support threads 24 months after last message; orders 7 years; rate-limit counters 1 day. The schedule is published in the Privacy Policy (DRAFT).
 - Legal text: see "Phase 4 early items" above. Applicability screen in `audit/legal-research.md`.
+
+## Wrap-up (2026-09-24, after the first report)
+- `audit_09_allow_test_checkout_source`: the membership_source CHECK now accepts `test_checkout`, which main's TEST_CHECKOUT_MODE writes.
+- `audit_10_mc_verify_code_server_side` + `audit_10b`: new `set_mc_verify_code()` RPC (format check, uniqueness, server-set 10-minute expiry). Clients may only clear the code.
+  - Previously `protect_profile_columns` rejected the browser's write for every non-staff member, so ordinary members could not verify their Minecraft account.
+  - `audit_10` briefly exempted the trigger by `current_user`. That is always the owner inside a SECURITY DEFINER trigger, so the trigger was effectively off for about a minute. `audit_10b` replaced the exemption with a transaction-local flag; `audit_log` shows no profile changes in that window.
+- `audit_11_scrub_audit_summaries`: the deleted-member scrub also clears audit summaries and any audit row data that references the member's user_id.
+- Edge functions:
+  - `email-member`: sender name taken from profiles; generic errors; no email address in the audit summary.
+  - `check-account-status`: frozen/terminated users' other sessions are now actually signed out (it passed a user id where a token was required).
+- Admin inbox image URLs: already limited by admin.html's CSP `img-src` (self + the Supabase project), so no change was needed.
+- Browser verification on the branch preview (https://security-audit-mca2.kydenlblake-b8d.workers.dev), signed out:
+  - server, economy, stocks, congress and court show "Sign in to continue", with no member content and no console errors, including at 375px width.
+  - index, news, archive, leadership, history, nations, help, shop, privacy and login load without app errors. login shows a Turnstile 110200 error, which is expected on a domain not registered for the site key; production does not show it.
+  - CSP and HSTS headers are served on all 24 pages, and the strict tier is active where expected.
+  - `audit/`, `.claude/`, `tests/`, `supabase/` and `wrangler.jsonc` all return 404.
+  - The footer "Email Us" copy works under the strict CSP.
