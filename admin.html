@@ -1675,6 +1675,13 @@ function renderMembers(members) {
     const statusBadge = accountStatus === 'frozen'
       ? `<span class="badge" style="background:#fff8e1;color:#b07d00;">⏸ Frozen</span>`
       : '';
+    // Dormant = the member deactivated their own account. deactivated_at
+    // stays set if an admin also freezes it, so a dormant+frozen account
+    // keeps the label alongside the Frozen badge.
+    const isDormant = accountStatus === 'deactivated' || (accountStatus === 'frozen' && !!m.deactivated_at);
+    const dormantLabel = isDormant
+      ? ` <span class="badge badge-unlinked" style="vertical-align:middle;margin-left:4px;">Dormant Account</span>`
+      : '';
 
     const mcBadge = m.minecraft_verified
       ? `<span class="badge badge-verified">Verified</span>`
@@ -1708,7 +1715,7 @@ function renderMembers(members) {
       ? `<button class="btn btn-danger btn-sm" onclick="revokeDiscord('${m.id}')">Revoke Discord</button>` : '';
     const revokeGoogleBtn = hasGoogle && _myPermissions.can_manage_users
       ? `<button class="btn btn-danger btn-sm" onclick="revokeGoogle('${m.id}')">Revoke Google</button>` : '';
-    const freezeBtn = accountStatus === 'active' && _myPermissions.can_manage_users
+    const freezeBtn = (accountStatus === 'active' || accountStatus === 'deactivated') && _myPermissions.can_manage_users
       ? `<button class="btn btn-outline btn-sm" onclick="freezeAccount('${m.id}')">Freeze</button>` : '';
     const unfreezeBtn = accountStatus === 'frozen' && _myPermissions.can_manage_users
       ? `<button class="btn btn-success btn-sm" onclick="unfreezeAccount('${m.id}')">Unfreeze</button>` : '';
@@ -1719,7 +1726,7 @@ function renderMembers(members) {
 
     return `<tr>
       <td>
-        <div class="member-name">${escapeHtml(name)}</div>
+        <div class="member-name">${escapeHtml(name)}${dormantLabel}</div>
         ${m.username && m.display_name ? `<div class="member-email">@${escapeHtml(m.username)}</div>` : ''}
       </td>
       <td><div class="member-email">${escapeHtml(m.email||'—')}</div></td>

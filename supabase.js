@@ -178,6 +178,36 @@ export async function signInWithGoogle() {
 }
 
 /** Sign in with email + password */
+/**
+ * Signing in is what reactivates a deactivated (dormant) account. Every
+ * sign-in path funnels through here — login.html after a password/MFA
+ * sign-in, and nav.js/account.html for OAuth, which redirects straight to
+ * the destination page. Memoised per page load so concurrent callers share
+ * one RPC and only one of them sees reactivated: true.
+ * Resolves to { reactivated: boolean, status: string|null }. A dormant
+ * account that is also frozen is NOT reactivated (status stays 'frozen').
+ */
+let _reactivatePromise = null;
+export function reactivateIfDormant() {
+  if (!_reactivatePromise) {
+    _reactivatePromise = supabase.rpc('reactivate_own_account')
+      .then(({ data, error }) => (error || !data)
+        ? { reactivated: false, status: null }
+        : { reactivated: data.reactivated === true, status: data.status ?? null })
+      .catch(() => ({ reactivated: false, status: null }))
+      .then(result => {
+        // nav.js shows "You've reactivated your account" from this flag — on
+        // this page, or on the next one when login.html redirects away.
+        if (result.reactivated) {
+          try { sessionStorage.setItem('mca_reactivated_notice', '1'); } catch (e) {}
+          try { window.dispatchEvent(new Event('mca:reactivated')); } catch (e) {}
+        }
+        return result;
+      });
+  }
+  return _reactivatePromise;
+}
+
 /** Sign out */
 export async function signOut() {
   await supabase.auth.signOut();

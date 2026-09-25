@@ -404,7 +404,7 @@
 </div>
 
 <script type="module">
-  import { supabase, signInWithDiscord } from './supabase.js';
+  import { supabase, signInWithDiscord, reactivateIfDormant } from './supabase.js';
 
   // ── Redirect destination ──────────────────────────────────────
   // If the user was sent here from another page, return them there after login.
@@ -449,14 +449,14 @@
     history.replaceState(null, '', window.location.pathname + window.location.search.replace(/[?&](error|error_description|error_code)=[^&]*/g, '').replace(/^&/, '?'));
   })();
 
-  // Best-effort: flips a dormant account back to active on successful login.
-  // No-op (and safe to ignore errors) if the account isn't deactivated.
-  async function reactivateIfNeeded() {
-    try { await supabase.rpc('reactivate_own_account'); } catch(e) {}
-  }
+  // Signing in flips a dormant (deactivated) account back to active. The
+  // "You've reactivated your account" notice is shown by nav.js on the page
+  // we land on. A dormant account that is ALSO frozen is left dormant (no
+  // notice) and goes to the frozen-account screen on account.html instead;
+  // the notice fires on the first sign-in after an admin unfreezes it.
   async function finishLogin(dest) {
-    await reactivateIfNeeded();
-    window.location.replace(dest);
+    const { status } = await reactivateIfDormant();
+    window.location.replace(status === 'frozen' ? 'account.html' : dest);
   }
 
   // If already signed in, skip the login page entirely — unless the session

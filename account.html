@@ -564,7 +564,7 @@
         <div class="account-section-title">Deactivate Account</div>
       </div>
       <div class="account-section-body">
-        <p class="form-hint" style="margin-bottom:1rem;">Deactivating puts your account to sleep — nothing is changed or deleted. You'll be signed out, and simply signing back in reactivates it.</p>
+        <p class="form-hint" style="margin-bottom:1rem;">Deactivating puts your account to sleep — nothing is deleted, and news emails pause until you're back. You'll be signed out, and simply signing back in reactivates it.</p>
         <button class="btn btn-outline" id="btn-deactivate-account">Deactivate My Account</button>
       </div>
     </div>
@@ -586,7 +586,7 @@
 </div>
 
 <script type="module">
-import { supabase, signOut, createBillingPortalSession } from './supabase.js';
+import { supabase, signOut, createBillingPortalSession, reactivateIfDormant } from './supabase.js';
 
 const elLoading      = document.getElementById('account-loading');
 const elNotSignedIn  = document.getElementById('account-not-signed-in');
@@ -712,6 +712,16 @@ async function init() {
   } catch(e) {}
 
   await loadProfile();
+
+  // A session on a dormant (deactivated) account is a fresh sign-in —
+  // deactivating ends every session — so signing in reactivates it. Shared
+  // with nav.js (OAuth lands here directly), which shows the notice. A
+  // dormant account that is also frozen comes back as 'frozen' and gets the
+  // frozen screen below instead.
+  if (_profile.account_status === 'deactivated') {
+    const { reactivated } = await reactivateIfDormant();
+    if (reactivated) await loadProfile();
+  }
 
   // Signing back in during the 7-day deletion grace period means the user
   // changed their mind — auto-cancel the pending deletion right here instead
@@ -2390,17 +2400,37 @@ function closeDeleteModal() {
 
 document.getElementById('btn-delete-account').addEventListener('click', openDeleteModal);
 
-document.getElementById('btn-deactivate-account').addEventListener('click', async () => {
-  if (!confirm('Deactivate your account? You\'ll be signed out, and signing back in reactivates it.')) return;
-  const btn = document.getElementById('btn-deactivate-account');
+function closeDeactivateModal() {
+  document.getElementById('deactivate-modal').classList.add('hidden');
+}
+document.getElementById('btn-deactivate-account').addEventListener('click', () => {
+  const errEl = document.getElementById('deactivate-error');
+  errEl.style.display = 'none';
+  const confirmBtn = document.getElementById('deactivate-confirm');
+  confirmBtn.disabled = false; confirmBtn.textContent = 'Deactivate';
+  document.getElementById('deactivate-modal').classList.remove('hidden');
+  confirmBtn.focus();
+});
+document.getElementById('deactivate-modal-close').addEventListener('click', closeDeactivateModal);
+document.getElementById('deactivate-cancel').addEventListener('click', closeDeactivateModal);
+document.getElementById('deactivate-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('deactivate-modal')) closeDeactivateModal();
+});
+document.getElementById('deactivate-confirm').addEventListener('click', async () => {
+  const btn = document.getElementById('deactivate-confirm');
+  const errEl = document.getElementById('deactivate-error');
+  errEl.style.display = 'none';
   btn.disabled = true; btn.textContent = 'Deactivating...';
   const { error } = await supabase.rpc('deactivate_own_account');
   if (error) {
-    alert(error.message || 'Could not deactivate account.');
-    btn.disabled = false; btn.textContent = 'Deactivate My Account';
+    errEl.textContent = error.message || 'Could not deactivate account.';
+    errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Deactivate';
     return;
   }
-  await signOut();
+  // deactivate_own_account() already ended every session server-side, so
+  // only the local copy is left to clear.
+  await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
   window.location.replace('login.html?deactivated=1');
 });
 document.getElementById('delete-modal-close').addEventListener('click', closeDeleteModal);
@@ -2811,6 +2841,24 @@ init();
     <div class="modal-footer">
       <button class="btn btn-outline" id="contact-cancel">Cancel</button>
       <button class="btn btn-primary" id="contact-send">Send Message</button>
+    </div>
+  </div>
+</div>
+
+<!-- Deactivate Account Modal -->
+<div class="modal-backdrop hidden" id="deactivate-modal" role="dialog" aria-modal="true" aria-labelledby="deactivate-modal-title">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title" id="deactivate-modal-title">Deactivate Account</div>
+      <button class="modal-close" id="deactivate-modal-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin:0;">Deactivating your account will sign you out. To reactivate it, simply sign back in.</p>
+      <div class="form-error" id="deactivate-error" style="margin-top:1rem;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="deactivate-cancel">Cancel</button>
+      <button class="btn btn-primary" id="deactivate-confirm">Deactivate</button>
     </div>
   </div>
 </div>

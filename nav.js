@@ -801,6 +801,7 @@ function copyAddress() {
   navigator.clipboard.writeText(el.textContent).catch(() => {});
   const t = document.getElementById('toast');
   if (!t) return;
+  t.textContent = 'Address copied to clipboard';
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2000);
 }
@@ -822,6 +823,34 @@ document.addEventListener('click', e => {
   e.preventDefault();
   copyEmail(el);
 });
+
+// "You've reactivated your account" — shown once, on the first page after a
+// sign-in that brought a dormant account back. Reuses the shared #toast,
+// which is injected with the footer and may not exist yet when auth resolves.
+let _reactivatedNoticeShown = false;
+function consumeReactivatedNotice() {
+  // login.html redirects straight after reactivating; leave the flag for the
+  // page it lands on rather than flashing the notice on the way out.
+  if ((window.location.pathname.split('/').pop() || 'index.html') === 'login.html') return;
+  try {
+    if (sessionStorage.getItem('mca_reactivated_notice') !== '1') return;
+    sessionStorage.removeItem('mca_reactivated_notice');
+  } catch (e) { return; }
+  showReactivatedNotice();
+}
+window.addEventListener('mca:reactivated', consumeReactivatedNotice);
+function showReactivatedNotice(attempt = 0) {
+  if (_reactivatedNoticeShown) return;
+  const t = document.getElementById('toast');
+  if (!t) {
+    if (attempt < 50) setTimeout(() => showReactivatedNotice(attempt + 1), 100);
+    return;
+  }
+  _reactivatedNoticeShown = true;
+  t.textContent = "You've reactivated your account";
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 5000);
+}
 
 // ── Nav auth + cart ───────────────────────────────────────────
 async function initNavAuth(_authReadyResolve) {
@@ -952,6 +981,26 @@ async function initNavAuth(_authReadyResolve) {
         const dn = String(roleData.display_name || '').trim();
         const ownDn = dn && dn.toLowerCase() !== emailLocal ? dn : '';
         label = ownDn || String(roleData.username || '').trim() || label;
+      }
+
+      // Signing in reactivates a dormant (deactivated) account. OAuth sign-in
+      // lands straight on the destination page without passing through
+      // login.html's finishLogin(), so the same check runs here. A dormant
+      // account that is also frozen stays dormant (status 'frozen') and is
+      // sent to the frozen-account screen below, with no reactivation notice.
+      if (roleData && roleData.account_status === 'deactivated') {
+        const { reactivated, status } = await mod0.reactivateIfDormant();
+        if (reactivated) roleData.account_status = 'active';
+        else if (status) roleData.account_status = status;
+      }
+      consumeReactivatedNotice();
+      if (roleData && roleData.account_status === 'frozen') {
+        const frozenAllowedPages = ['account.html', 'login.html', 'privacy.html', 'terms.html', 'help.html'];
+        const currentPage = window.location.pathname.split('/').pop() || 'index.html';
+        if (!frozenAllowedPages.includes(currentPage)) {
+          window.location.replace('account.html');
+          return { isAdmin: false, canPublishNews: false };
+        }
       }
 
       // Sitewide COPPA age gate: an account that hasn't answered the age

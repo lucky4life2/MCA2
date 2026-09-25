@@ -82,9 +82,23 @@
           [['Sign in', 'login.html?return=' + encodeURIComponent(page), true]]));
       }
 
-      const { data, error } = await supabase.rpc('get_my_membership_state');
-      const s = Array.isArray(data) ? data[0] : data;
+      let { data, error } = await supabase.rpc('get_my_membership_state');
+      let s = Array.isArray(data) ? data[0] : data;
       if (error || !s) return allow(); // lookup failed: RLS still protects the data
+
+      // A session on a dormant account is a fresh sign-in (deactivating ends
+      // every session), and OAuth lands here directly — reactivate first so
+      // the member isn't told their account is deactivated. nav.js shows the
+      // notice; reactivateIfDormant() is shared, so it only runs once.
+      if (s.account_status === 'deactivated') {
+        const { reactivateIfDormant } = await import('./supabase.js');
+        const { reactivated } = await reactivateIfDormant();
+        if (reactivated) {
+          ({ data, error } = await supabase.rpc('get_my_membership_state'));
+          s = Array.isArray(data) ? data[0] : data;
+          if (error || !s) return allow();
+        }
+      }
 
       if (s.bypass) return allow();
 
