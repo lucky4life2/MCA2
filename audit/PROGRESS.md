@@ -15,10 +15,26 @@ Guidance applied to this stack:
 
 Sources: see the final report, §6.
 
-## Phase 2: Audit and fix (in progress)
+## Phase 2: Audit and fix (done)
 Public repo policy: this log records **fixed** issues only. Open findings are tracked privately, outside the repo, until they are fixed.
 
-Blocker: DB migrations and edge-function deploys are refused by the Claude Code auto-mode classifier until the owner adds a permission rule. Pending SQL is in `audit/migrations/`, with rollbacks in `audit/rollback/`.
+The permission rule was added by the owner on 2026-09-24, and DB migrations and edge deploys then ran. Every migration has a rollback in `audit/rollback/`.
+
+Migrations applied (live):
+- `audit_01_remove_legacy_role_checks`: 31 policies and 6 functions moved from legacy `profiles.role` to `user_has_permission()`; the `require_permission()` owner fallback removed; `get_email_by_username` revoked; Administrator gets `can_manage_memberships`.
+- `audit_02_rate_limit_primitive`: `check_rate_limit()` + `rate_limits` (service_role only).
+- `audit_03_message_attachments_read_scope`: the private attachment bucket honors thread references only from admin-sent items.
+- `audit_04_account_deletion_requires_aal2`: self-deletion requires an MFA-verified session when MFA is enrolled.
+
+Edge functions deployed:
+- `sign-in-with-email`: resolves usernames server-side; generic errors.
+- `request-password-reset`, `signup-with-email`, `add-email-to-account`, `submit-age-check`: rate limits; generic errors; the parent email can't be the child's own.
+- `notify-task-assignee`: legacy role fallback removed; sender name taken from profiles.
+- `confirm-email-link`, `delete-own-account`: retired to 410 stubs (unused).
+
+Frontend: inline handlers removed from `nav.js` and the legal pages; 6 more pages on the strict CSP; `tests/csp-check.js` verifies 21 strict pages.
+
+Advisors after the fixes: 0028 anon-executable SECURITY DEFINER dropped from 5 to 3 (the remaining 3 are RLS helpers that anon-readable policies call). 0029 = 72, all RPCs with internal permission checks (spot-checked by the test matrix). 0008 on `rate_limits` is intentional (service_role only). Leaked-password protection is a manual dashboard setting. Performance lints are informational.
 
 Verified OK (live DB): RLS is enabled on all 86 public tables. Membership/billing/role/status columns cannot be written by clients (`private.profiles_guard_columns`). Storage writes are permission-gated.
 
