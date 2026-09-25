@@ -34,3 +34,35 @@ Fixed (branch commit 83eb395; the security part is also in hotfix PR #33):
 - Entity name "MCA Inc., a North Dakota nonprofit corporation" in the Privacy Policy and Terms; footer © MCA Inc.
 - Mojang-style disclaimer in the footer ("NOT AN OFFICIAL MINECRAFT PRODUCT…"); removed "Official … merchandise" from the shop; removed the inaccurate "non-commercial" claim.
 - Added sections marked DRAFT: Terms (Nonpartisanship; Governing Law, North Dakota); Privacy (breach-notice sentence; Do Not Track / third-party tracking).
+
+## Phase 3: Membership (done)
+Uses the existing Stripe-driven model (`profiles.membership_*`); no new table.
+- `audit_05_membership_state`:
+  - `private.membership_state()` is the single rule set: none / active / grace (past_due, still paid) / cancelled (still paid) / expired.
+  - Exposed as `get_my_membership_state()` for signed-in users and `get_membership_state_for_minecraft()` for service_role.
+  - `user_meets_membership_gate()` now allows grace/cancelled and refuses frozen/terminated/restricted accounts.
+  - `admin_set_membership(..., p_expires_at)` supports extend-to-date.
+- `audit_06_membership_enforcement`:
+  - A RESTRICTIVE `members_only` policy on all 56 congress_/court_/economy_ tables.
+  - A write trigger on 6 economy tables for website sessions (SECURITY DEFINER RPCs bypass RLS).
+  - Market-data RPCs revoked from anon.
+- `member-gate.js`: hides member pages before first paint and shows a state-accurate message (sign in / membership required / expired on date / account frozen or terminated). Grace and cancelled members get an end-date banner. Page scripts wait for the check, so there is no flash and no data load.
+- `admin.html`: Extend… button plus accurate badges. `account.html`: expired/grace wording.
+- Minecraft plugin (`account linking Plugin Files/.../MembershipGateListener`): calls the service-role RPC and uses the same rules with state-specific kick messages. Compiles with `mvn compile`; build and deploy the jar manually.
+
+Page classification:
+- **Public:** index, leadership, history, archive, document, news, article, nations, help, login, privacy, terms, cookies, accessibility, refund, unsubscribe, parental-consent, 404, shop.
+- **Signed-in:** account, tasks (staff features gated by permission).
+- **Member-only:** server, economy, stocks, congress, court.
+- **Staff-only (permission):** admin, news-publish, archive-publish.
+
+Test matrix: run as a rolled-back DO block impersonating each role via JWT claims (full results in the final report). All 10 roles × 13 checks behaved as designed.
+
+## Phase 4: Legal (done — not legal advice)
+- `audit_07_deletion_and_retention` + `audit_08_audit_log_maintenance_window`:
+  - Scheduled deletion now runs per user.
+  - Accounts tied to civic records (votes, bills, filings, economy history) are anonymized in place instead of blocking every deletion. Before this, one such member made the nightly purge fail for everyone.
+  - `audit_log` entries for the deleted member are scrubbed.
+  - Tested rolled-back: plain member fully deleted; civic member anonymized with the record kept; audit_log stays immutable outside the maintenance functions.
+- Retention job `purge-retention` (daily 03:30 UTC): audit_log 12 months; support threads 24 months after last message; orders 7 years; rate-limit counters 1 day. The schedule is published in the Privacy Policy (DRAFT).
+- Legal text: see "Phase 4 early items" above. Applicability screen in `audit/legal-research.md`.
