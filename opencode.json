@@ -1,0 +1,17 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "ollama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ollama on OptiPlex",
+      "options": {
+        "baseURL": "http://192.168.0.160:11434/v1"
+      },
+      "models": {
+        "qwen2.5-coder:3b": {
+          "name": "Qwen 2.5 Coder 3B"
+        }
+      }
+    }
+  }
+}

@@ -56,7 +56,7 @@
         table.innerHTML = presidents.map(p =>
           `<tr>
             <td>${esc(p.name)}${p.username ? `<br><span style="font-size:12px;color:var(--muted);">@${esc(p.username)}</span>` : ''}</td>
-            <td>${esc(p.club_name)}${p.region ? `<br><span style="font-size:12px;color:var(--muted);">${esc(p.region)}</span>` : ''}</td>
+            <td>${esc(p.club_name)}${p.region ? `<br><span style="font-size:12px;color:var(--muted);">${esc(p.region)}</span>` : ''}${p.meeting_info ? `<br><span style="font-size:12px;color:var(--muted);">Meets: ${esc(p.meeting_info)}</span>` : ''}${p.description ? `<div style="font-size:13px;margin-top:4px;white-space:pre-line;">${esc(p.description)}</div>` : ''}</td>
           </tr>`
         ).join('');
       }

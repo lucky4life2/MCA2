@@ -512,7 +512,7 @@ async function uploadFileIfNeeded() {
   if (!_pendingFile) return { url: _currentFileUrl, name: _currentFileName };
   const ext = (_pendingFile.name.split('.').pop() || '').toLowerCase();
   const path = `${_user.id}/${Date.now()}-${slugify(_pendingFile.name.replace(/\.[^.]+$/, ''))}.${ext}`;
-  const { error } = await supabase.storage.from(BUCKET).upload(path, _pendingFile, { upsert: true });
+  const { error } = await supabase.storage.from(BUCKET).upload(path, _pendingFile);
   if (error) throw error;
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
   return { url: data.publicUrl, name: _pendingFile.name };

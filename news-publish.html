@@ -674,7 +674,7 @@ function uploadFolder() { return _editingId || _uploadFolder; }
 async function uploadNewsImage(file) {
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
   const path = `${uploadFolder()}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
-  const { error } = await supabase.storage.from('news-images').upload(path, file, { upsert: true });
+  const { error } = await supabase.storage.from('news-images').upload(path, file);
   if (error) throw error;
   const { data } = supabase.storage.from('news-images').getPublicUrl(path);
   return data.publicUrl;
