@@ -293,6 +293,12 @@
               </select>
             </div>
           </div>
+          <div class="login-form-group">
+            <label class="login-form-label" for="signup-club">Your Club</label>
+            <select id="signup-club" class="login-form-input">
+              <option value="">I'm not in a club yet</option>
+            </select>
+          </div>
           <div class="login-error" id="signup-error"></div>
 
           <div class="login-consent">
@@ -516,11 +522,24 @@
   function requireSignupConsent() {
     if (signupConsent.checked) {
       signupConsentError.style.display = 'none';
+      // Every signup path (email, Discord, Google) passes through here, so this
+      // is where the chosen club is remembered. nav.js sends the join request
+      // once the new account has a session (after the OAuth redirect, too).
+      try {
+        const club = document.getElementById('signup-club').value;
+        if (club) sessionStorage.setItem('mca_signup_club', club);
+        else sessionStorage.removeItem('mca_signup_club');
+      } catch (e) {}
       return true;
     }
     signupConsentError.style.display = 'block';
     return false;
   }
+  supabase.from('club_presidents').select('id, club_name, region').order('club_name').then(({ data }) => {
+    const sel = document.getElementById('signup-club');
+    for (const c of data || []) sel.add(new Option(c.club_name + (c.region ? ' — ' + c.region : ''), c.id));
+  });
+
   signupConsent.addEventListener('change', () => {
     if (signupConsent.checked) signupConsentError.style.display = 'none';
   });

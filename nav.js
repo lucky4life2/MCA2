@@ -1052,6 +1052,7 @@ async function initNavAuth(_authReadyResolve) {
 
     watchMyRoleChanges(user.id);
     initRolePreviewBanner(); // fire-and-forget; shows/hides the "Previewing as" bar
+    claimSignupClub(); // fire-and-forget; sends the club picked on login.html's signup form
 
     try {
       const mod = await import('./supabase.js');
@@ -1203,6 +1204,21 @@ async function initNavAuth(_authReadyResolve) {
     if (_authReadyResolve) { _authReadyResolve({ user: null, session: null, isAdmin: false, canPublishNews: false }); _authReadyResolve = null; }
     setSignedOut();
   }
+}
+
+// ── Club picked at signup ──────────────────────────────────────────
+// login.html stores the choice before any signup path (email or OAuth
+// redirect). It's kept until the request succeeds, since an OAuth account
+// can't join until it finishes the age check on account.html.
+async function claimSignupClub() {
+  let clubId;
+  try { clubId = sessionStorage.getItem('mca_signup_club'); } catch(e) { return; }
+  if (!clubId) return;
+  try {
+    const { supabase } = await import('./supabase.js');
+    const { error } = await supabase.rpc('club_request_join', { p_club_id: clubId });
+    if (!error) sessionStorage.removeItem('mca_signup_club');
+  } catch(e) {}
 }
 
 // ── "Previewing as: <role>" banner ────────────────────────────────

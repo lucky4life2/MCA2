@@ -1,4 +1,4 @@
-// Member-only page guard (server, economy, stocks, congress, court).
+// Member-only page guard (economy, stocks; congress and court in data-gate="view" mode).
 //
 // Loaded as a classic blocking <script src> in <head>, right after
 // early-hide.js, so the page body is marked hidden before first paint and
@@ -12,6 +12,9 @@
   const root = document.documentElement;
   root.dataset.memberGate = 'pending';
 
+  // data-gate="view" (congress, court): non-members may read public records, so
+  // a missing/expired membership shows a banner instead of blocking the page.
+  const viewOnly = document.currentScript?.dataset.gate === 'view';
   const page = location.pathname.split('/').pop() || 'index.html';
   const fmt = iso => new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -101,10 +104,14 @@
           return allow(banner(`Your membership is cancelled and ends on ${fmt(s.expires_at)}.`,
             'Renew membership', 'shop.html'));
         case 'expired':
+          if (viewOnly) return allow(banner('Your membership has expired. You can view public records; renew to take part.',
+            'Renew membership', 'shop.html'));
           return block(panel('Membership expired',
             s.expires_at ? `Your membership expired on ${fmt(s.expires_at)}.` : 'Your membership has expired.',
             [['Renew membership', 'shop.html', true], ['My account', 'account.html', false]]));
         default:
+          if (viewOnly) return allow(banner('You are viewing public records. Membership ($12/year) is required to take part.',
+            'Join MCA', 'shop.html'));
           return block(panel('Membership required',
             'This page is for MCA members. Membership is $12/year and also unlocks the Minecraft server.',
             [['Join MCA', 'shop.html', true], ['Learn more', 'help.html', false]]));

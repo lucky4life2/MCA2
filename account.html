@@ -342,6 +342,48 @@
       </div>
     </div>
 
+    <!-- My Club -->
+    <div class="account-section" id="section-club">
+      <div class="account-section-header">
+        <div class="account-section-title">My Club</div>
+        <span class="account-section-badge" id="club-badge"></span>
+      </div>
+      <div class="account-section-body" id="club-body">
+        <!-- injected -->
+      </div>
+    </div>
+
+    <!-- Manage Club (club presidents only) -->
+    <div class="account-section" id="section-club-manage" style="display:none;">
+      <div class="account-section-header">
+        <div class="account-section-title">Manage Club</div>
+      </div>
+      <div class="account-section-body">
+        <div class="form-group">
+          <label class="form-label" for="club-edit-name">Club Name</label>
+          <input type="text" id="club-edit-name" class="form-input" maxlength="120">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="club-edit-region">Region / State</label>
+          <input type="text" id="club-edit-region" class="form-input" maxlength="80">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="club-edit-meeting">Meeting Time &amp; Place</label>
+          <input type="text" id="club-edit-meeting" class="form-input" maxlength="300" placeholder="e.g. Tuesdays after school, Room 204">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="club-edit-desc">About the Club</label>
+          <textarea id="club-edit-desc" class="form-input" rows="4" maxlength="2000" style="resize:vertical;"></textarea>
+        </div>
+        <div class="form-error" id="club-edit-error" role="alert"></div>
+        <div class="form-success" id="club-edit-success" role="status"></div>
+        <button class="btn btn-primary" id="btn-save-club">Save Club</button>
+
+        <div class="form-label" style="margin-top:1.75rem;">Members</div>
+        <div id="club-members-list"></div>
+      </div>
+    </div>
+
     <!-- My Roles -->
     <div class="account-section" id="section-my-roles">
       <div class="account-section-header">
@@ -982,6 +1024,116 @@ function likeEscape(value) {
 }
 
 // ── Membership ───────────────────────────────────────────────
+// ── Club ──────────────────────────────────────────────────────
+// One club per member; the club's president approves join requests.
+// All writes are RPCs that check permissions server-side.
+async function renderClub() {
+  const badge = document.getElementById('club-badge');
+  const body  = document.getElementById('club-body');
+  const [{ data: clubs }, { data: mine }] = await Promise.all([
+    supabase.from('club_presidents').select('id, club_name, region, president_user_id').order('club_name'),
+    supabase.from('club_members').select('club_id, status').eq('user_id', _user.id).maybeSingle(),
+  ]);
+  const all = clubs || [];
+  const club = mine && all.find(c => c.id === mine.club_id);
+
+  if (club) {
+    const approved = mine.status === 'approved';
+    badge.textContent = approved ? 'Member' : 'Pending';
+    badge.className = 'account-section-badge ' + (approved ? 'badge-verified' : 'badge-pending');
+    body.innerHTML = `
+      <p style="font-size:14px;margin-bottom:1rem;">${approved
+        ? `You're a member of <strong>${escapeHtml(club.club_name)}</strong>.`
+        : `Your request to join <strong>${escapeHtml(club.club_name)}</strong> is waiting for the club president's approval.`}</p>
+      <div class="form-error" id="club-error" role="alert"></div>
+      <button class="btn btn-danger" id="btn-club-leave">${approved ? 'Leave Club' : 'Cancel Request'}</button>`;
+    document.getElementById('btn-club-leave').addEventListener('click', async () => {
+      if (!confirm(approved ? `Leave ${club.club_name}?` : 'Cancel your join request?')) return;
+      const { error } = await supabase.rpc('club_leave');
+      if (error) return showErr('club-error', error.message);
+      renderClub();
+    });
+  } else {
+    badge.textContent = 'None';
+    badge.className = 'account-section-badge badge-unlinked';
+    body.innerHTML = all.length ? `
+      <div class="form-group">
+        <label class="form-label" for="club-pick">Choose your club</label>
+        <select id="club-pick" class="form-input">
+          <option value="">Select a club…</option>
+          ${all.map(c => `<option value="${c.id}">${escapeHtml(c.club_name)}${c.region ? ' — ' + escapeHtml(c.region) : ''}</option>`).join('')}
+        </select>
+        <div class="form-hint">Your club's president will approve your request.</div>
+      </div>
+      <div class="form-error" id="club-error" role="alert"></div>
+      <button class="btn btn-primary" id="btn-club-join">Request to Join</button>`
+      : '<p style="font-size:14px;color:var(--muted);">No clubs are set up yet.</p>';
+    document.getElementById('btn-club-join')?.addEventListener('click', async () => {
+      const id = document.getElementById('club-pick').value;
+      if (!id) return showErr('club-error', 'Choose a club first.');
+      const { error } = await supabase.rpc('club_request_join', { p_club_id: id });
+      if (error) return showErr('club-error', error.message);
+      renderClub();
+    });
+  }
+
+  const led = all.find(c => c.president_user_id === _user.id);
+  document.getElementById('section-club-manage').style.display = led ? '' : 'none';
+  if (led) renderClubManage(led.id);
+}
+
+function showErr(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg; el.style.display = 'block';
+}
+
+async function renderClubManage(clubId) {
+  const { data: c } = await supabase.from('club_presidents')
+    .select('club_name, region, description, meeting_info').eq('id', clubId).single();
+  document.getElementById('club-edit-name').value    = c?.club_name || '';
+  document.getElementById('club-edit-region').value  = c?.region || '';
+  document.getElementById('club-edit-meeting').value = c?.meeting_info || '';
+  document.getElementById('club-edit-desc').value    = c?.description || '';
+  document.getElementById('btn-save-club').onclick = async () => {
+    const errEl = document.getElementById('club-edit-error'), okEl = document.getElementById('club-edit-success');
+    errEl.style.display = okEl.style.display = 'none';
+    const { error } = await supabase.rpc('club_update_profile', {
+      p_club_id: clubId,
+      p_club_name:    document.getElementById('club-edit-name').value,
+      p_region:       document.getElementById('club-edit-region').value,
+      p_description:  document.getElementById('club-edit-desc').value,
+      p_meeting_info: document.getElementById('club-edit-meeting').value,
+    });
+    if (error) return showErr('club-edit-error', error.message);
+    okEl.textContent = 'Club saved.'; okEl.style.display = 'block';
+  };
+
+  const list = document.getElementById('club-members-list');
+  const { data: members, error } = await supabase.rpc('club_list_members', { p_club_id: clubId });
+  if (error) { list.innerHTML = `<p class="form-hint">${escapeHtml(error.message)}</p>`; return; }
+  list.innerHTML = (members || []).length ? members.map(m => `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--border);">
+      <div>
+        <div style="font-weight:600;font-size:14px;">${escapeHtml(m.display_name || m.username || 'Member')}${m.username ? ` <span class="form-hint">@${escapeHtml(m.username)}</span>` : ''}</div>
+        <div class="form-hint">${m.status === 'pending' ? 'Requested ' + new Date(m.requested_at).toLocaleDateString() : 'Member'}</div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        ${m.status === 'pending' ? `<button class="btn btn-primary" data-club-approve="${m.user_id}">Approve</button>` : ''}
+        <button class="btn btn-danger" data-club-remove="${m.user_id}" data-pending="${m.status === 'pending'}">${m.status === 'pending' ? 'Decline' : 'Remove'}</button>
+      </div>
+    </div>`).join('')
+    : '<p class="form-hint">No members or requests yet.</p>';
+  list.onclick = async e => {
+    const approve = e.target.dataset.clubApprove, remove = e.target.dataset.clubRemove;
+    if (!approve && !remove) return;
+    if (remove && e.target.dataset.pending !== 'true' && !confirm('Remove this member from the club?')) return;
+    e.target.disabled = true;
+    const { error } = await supabase.rpc('club_review_member', { p_user_id: approve || remove, p_approve: !!approve });
+    if (error) { alert(error.message); e.target.disabled = false; return; }
+    renderClubManage(clubId);
+  };
+}
+
 function renderMembership() {
   const badge = document.getElementById('membership-badge');
   const body = document.getElementById('membership-body');
@@ -1174,6 +1326,7 @@ async function renderPage() {
 
   // Membership
   renderMembership();
+  renderClub();
   loadOrderHistory();
 
   // Connected accounts
@@ -2369,7 +2522,7 @@ async function uploadMsgAttachments(files) {
   for (const file of files) {
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
     const path = `${_user.id}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
-    const { error } = await supabase.storage.from('message-attachments').upload(path, file, { upsert: true });
+    const { error } = await supabase.storage.from('message-attachments').upload(path, file);
     if (error) throw error;
     const { data } = supabase.storage.from('message-attachments').getPublicUrl(path);
     uploaded.push({ url: data.publicUrl, name: file.name, size: file.size });

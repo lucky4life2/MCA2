@@ -2212,7 +2212,7 @@ footer {
 /* ── Member-only page gate (member-gate.js) ── */
 /* While the membership check is pending, or when it blocks, hide the page's
    own content but keep the injected nav/footer/chrome and the gate message. */
-html[data-member-gate] body > :not(nav):not(footer):not(script):not(.member-gate-panel):not(.skip-link):not(.toast):not(.cookie-banner):not(.scroll-progress) {
+html[data-member-gate] body > :not(nav):not(footer):not(script):not(.member-gate-panel):not(.skip-link):not(.toast):not(.cookie-banner):not(.scroll-progress):not(#role-preview-banner) {
   display: none !important;
 }
 .member-gate-panel {
