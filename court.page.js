@@ -17,13 +17,13 @@ const EVENT_TYPE_LABEL = { hearing: 'Hearing', oral_argument: 'Oral Argument', d
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 function safeUrl(url) {
-  // Strip ASCII tab/newline/CR before the scheme check — browsers strip
-  // these when parsing a URL for navigation, so "java\tscript:" would
-  // otherwise dodge the scheme regex below while still executing as
-  // javascript: once the browser normalizes it on click.
-  const u = String(url ?? '').replace(/[\t\n\r]/g, '').trim();
-  if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return /^https?:\/\//i.test(u) ? u : '';
-  return u;
+  // Positive allowlist: the browser's own URL parser resolves the value (it
+  // strips every leading C0 control char, which the old regex missed) and only
+  // http(s) survives. Relative links resolve against this page, so they still work.
+  try {
+    const p = new URL(String(url ?? ''), location.href);
+    return (p.protocol === 'https:' || p.protocol === 'http:') ? p.href : '';
+  } catch { return ''; }
 }
 
 // ── Member name directory (see congress.page.js for why public_profiles) ──
