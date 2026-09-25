@@ -1008,6 +1008,23 @@ function safeAttachmentUrl(u) {
   return /^https:\/\//i.test(String(u ?? '')) ? String(u) : '';
 }
 
+// Signup used to seed display_name with the local part of the sign-in email
+// (handle_new_user, submit-age-check, confirm-parental-consent all did it),
+// so a member who only ever set a username still saw their email fragment in
+// the header, ahead of the username. Treat that seeded value as "no display
+// name" everywhere this page shows or edits it.
+function seededEmailName(p) {
+  const dn = String(p?.display_name ?? '').trim();
+  const local = String(p?.email ?? _user?.email ?? '').split('@')[0].trim();
+  return !!dn && !!local && dn.toLowerCase() === local.toLowerCase();
+}
+function ownDisplayName(p) {
+  return seededEmailName(p) ? '' : String(p?.display_name ?? '').trim();
+}
+function headerName(p) {
+  return ownDisplayName(p) || String(p?.username ?? '').trim() || 'Account';
+}
+
 // Regex escaper (not textContent/innerHTML) so quotes are escaped too — this
 // is used inside attribute values, where an unescaped " breaks out.
 function escapeHtml(str) {
@@ -1311,12 +1328,11 @@ async function loadMyRoles() {
 // ── Render ───────────────────────────────────────────────────
 async function renderPage() {
   // Hero
-  const name = _profile.display_name || _profile.username || _user.email?.split('@')[0] || 'Account';
-  document.getElementById('account-hero-name').textContent = name;
+  document.getElementById('account-hero-name').textContent = headerName(_profile);
   document.getElementById('account-hero-sub').textContent = 'Member';
 
   // Profile fields
-  document.getElementById('field-display-name').value = _profile.display_name || '';
+  document.getElementById('field-display-name').value = ownDisplayName(_profile);
   document.getElementById('field-username').value = _profile.username || '';
   document.getElementById('field-directory-opt-in').checked = !!_profile.public_listing_opt_in;
   document.getElementById('field-news-opt-in').checked = !!_profile.news_email_opt_in;
@@ -2155,12 +2171,20 @@ document.getElementById('btn-save-profile').addEventListener('click', async () =
   }
 
   const directoryOptIn = document.getElementById('field-directory-opt-in').checked;
-  const { error } = await supabase.from('profiles').update({ display_name, username, public_listing_opt_in: directoryOptIn }).eq('id', _user.id);
-  if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
-  _profile.display_name = display_name;
-  _profile.username = username;
-  _profile.public_listing_opt_in = directoryOptIn;
-  document.getElementById('account-hero-name').textContent = display_name || username || _user.email?.split('@')[0];
+  // .select() returns the row as stored, so a write that silently matched no
+  // row (RLS) shows up as an error here instead of a "Saved." that reverts
+  // on the next reload.
+  const { data: saved, error } = await supabase.from('profiles')
+    .update({ display_name: display_name || null, username: username || null, public_listing_opt_in: directoryOptIn })
+    .eq('id', _user.id)
+    .select('display_name, username, public_listing_opt_in')
+    .maybeSingle();
+  if (error || !saved) { errEl.textContent = error?.message || 'Your changes could not be saved. Please reload and try again.'; errEl.style.display = 'block'; return; }
+  _profile.display_name = saved.display_name;
+  _profile.username = saved.username;
+  _profile.public_listing_opt_in = saved.public_listing_opt_in;
+  document.getElementById('account-hero-name').textContent = headerName(_profile);
+  document.querySelectorAll('#nav-account-user-btn .nav-account-label').forEach(el => { el.textContent = headerName(_profile); });
   succEl.textContent = 'Saved.'; succEl.style.display = 'block';
   setTimeout(() => succEl.style.display = 'none', 3000);
 });

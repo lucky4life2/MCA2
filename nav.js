@@ -902,7 +902,9 @@ async function initNavAuth(_authReadyResolve) {
   }
 
   async function setSignedIn(user) {
-    let label = user.email?.split('@')[0] || 'Account';
+    // Never label the account button with the sign-in email: it's only a
+    // placeholder until the profile row below comes back.
+    let label = 'Account';
     let isAdmin = false;
     let canPublishNews = false;
     let canManageArchive = false;
@@ -943,7 +945,13 @@ async function initNavAuth(_authReadyResolve) {
         mod0.hasPermission('can_bypass_membership').catch(() => false)
       ]);
       if (roleData) {
-        label = roleData.display_name || roleData.username || label;
+        // Signup used to seed display_name with the email's local part; that
+        // seeded value isn't a name the member chose, so fall through to the
+        // username instead of showing an email fragment.
+        const emailLocal = String(user.email || '').split('@')[0].trim().toLowerCase();
+        const dn = String(roleData.display_name || '').trim();
+        const ownDn = dn && dn.toLowerCase() !== emailLocal ? dn : '';
+        label = ownDn || String(roleData.username || '').trim() || label;
       }
 
       // Sitewide COPPA age gate: an account that hasn't answered the age
@@ -992,7 +1000,7 @@ async function initNavAuth(_authReadyResolve) {
       <div class="nav-account-wrap" id="nav-account-wrap">
         <button class="nav-account-btn nav-account-user" id="nav-account-user-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          ${escapeHtml(label)}
+          <span class="nav-account-label">${escapeHtml(label)}</span>
         </button>
         <div class="nav-account-dropdown" id="nav-account-dropdown">
           ${hasStaffAccess ? `
