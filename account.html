@@ -1766,13 +1766,11 @@ function generateCode() {
   crypto.getRandomValues(bytes);
   let code = '';
   for (let i = 0; i < 8; i++) code += chars[bytes[i] % chars.length];
-  // Store code + expiry in profiles so the edge function can validate it
-  const expiry = Date.now() + 10 * 60 * 1000;
-  supabase.from('profiles').update({
-    mc_verify_code: code,
-    mc_verify_expires: new Date(expiry).toISOString()
-  }).eq('id', _user.id).then(({ error }) => {
-    if (error) console.error('Failed to store verify code:', error.message);
+  // Stored through set_mc_verify_code(): the server checks the format and
+  // uniqueness and sets the 10-minute expiry itself (a direct profiles write of
+  // these columns is refused).
+  supabase.rpc('set_mc_verify_code', { p_code: code }).then(({ error }) => {
+    if (error) console.warn('Could not store verify code:', error.message);
   });
   return code;
 }
