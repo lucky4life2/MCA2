@@ -10,6 +10,7 @@
   --blue-dark:   #123a82;   /* hover states */
   --green:       #6cd26e;   /* accents, labels, highlights */
   --green-dark:  #4db84f;   /* hover on green elements */
+  --green-text:  #2e7d32;   /* green TEXT on light bg: 4.8:1 on --bg (#6cd26e is only ~1.9:1) */
   --black:       #111111;
   --mid:         #444444;
   --muted:       #6b7280;   /* WCAG AA 4.5:1+ against --white/--bg (was #888, ~3.9:1 — failed AA for normal text) */
@@ -53,6 +54,7 @@
   --black:   #eceef4;
   --mid:     #c4c9d8;
   --muted:   #9099b2;
+  --green-text: #6cd26e;
   --border:  #2e3650;
   --bg:      #111620;
   --white:   #1a2035;
@@ -504,7 +506,7 @@ nav {
 }
 .hero-eyebrow {
   font-size: 11px; font-weight: 600; letter-spacing: 2.5px; text-transform: uppercase;
-  color: var(--green); margin-bottom: 1.25rem;
+  color: var(--green-text); margin-bottom: 1.25rem;
   display: flex; align-items: center; gap: 10px;
 }
 .hero-eyebrow::after {
@@ -517,7 +519,7 @@ nav {
   font-weight: 700; line-height: 1.15; color: var(--blue);
   margin-bottom: 1.5rem;
 }
-.hero h1 em { font-style: italic; color: var(--green); }
+.hero h1 em { font-style: italic; color: var(--green-text); }
 .hero-sub {
   font-size: 17px; font-weight: 400; color: var(--mid);
   max-width: 520px; line-height: 1.75; margin-bottom: 2.5rem;
@@ -576,7 +578,7 @@ nav {
 
 .section-label {
   font-size: 11px; font-weight: 700; letter-spacing: 2.5px;
-  text-transform: uppercase; color: var(--green); margin-bottom: 1.25rem;
+  text-transform: uppercase; color: var(--green-text); margin-bottom: 1.25rem;
 }
 .section h2 {
   font-family: 'Times New Roman', Times, serif;
@@ -615,7 +617,7 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 2rem 0; 
 /* ── BRANCH HEADERS ── */
 .branch-label {
   font-size: 11px; font-weight: 700; letter-spacing: 2.5px;
-  text-transform: uppercase; color: var(--green); margin-bottom: 4px;
+  text-transform: uppercase; color: var(--green-text); margin-bottom: 4px;
 }
 .branch-title {
   font-family: 'Times New Roman', Times, serif;
@@ -669,7 +671,7 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 2rem 0; 
 .rules-list li:last-child { border-bottom: none; }
 .rule-num {
   font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
-  color: var(--green); flex-shrink: 0; width: 24px; margin-top: 3px;
+  color: var(--green-text); flex-shrink: 0; width: 24px; margin-top: 3px;
 }
 
 /* ── MODS ── */
@@ -1118,7 +1120,7 @@ footer {
   content: '—';
   position: absolute;
   left: 0;
-  color: var(--green);
+  color: var(--green-text);
   font-weight: 700;
 }
 .history-list li strong { color: var(--black); font-weight: 600; }
@@ -1181,7 +1183,7 @@ footer {
   content: '—';
   position: absolute;
   left: 0;
-  color: var(--green);
+  color: var(--green-text);
   font-weight: 700;
 }
 .home-feature-list li strong { color: var(--black); font-weight: 600; }
@@ -1419,7 +1421,7 @@ footer {
   transition: color 0.15s;
 }
 
-.article-back:hover { color: var(--green); }
+.article-back:hover { color: var(--green-text); }
 
 .article-body h1,
 .article-body h2,
@@ -1464,7 +1466,7 @@ footer {
   text-underline-offset: 3px;
 }
 
-.article-body a:hover { color: var(--green); }
+.article-body a:hover { color: var(--green-text); }
 
 /* Pull quote */
 .pull-quote {
@@ -1588,7 +1590,7 @@ footer {
 .featured-banner-cta {
   font-size: 12px;
   font-weight: 600;
-  color: var(--green);
+  color: var(--green-text);
   white-space: nowrap;
   letter-spacing: 0.3px;
 }
@@ -1995,7 +1997,7 @@ footer {
   font-weight: 700;
   letter-spacing: 2px;
   text-transform: uppercase;
-  color: var(--green);
+  color: var(--green-text);
   margin-bottom: 0.75rem;
 }
 
@@ -2121,7 +2123,7 @@ footer {
 .econ-wrap-narrow { max-width: 760px; }
 
 .econ-hero { border-bottom: 1px solid var(--border); padding-bottom: 2rem; margin-bottom: 2rem; }
-.econ-hero-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 2.5px; text-transform: uppercase; color: var(--green); margin-bottom: 1rem; display: flex; align-items: center; gap: 10px; }
+.econ-hero-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 2.5px; text-transform: uppercase; color: var(--green-text); margin-bottom: 1rem; display: flex; align-items: center; gap: 10px; }
 .econ-hero-eyebrow::after { content: ''; display: block; height: 1px; width: 40px; background: var(--green); opacity: .6; }
 .econ-hero h1 { font-family: 'Times New Roman', serif; font-size: clamp(28px, 4vw, 42px); font-weight: 700; color: var(--blue); line-height: 1.15; }
 .econ-hero-sub { font-size: 14px; color: var(--muted); margin-top: .5rem; }
@@ -2205,4 +2207,30 @@ footer {
   /* Tap targets stay comfortable on phones. */
   .econ-tab { padding: 11px 14px; }
   .btn { padding: 11px 18px; }
+}
+
+/* ── Member-only page gate (member-gate.js) ── */
+/* While the membership check is pending, or when it blocks, hide the page's
+   own content but keep the injected nav/footer/chrome and the gate message. */
+html[data-member-gate] body > :not(nav):not(footer):not(script):not(.member-gate-panel):not(.skip-link):not(.toast):not(.cookie-banner):not(.scroll-progress) {
+  display: none !important;
+}
+.member-gate-panel {
+  max-width: 560px; margin: 4rem auto; padding: 2rem 1.5rem;
+  text-align: center; background: var(--white); border: 1px solid var(--border); border-radius: 8px;
+}
+.member-gate-panel h1 {
+  font-family: 'Times New Roman', serif; font-weight: normal;
+  font-size: clamp(1.5rem, 4vw, 2rem); color: var(--blue); margin-bottom: 0.75rem;
+}
+.member-gate-panel p { color: var(--mid); font-size: 15px; line-height: 1.6; margin-bottom: 1.5rem; }
+.member-gate-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.member-gate-actions .btn { text-decoration: none; display: inline-block; }
+.member-gate-banner {
+  padding: 10px 16px; text-align: center; font-size: 14px;
+  background: var(--bg); color: var(--black); border-bottom: 1px solid var(--border);
+}
+.member-gate-banner a { color: var(--blue); font-weight: 600; }
+@media (max-width: 480px) {
+  .member-gate-panel { margin: 2rem 16px; }
 }

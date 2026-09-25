@@ -7,6 +7,10 @@ import {
   loadOpenOfferings, loadMyCompanyRoles, likeEscape
 } from './economy.js';
 
+// member-gate.js shows the right message when this visitor may not use the page;
+// in that case never resolve, so nothing below loads member-only data.
+if (window._mcaMemberGate && !(await window._mcaMemberGate)) await new Promise(() => {});
+
 const view = document.getElementById('view');
 
 let _session = null;

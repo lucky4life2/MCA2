@@ -35,9 +35,9 @@ public class MembershipGateListener implements Listener {
         UUID uuid = event.getUniqueId();
         if (plugin.isHardcodedAdmin(uuid)) return;
 
-        SupabaseClient.MembershipStatus status;
+        SupabaseClient.MembershipState s;
         try {
-            status = supabase.findMembershipStatusByUuid(uuid.toString());
+            s = supabase.getMembershipState(uuid.toString());
         } catch (SupabaseClient.MembershipLookupException e) {
             // The lookup itself failed — Supabase is down or unreachable.
             // That is not the same as "this player has no membership", and
@@ -53,11 +53,30 @@ public class MembershipGateListener implements Listener {
             return;
         }
 
-        // No linked profile at all, or a profile that isn't an active member:
-        // same refusal either way, since both mean "not currently paid up".
-        if (status == null || !status.isActive()) {
-            String reasonKey = status == null ? "membership_required_unlinked" : "membership_required";
-            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, plugin.msg(reasonKey));
+        // Same rules as the website and the database (user_meets_membership_gate):
+        // staff bypass; account status first (frozen/terminated get their own
+        // message, not a membership prompt); then active, grace and
+        // cancelled-but-still-paid may join.
+        if (!s.linked) {
+            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, plugin.msg("membership_required_unlinked"));
+            return;
         }
+        if (s.bypass) return;
+        if (!s.accountOk()) {
+            String key = "frozen".equals(s.accountStatus) ? "account_frozen"
+                    : "terminated".equals(s.accountStatus) ? "account_terminated"
+                    : "account_unavailable";
+            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_BANNED, plugin.msg(key));
+            return;
+        }
+        if (s.membershipOk()) return;
+        if ("expired".equals(s.state)) {
+            String date = s.expiresAt == null ? "recently"
+                    : java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy")
+                        .withZone(java.time.ZoneOffset.UTC).format(s.expiresAt);
+            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, plugin.msg("membership_expired", "%date%", date));
+            return;
+        }
+        event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, plugin.msg("membership_required"));
     }
 }

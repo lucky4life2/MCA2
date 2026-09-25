@@ -40,3 +40,6 @@ package-lock.json
 **/*.jar
 **/*.zip
 **/*.csv
+
+# Audit notes / rollback SQL (also covered by **/*.md and **/*.sql)
+audit

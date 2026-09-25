@@ -998,6 +998,20 @@ function renderMembership() {
   // could buy a second subscription.
   const isActive = status === 'active' || status === 'trialing';
 
+  // Same rule as the server's private.membership_state(): any non-'none'
+  // membership whose period end has passed is expired, whatever its status.
+  if (status !== 'none' && (!periodEnd || periodEnd.getTime() <= Date.now())) {
+    badge.textContent = 'Expired';
+    badge.className = 'account-section-badge badge-unlinked';
+    body.innerHTML = `
+      <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
+        ${periodEnd ? `Your membership expired on <strong>${escapeHtml(periodEnd.toLocaleDateString())}</strong>.` : 'Your membership has expired.'}
+        Renew to get back into the Minecraft server and the member-only pages.
+      </p>
+      <a class="btn btn-primary" href="shop.html" style="text-decoration:none;display:inline-block;">Renew membership</a>`;
+    return;
+  }
+
   if (isActive) {
     // A comped membership has no Stripe customer behind it, so it has no
     // renewal date and nothing to manage — saying it "renews" on a date a
@@ -1033,7 +1047,7 @@ function renderMembership() {
     badge.className = 'account-section-badge badge-pending';
     body.innerHTML = `
       <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
-        We couldn't process your last membership payment. Server and member-page access may be paused until this is resolved.
+        We couldn't process your last membership payment. You keep access until <strong>${periodEnd ? escapeHtml(periodEnd.toLocaleDateString()) : 'the end of your current period'}</strong> while we retry. Update your payment method so it doesn't lapse.
       </p>
       <button class="btn btn-primary" type="button" onclick="openBillingPortal(this)">Update Payment</button>`;
   } else {
@@ -1752,13 +1766,11 @@ function generateCode() {
   crypto.getRandomValues(bytes);
   let code = '';
   for (let i = 0; i < 8; i++) code += chars[bytes[i] % chars.length];
-  // Store code + expiry in profiles so the edge function can validate it
-  const expiry = Date.now() + 10 * 60 * 1000;
-  supabase.from('profiles').update({
-    mc_verify_code: code,
-    mc_verify_expires: new Date(expiry).toISOString()
-  }).eq('id', _user.id).then(({ error }) => {
-    if (error) console.error('Failed to store verify code:', error.message);
+  // Stored through set_mc_verify_code(): the server checks the format and
+  // uniqueness and sets the 10-minute expiry itself (a direct profiles write of
+  // these columns is refused).
+  supabase.rpc('set_mc_verify_code', { p_code: code }).then(({ error }) => {
+    if (error) console.warn('Could not store verify code:', error.message);
   });
   return code;
 }

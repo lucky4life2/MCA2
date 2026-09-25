@@ -151,6 +151,49 @@ public class SupabaseClient {
         }
     }
 
+    /**
+     * Membership state for a linked Minecraft UUID via the service-role-only
+     * RPC get_membership_state_for_minecraft — the same state rules the
+     * website and the database use (none/active/grace/cancelled/expired plus
+     * account_status and the can_bypass_membership permission). Throws
+     * MembershipLookupException when the lookup itself fails.
+     */
+    public MembershipState getMembershipState(String minecraftUuid) {
+        String url = baseUrl + "/rest/v1/rpc/get_membership_state_for_minecraft";
+        JsonObject body = new JsonObject();
+        body.addProperty("p_minecraft_uuid", minecraftUuid);
+        try {
+            HttpRequest request = baseRequest(url)
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body.toString(), StandardCharsets.UTF_8))
+                    .build();
+            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                logger.log(Level.WARNING, "Supabase membership RPC failed (" + response.statusCode() + "): " + response.body());
+                throw new MembershipLookupException("Supabase returned HTTP " + response.statusCode());
+            }
+            JsonElement parsed = JsonParser.parseString(response.body());
+            if (!parsed.isJsonArray() || parsed.getAsJsonArray().size() == 0) {
+                throw new MembershipLookupException("Unexpected response body from Supabase");
+            }
+            JsonObject row = parsed.getAsJsonArray().get(0).getAsJsonObject();
+            boolean linked = row.has("linked") && !row.get("linked").isJsonNull() && row.get("linked").getAsBoolean();
+            boolean bypass = row.has("bypass") && !row.get("bypass").isJsonNull() && row.get("bypass").getAsBoolean();
+            Instant expiresAt = null;
+            String expiresStr = getString(row, "expires_at");
+            if (expiresStr != null) {
+                try { expiresAt = java.time.OffsetDateTime.parse(expiresStr).toInstant(); } catch (Exception ignored) { }
+            }
+            return new MembershipState(linked, getString(row, "state"), expiresAt, getString(row, "account_status"), bypass);
+        } catch (MembershipLookupException e) {
+            throw e;
+        } catch (Exception e) {
+            logger.log(Level.WARNING, "Error contacting Supabase", e);
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            throw new MembershipLookupException("Could not reach Supabase", e);
+        }
+    }
+
     /** Looks up a profile row by its linked Minecraft username. Returns null if not found or on error. */
     public ProfileMatch findByMinecraftUsername(String username) {
         String select = String.join(",", "id", columns.minecraftUsername, columns.minecraftVerified);
@@ -338,6 +381,32 @@ public class SupabaseClient {
         /** True only while status is "active" AND the paid period hasn't ended yet. */
         public boolean isActive() {
             return "active".equals(status) && periodEnd != null && Instant.now().isBefore(periodEnd);
+        }
+    }
+
+    /** Result of get_membership_state_for_minecraft. */
+    public static class MembershipState {
+        public final boolean linked;
+        public final String state;          // none | active | grace | cancelled | expired
+        public final Instant expiresAt;
+        public final String accountStatus;  // active | frozen | terminated | ...
+        public final boolean bypass;        // can_bypass_membership (staff)
+
+        public MembershipState(boolean linked, String state, Instant expiresAt, String accountStatus, boolean bypass) {
+            this.linked = linked;
+            this.state = state == null ? "none" : state;
+            this.expiresAt = expiresAt;
+            this.accountStatus = accountStatus;
+            this.bypass = bypass;
+        }
+
+        /** Same rule as the database's user_meets_membership_gate(). */
+        public boolean accountOk() {
+            return "active".equals(accountStatus) || "pending_deletion".equals(accountStatus);
+        }
+
+        public boolean membershipOk() {
+            return "active".equals(state) || "grace".equals(state) || "cancelled".equals(state);
         }
     }
 

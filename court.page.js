@@ -1,5 +1,9 @@
 import { supabase } from './supabase.js';
 
+// member-gate.js shows the right message when this visitor may not use the page;
+// in that case never resolve, so nothing below loads member-only data.
+if (window._mcaMemberGate && !(await window._mcaMemberGate)) await new Promise(() => {});
+
 let _me = null;
 let _access = { manage: false, file: false, certify: false, moderate: false, isJustice: false, justice: null };
 let _types = [], _statuses = [], _motionTypes = [];

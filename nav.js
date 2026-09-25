@@ -73,7 +73,7 @@ const NAV_HTML = () => {
   <ul class="nav-links" id="nav-links">
     <li><a href="index.html"      data-page="index">Home</a></li>
     <li class="nav-has-dropdown" id="nav-server-item">
-      <a href="#" class="nav-dropdown-trigger" data-page="server-hub" aria-expanded="false" onclick="return false;">Server <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></a>
+      <a href="#" class="nav-dropdown-trigger" data-page="server-hub" aria-expanded="false">Server <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></a>
       <ul class="nav-dropdown" id="nav-server-dropdown">
         <li><a href="server.html"  data-page="server">Server</a></li>
         <li><a href="economy.html" data-page="economy">Economy</a></li>
@@ -81,7 +81,7 @@ const NAV_HTML = () => {
       </ul>
     </li>
     <li class="nav-has-dropdown" id="nav-community-item">
-      <a href="#" class="nav-dropdown-trigger" data-page="community" aria-expanded="false" onclick="return false;">Community <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></a>
+      <a href="#" class="nav-dropdown-trigger" data-page="community" aria-expanded="false">Community <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></a>
       <ul class="nav-dropdown" id="nav-community-dropdown">
         <li><a href="news.html"    data-page="news">News</a></li>
         <li><a href="nations.html" data-page="nations">Nations</a></li>
@@ -90,7 +90,7 @@ const NAV_HTML = () => {
       </ul>
     </li>
     <li class="nav-has-dropdown" id="nav-about-item">
-      <a href="#" class="nav-dropdown-trigger" data-page="about" aria-expanded="false" onclick="return false;">About <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></a>
+      <a href="#" class="nav-dropdown-trigger" data-page="about" aria-expanded="false">About <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></a>
       <ul class="nav-dropdown" id="nav-about-dropdown">
         <li><a href="leadership.html" data-page="leadership">Leadership</a></li>
         <li><a href="archive.html"    data-page="archive">Archive</a></li>
@@ -132,7 +132,7 @@ const FOOTER_HTML = () => {
         <span class="footer-logo-text">Minecraft Club of America</span>
       </div>
       <p class="footer-tagline">Trade · Build · Govern · Create</p>
-      <span class="footer-copy">© <span id="year"></span> Minecraft Club of America · Ratified May 13, 2025</span>
+      <span class="footer-copy">© <span id="year"></span> MCA Inc. · Ratified May 13, 2025</span>
     </div>
 
     <div class="footer-links">
@@ -158,7 +158,7 @@ const FOOTER_HTML = () => {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
           YouTube
         </a>
-        <a href="#" id="footer-email-btn" onclick="copyEmail(this);return false;">
+        <a href="#" id="footer-email-btn" data-copy-email>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
           Email Us
         </a>
@@ -176,8 +176,8 @@ const FOOTER_HTML = () => {
 
   </div>
   <div class="footer-disclaimer">
-    Minecraft Club of America is a volunteer-run, non-commercial community club.
-    Not affiliated with, endorsed by, or associated with Mojang Studios or Microsoft.
+    Operated by MCA Inc., a volunteer-run North Dakota nonprofit.
+    NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.
     Minecraft is a trademark of Mojang Studios.
     <span class="footer-version">v2.5.67</span>
   </div>
@@ -427,7 +427,7 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
       document.documentElement.style.visibility = '';
       document.body.innerHTML = `
         <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0f1e;font-family:'Open Sans',sans-serif;padding:2rem;text-align:center;">
-          <img src="assets/mca-logo.png" alt="MCA" style="width:72px;height:72px;border-radius:12px;margin-bottom:1.5rem;" onerror="this.style.display='none'">
+          <img src="images/logo.png" alt="MCA" style="width:72px;height:72px;border-radius:12px;margin-bottom:1.5rem;">
           <h1 style="color:#fff;font-size:1.6rem;font-weight:700;margin:0 0 0.5rem;">Site Temporarily Unavailable</h1>
           <p style="color:#94a3b8;font-size:0.95rem;max-width:420px;line-height:1.6;margin:0 0 1.5rem;">
             We're unable to load the site right now because Supabase — the service we use for our database — appears to be unreachable. This is likely due to an ongoing outage.
@@ -456,7 +456,7 @@ function showLockScreen(cfg) {
       padding:2rem;
       text-align:center;
     ">
-      <img src="/images/logo-light.png" alt="MCA Logo" id="lock-logo-img" style="width:72px;height:72px;object-fit:contain;margin-bottom:1.5rem;" onerror="this.style.display='none'">
+      <img src="/images/logo-light.png" alt="MCA Logo" id="lock-logo-img" style="width:72px;height:72px;object-fit:contain;margin-bottom:1.5rem;">
       <div id="lock-eyebrow" style="
         font-size:11px;
         font-weight:700;
@@ -742,6 +742,18 @@ async function injectNav() {
       if (!item.contains(e.target)) closeDropdown(item);
     });
   });
+  // Escape closes every nav/account dropdown and returns focus to the
+  // trigger that owned the focused item (WCAG 2.1.1 keyboard access).
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    const owner = document.activeElement?.closest('.nav-has-dropdown, .nav-account-submenu, .nav-account-dropdown');
+    document.querySelectorAll('.nav-has-dropdown').forEach(closeDropdown);
+    document.querySelectorAll('.nav-account-dropdown, .nav-account-submenu').forEach(d => d.classList.remove('open'));
+    const trigger = owner?.matches('.nav-account-dropdown')
+      ? owner.previousElementSibling
+      : owner?.querySelector('.nav-dropdown-trigger, #nav-staff-trigger');
+    trigger?.focus();
+  });
 
   // Hamburger menu toggle
   const hamburger = document.getElementById('nav-hamburger');
@@ -802,6 +814,14 @@ function copyEmail(el) {
   setTimeout(() => { el.innerHTML = orig; }, 2000);
 }
 window.copyEmail = copyEmail;
+// Delegated so no inline onclick is needed (inline handlers are blocked by
+// the strict CSP in _headers). Any element with data-copy-email works.
+document.addEventListener('click', e => {
+  const el = e.target.closest?.('[data-copy-email]');
+  if (!el) return;
+  e.preventDefault();
+  copyEmail(el);
+});
 
 // ── Nav auth + cart ───────────────────────────────────────────
 async function initNavAuth(_authReadyResolve) {
@@ -916,7 +936,7 @@ async function initNavAuth(_authReadyResolve) {
         }
       }
 
-      const [{ data: roleData, error: roleError }, preview, canViewAdmin, canBypassMembership] = await Promise.all([
+      const [{ data: roleData, error: roleError }, preview, canViewAdmin] = await Promise.all([
         mod0.supabase.from('profiles').select('display_name, username, account_status, membership_status, membership_current_period_end').eq('id', user.id).single(),
         mod0.getMyRolePreview().catch(() => null),
         mod0.hasPermission('can_view_admin').catch(() => false),
@@ -946,33 +966,8 @@ async function initNavAuth(_authReadyResolve) {
         }
       }
 
-      // Membership gate: the Minecraft server and the website features tied
-      // to it are locked to paying members. Same client-side "check
-      // profiles, redirect if not allowed" idiom as the COPPA gate above —
-      // real enforcement for any mutation on these pages' data still depends
-      // on that table's own RLS (see user_meets_membership_gate() /
-      // require_active_membership() applied there). Exemption is the
-      // can_bypass_membership permission specifically, not can_view_admin —
-      // those used to be conflated here, which meant granting someone admin
-      // panel access silently exempted them from ever needing a membership.
-      // Owner and Admin have the bypass seeded by default; anyone else who
-      // needs it (e.g. a Congress/Court role without a paid membership) gets
-      // it granted explicitly via the Roles tab.
-      const memberGatedPages = ['server.html', 'economy.html', 'stocks.html', 'congress.html', 'court.html'];
-      const currentPageForMembers = window.location.pathname.split('/').pop() || 'index.html';
-      // A failed profile read is not proof of a lapsed membership, and this
-      // redirect is UX rather than enforcement (RLS is what actually gates
-      // the data). Bouncing a paid member to "you need a membership" on a
-      // transient error is worse than letting the page load and come up
-      // empty, so the gate only fires on a profile we actually read.
-      if (memberGatedPages.includes(currentPageForMembers) && !canBypassMembership && roleData && !roleError) {
-        const periodEnd = roleData.membership_current_period_end ? new Date(roleData.membership_current_period_end) : null;
-        const isActiveMember = roleData.membership_status === 'active' && periodEnd && periodEnd.getTime() > Date.now();
-        if (!isActiveMember) {
-          window.location.replace('account.html?membership_required=1');
-          return { isAdmin: false, canPublishNews: false };
-        }
-      }
+      // Membership gating for member-only pages lives in member-gate.js (loaded
+      // in each gated page's <head>) so content never flashes before the check.
       // isAdmin comes exclusively from the server-side role/permission
       // system (user_roles + roles.permissions) via the can_view_admin
       // permission — never from the legacy profiles.role column.

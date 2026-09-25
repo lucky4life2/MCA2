@@ -72,4 +72,8 @@ comment on function public.check_rate_limit(text, integer, integer) is
 -- function must be granted explicitly. service_role needs it for the Stripe
 -- Edge Functions; authenticated is granted too so a future RPC can reuse it
 -- without another migration.
-grant execute on function public.check_rate_limit(text, integer, integer) to authenticated, service_role;
+-- Applied live 2026-09-24 as audit_02_rate_limit_primitive with EXECUTE for service_role
+-- ONLY: an authenticated grant would let any user exhaust another user's key
+-- (e.g. pwreset:email:<victim>). SECURITY DEFINER RPCs reuse it without a grant.
+revoke all on function public.check_rate_limit(text, integer, integer) from public, anon, authenticated;
+grant execute on function public.check_rate_limit(text, integer, integer) to service_role;
