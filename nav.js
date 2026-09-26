@@ -496,7 +496,8 @@ function showLockScreen(cfg) {
       <div style="background:#fff;border-radius:10px;padding:2rem;width:100%;max-width:360px;margin:1rem;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
         <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#18489e;margin-bottom:0.5rem;">Admin Access</div>
         <h2 style="font-family:'Times New Roman',serif;font-size:1.4rem;font-weight:normal;margin:0 0 1.25rem;color:#1a1a2e;">Sign in to continue</h2>
-        <input id="lock-email" type="email" placeholder="Email" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #dde1ea;border-radius:5px;font-size:14px;margin-bottom:10px;outline:none;font-family:inherit;">
+        <label for="lock-email" style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:4px;">Email or Username</label>
+        <input id="lock-email" type="text" placeholder="Email or username" autocomplete="username" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #dde1ea;border-radius:5px;font-size:14px;margin-bottom:10px;outline:none;font-family:inherit;">
         <input id="lock-password" type="password" placeholder="Password" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #dde1ea;border-radius:5px;font-size:14px;margin-bottom:14px;outline:none;font-family:inherit;">
         <div id="lock-login-error" style="font-size:12px;color:#c0392b;margin-bottom:10px;display:none;"></div>
         <div style="display:flex;gap:8px;">
@@ -560,7 +561,7 @@ function showLockScreen(cfg) {
     const password = document.getElementById('lock-password').value;
     const errEl = document.getElementById('lock-login-error');
     errEl.style.display = 'none';
-    if (!email || !password) { errEl.textContent = 'Please enter your email and password.'; errEl.style.display = 'block'; return; }
+    if (!email || !password) { errEl.textContent = 'Please enter your email or username and password.'; errEl.style.display = 'block'; return; }
     const btn = document.getElementById('lock-login-submit');
     btn.textContent = 'Signing in…'; btn.disabled = true;
     try {
