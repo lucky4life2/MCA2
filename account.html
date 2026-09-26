@@ -1475,8 +1475,11 @@ async function renderConnectedAccounts(skipFetch = false) {
   }
   const el = document.getElementById('connected-accounts-body');
   const identities = _user.identities || [];
-  const hasDiscord = identities.some(i => i.provider === 'discord') || !!_profile.discord_id;
-  const hasGoogle  = identities.some(i => i.provider === 'google') || !!_profile.google_id;
+  // Linked means an OAuth identity exists. profiles.discord_id / google_id
+  // only mirror it and could be left behind after an unlink, which used to
+  // hide the Link button so a new account could never be connected.
+  const hasDiscord = identities.some(i => i.provider === 'discord');
+  const hasGoogle  = identities.some(i => i.provider === 'google');
   const hasEmail   = identities.some(i => i.provider === 'email');
 
   // If auth.users still has an email but no email identity exists, Discord/Google OAuth

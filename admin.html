@@ -1711,10 +1711,13 @@ function renderMembers(members) {
       ? `<button class="btn btn-secondary btn-sm" onclick="allowEmail('${m.id}')">Allow Email</button>` : '';
     const revokeEmailBtn = m.email && _myPermissions.can_manage_users
       ? `<button class="btn btn-danger btn-sm" onclick="revokeEmail('${m.id}')">Revoke Email</button>` : '';
-    const revokeDiscordBtn = hasDiscord && _myPermissions.can_manage_users
-      ? `<button class="btn btn-danger btn-sm" onclick="revokeDiscord('${m.id}')">Revoke Discord</button>` : '';
-    const revokeGoogleBtn = hasGoogle && _myPermissions.can_manage_users
-      ? `<button class="btn btn-danger btn-sm" onclick="revokeGoogle('${m.id}')">Revoke Google</button>` : '';
+    // Also offered when only the profile still carries the provider id (the
+    // identity is gone): revoke_*_identity() clears that leftover too, which
+    // is what frees the Discord/Google account to be linked again.
+    const revokeDiscordBtn = (hasDiscord || !!m.discord_id) && _myPermissions.can_manage_users
+      ? `<button class="btn btn-danger btn-sm" onclick="revokeDiscord('${m.id}')">Unlink Discord</button>` : '';
+    const revokeGoogleBtn = (hasGoogle || !!m.google_id) && _myPermissions.can_manage_users
+      ? `<button class="btn btn-danger btn-sm" onclick="revokeGoogle('${m.id}')">Unlink Google</button>` : '';
     const freezeBtn = (accountStatus === 'active' || accountStatus === 'deactivated') && _myPermissions.can_manage_users
       ? `<button class="btn btn-outline btn-sm" onclick="freezeAccount('${m.id}')">Freeze</button>` : '';
     const unfreezeBtn = accountStatus === 'frozen' && _myPermissions.can_manage_users
