@@ -17,6 +17,9 @@ let _archiveFiltered = [];
 const POSITIONS = ['support', 'oppose', 'neutral', 'question', 'sponsor_statement', 'committee_report'];
 
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// Vote choices are stored lowercase ('yea', 'nay', 'present', 'abstain');
+// capitalise them for display only. Stored values and data-vote stay as-is.
+function voteLabel(v) { const s = String(v ?? ''); return s.charAt(0).toUpperCase() + s.slice(1); }
 
 // Allow-lists http(s) and relative URLs before anything navigates the page to
 // them; blocks javascript: and other schemes. Needed because dataset reads
@@ -956,7 +959,7 @@ async function renderVoteBlock(rollCall, measure) {
     const { data: tally } = await supabase.rpc('congress_roll_call_tally', { p_roll_call_id: rollCall.id });
     if (tally && tally.length) {
       tallyHtml = `<div class="cg-tally">${tally.map(t => `
-        <div class="cg-tally-cell"><div class="n">${t.vote_count}</div><div class="l">${esc(t.choice)}</div></div>
+        <div class="cg-tally-cell"><div class="n">${t.vote_count}</div><div class="l">${esc(voteLabel(t.choice))}</div></div>
       `).join('')}</div>
       <div class="cg-vote-status">Cast: ${tally[0].total_cast} / Eligible: ${tally[0].total_eligible} · Quorum ${tally[0].quorum_met ? 'met' : 'not met'}</div>`;
     }
@@ -968,9 +971,9 @@ async function renderVoteBlock(rollCall, measure) {
     <div style="font-size:12px;color:var(--muted);">Status: ${esc(rollCall.status)} · Visibility: ${esc(rollCall.visibility)}</div>
     ${canVote ? `
       <div class="cg-vote-options">
-        ${options.map(o => `<button class="btn ${myVote === o ? 'btn-primary' : 'btn-outline'}" data-vote="${esc(o)}">${esc(o)}</button>`).join('')}
+        ${options.map(o => `<button class="btn ${myVote === o ? 'btn-primary' : 'btn-outline'}" data-vote="${esc(o)}">${esc(voteLabel(o))}</button>`).join('')}
       </div>
-      <div class="cg-vote-status">${myVote ? `Your recorded vote: <strong>${esc(myVote)}</strong>${rollCall.allow_vote_changes ? ' (you may change it while voting is open)' : ''}` : 'You have not voted yet.'}</div>
+      <div class="cg-vote-status">${myVote ? `Your recorded vote: <strong>${esc(voteLabel(myVote))}</strong>${rollCall.allow_vote_changes ? ' (you may change it while voting is open)' : ''}` : 'You have not voted yet.'}</div>
     ` : rollCall.status === 'open' ? `<div class="cg-vote-status">You are not an eligible voter for this chamber.</div>` : ''}
     ${tallyHtml}
     <div id="cg-vote-rc-id" data-id="${rollCall.id}"></div>
