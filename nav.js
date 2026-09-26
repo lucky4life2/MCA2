@@ -1113,28 +1113,23 @@ async function initNavAuth(_authReadyResolve) {
 
     try {
       const mod = await import('./supabase.js');
-      try {
-        const permResult = await Promise.race([
-          mod.supabase.rpc('user_has_permission', { perm: 'can_publish_news' }),
-          new Promise(r => setTimeout(() => r({ data: null }), 1000))
-        ]);
-        if (permResult?.data) canPublishNews = true;
-      } catch(e) {}
-      try {
-        const archiveResult = await Promise.race([
-          mod.supabase.rpc('user_has_permission', { perm: 'can_manage_archive' }),
-          new Promise(r => setTimeout(() => r({ data: null }), 1000))
-        ]);
-        if (archiveResult?.data) canManageArchive = true;
-      } catch(e) {}
-      try {
-        const [manageResult, testResult, checkoffResult] = await Promise.all([
-          Promise.race([mod.supabase.rpc('user_has_permission', { perm: 'can_manage_tasks' }), new Promise(r => setTimeout(() => r({ data: null }), 1000))]),
-          Promise.race([mod.supabase.rpc('user_has_permission', { perm: 'can_test_tasks' }), new Promise(r => setTimeout(() => r({ data: null }), 1000))]),
-          Promise.race([mod.supabase.rpc('user_has_permission', { perm: 'can_check_off_tasks' }), new Promise(r => setTimeout(() => r({ data: null }), 1000))]),
-        ]);
-        if (manageResult?.data || testResult?.data || checkoffResult?.data) canAccessTasks = true;
-      } catch(e) {}
+      // All five checks run together. Each used to be raced against its own
+      // 1-second timeout, one after another, so any slow round-trip (mobile,
+      // a cold connection) silently dropped Tasks / Publish News / Manage
+      // Archive from the dropdown even though the member holds the
+      // permission. The nav has already rendered above, so waiting a little
+      // longer here only delays the second render, never the nav itself.
+      const perm = (p) => Promise.race([
+        mod.supabase.rpc('user_has_permission', { perm: p }).then(r => !!r?.data, () => false),
+        new Promise(r => setTimeout(() => r(false), 8000)),
+      ]);
+      const [pubNews, manageArchive, manageTasks, testTasks, checkoffTasks] = await Promise.all([
+        perm('can_publish_news'), perm('can_manage_archive'),
+        perm('can_manage_tasks'), perm('can_test_tasks'), perm('can_check_off_tasks'),
+      ]);
+      if (pubNews) canPublishNews = true;
+      if (manageArchive) canManageArchive = true;
+      if (manageTasks || testTasks || checkoffTasks) canAccessTasks = true;
       // While previewing a role, canPublishNews/canManageArchive/canAccessTasks
       // above already came from the preview-aware user_has_permission RPC —
       // don't let a real admin/owner's actual role override them back to true.
