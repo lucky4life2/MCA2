@@ -67,6 +67,7 @@ public class VerifyCommand implements CommandExecutor {
                     plugin.getServer().getScheduler().runTask(plugin, () -> {
                         if (!player.isOnline()) return;
                         if (ok) {
+                            plugin.removePendingLink(player.getUniqueId());
                             player.sendMessage(plugin.msg("success"));
                         } else {
                             player.sendMessage(plugin.msg("error"));

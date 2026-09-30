@@ -159,9 +159,22 @@ public class SupabaseClient {
      * MembershipLookupException when the lookup itself fails.
      */
     public MembershipState getMembershipState(String minecraftUuid) {
-        String url = baseUrl + "/rest/v1/rpc/get_membership_state_for_minecraft";
+        return getMembershipState(minecraftUuid, null);
+    }
+
+    /**
+     * Same lookup, but also recognises a not-yet-linked player whose name a
+     * website account has claimed (get_minecraft_join_state). Pass the
+     * player's login name; it is trustworthy on an online-mode server
+     * because Mojang has already authenticated it.
+     */
+    public MembershipState getMembershipState(String minecraftUuid, String minecraftName) {
+        boolean withName = minecraftName != null && !minecraftName.isBlank();
+        String url = baseUrl + "/rest/v1/rpc/"
+                + (withName ? "get_minecraft_join_state" : "get_membership_state_for_minecraft");
         JsonObject body = new JsonObject();
         body.addProperty("p_minecraft_uuid", minecraftUuid);
+        if (withName) body.addProperty("p_minecraft_name", minecraftName);
         try {
             HttpRequest request = baseRequest(url)
                     .header("Content-Type", "application/json")
@@ -184,7 +197,8 @@ public class SupabaseClient {
             if (expiresStr != null) {
                 try { expiresAt = java.time.OffsetDateTime.parse(expiresStr).toInstant(); } catch (Exception ignored) { }
             }
-            return new MembershipState(linked, getString(row, "state"), expiresAt, getString(row, "account_status"), bypass);
+            boolean pendingLink = row.has("pending_link") && !row.get("pending_link").isJsonNull() && row.get("pending_link").getAsBoolean();
+            return new MembershipState(linked, getString(row, "state"), expiresAt, getString(row, "account_status"), bypass, pendingLink);
         } catch (MembershipLookupException e) {
             throw e;
         } catch (Exception e) {
@@ -391,13 +405,25 @@ public class SupabaseClient {
         public final Instant expiresAt;
         public final String accountStatus;  // active | frozen | terminated | ...
         public final boolean bypass;        // can_bypass_membership (staff)
+        /**
+         * True when this Minecraft account isn't linked yet, but a website
+         * account has claimed its username. Such a player may be let in
+         * (if that website account is paid up) just long enough to run
+         * /mcaverify — see PendingLinkListener.
+         */
+        public final boolean pendingLink;
 
         public MembershipState(boolean linked, String state, Instant expiresAt, String accountStatus, boolean bypass) {
+            this(linked, state, expiresAt, accountStatus, bypass, false);
+        }
+
+        public MembershipState(boolean linked, String state, Instant expiresAt, String accountStatus, boolean bypass, boolean pendingLink) {
             this.linked = linked;
             this.state = state == null ? "none" : state;
             this.expiresAt = expiresAt;
             this.accountStatus = accountStatus;
             this.bypass = bypass;
+            this.pendingLink = pendingLink;
         }
 
         /** Same rule as the database's user_meets_membership_gate(). */

@@ -37,7 +37,7 @@ public class MembershipGateListener implements Listener {
 
         SupabaseClient.MembershipState s;
         try {
-            s = supabase.getMembershipState(uuid.toString());
+            s = supabase.getMembershipState(uuid.toString(), event.getName());
         } catch (SupabaseClient.MembershipLookupException e) {
             // The lookup itself failed — Supabase is down or unreachable.
             // That is not the same as "this player has no membership", and
@@ -57,11 +57,15 @@ public class MembershipGateListener implements Listener {
         // staff bypass; account status first (frozen/terminated get their own
         // message, not a membership prompt); then active, grace and
         // cancelled-but-still-paid may join.
-        if (!s.linked) {
+        // Linking happens AFTER purchase: a player who isn't linked yet is
+        // still refused unless a website account has claimed their name
+        // (pendingLink) and then passes the same paid-up checks below. They
+        // are let in only to run /mcaverify (see PendingLinkListener).
+        if (!s.linked && !s.pendingLink) {
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, plugin.msg("membership_required_unlinked"));
             return;
         }
-        if (s.bypass) return;
+        if (s.bypass) { notePending(s, uuid); return; }
         if (!s.accountOk()) {
             String key = "frozen".equals(s.accountStatus) ? "account_frozen"
                     : "terminated".equals(s.accountStatus) ? "account_terminated"
@@ -69,7 +73,7 @@ public class MembershipGateListener implements Listener {
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_BANNED, plugin.msg(key));
             return;
         }
-        if (s.membershipOk()) return;
+        if (s.membershipOk()) { notePending(s, uuid); return; }
         if ("expired".equals(s.state)) {
             String date = s.expiresAt == null ? "recently"
                     : java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy")
@@ -78,5 +82,10 @@ public class MembershipGateListener implements Listener {
             return;
         }
         event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, plugin.msg("membership_required"));
+    }
+
+    private void notePending(SupabaseClient.MembershipState s, UUID uuid) {
+        if (s.pendingLink) plugin.addPendingLink(uuid);
+        else plugin.removePendingLink(uuid);
     }
 }

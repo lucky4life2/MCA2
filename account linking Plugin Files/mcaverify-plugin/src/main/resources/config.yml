@@ -71,5 +71,13 @@ messages:
   account_frozen: "&cYour MCA account is frozen.\n&7See your account page on the website for details or to appeal."
   account_terminated: "&cYour MCA account has been terminated.\n&7See your account page on the website for details."
   account_unavailable: "&cYour MCA account can't join right now.\n&7Check your account page on the website for details."
-  membership_required_unlinked: "&cYou need an active MCA membership to join.\n&7Sign up on the website, verify with /mcaverify, then purchase a membership."
+  membership_required_unlinked: "&cYou need an active MCA membership to join.\n&7Buy a membership on the website (Shop), enter your Minecraft username on your account page, then join again."
+  pending_link_intro: "&aMembership confirmed. &7Go to My Account on the website, generate your code, and run &f/mcaverify <code>&7 here within %minutes% minutes to finish linking."
+  pending_link_timeout: "&cYou didn't finish linking in time.\n&7Generate a code on My Account, join again, and run /mcaverify <code>."
   membership_check_unavailable: "&cWe couldn't check your membership right now.\n&7This is a problem on our end, not yours — please try again in a few minutes."
+
+# A paid member who has entered their username on the website but not yet
+# linked may join only to run /mcaverify. They are frozen in place, can't
+# chat or use any other command, and are removed after this many seconds.
+pending_link:
+  timeout_seconds: 300

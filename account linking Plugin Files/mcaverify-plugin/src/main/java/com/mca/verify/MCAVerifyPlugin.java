@@ -5,6 +5,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.util.HashSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
@@ -23,6 +24,9 @@ public class MCAVerifyPlugin extends JavaPlugin {
     private final Set<UUID> hardcodedAdmins = new HashSet<>();
     private boolean membershipGateEnabled;
     private boolean denyOnMembershipLookupError;
+    // Paid members who joined before linking and still have to run /mcaverify.
+    private final Set<UUID> pendingLink = ConcurrentHashMap.newKeySet();
+    private long pendingLinkTimeoutTicks = 300L * 20L;
 
     // NEW: heartbeat task handle + config, so the website's admin panel can
     // tell this plugin is actually alive (see SupabaseClient.sendHeartbeat()).
@@ -75,6 +79,8 @@ public class MCAVerifyPlugin extends JavaPlugin {
         membershipGateEnabled = cfg.getBoolean("membership.gate_enabled", true);
         denyOnMembershipLookupError = cfg.getBoolean("membership.deny_on_lookup_error", true);
         getServer().getPluginManager().registerEvents(new MembershipGateListener(this, supabase), this);
+        pendingLinkTimeoutTicks = Math.max(30L, cfg.getLong("pending_link.timeout_seconds", 300L)) * 20L;
+        getServer().getPluginManager().registerEvents(new PendingLinkListener(this), this);
         if (membershipGateEnabled) {
             getLogger().info("Membership gate ENABLED — only active members (and hardcoded admins) may join.");
         } else {
@@ -149,5 +155,21 @@ public class MCAVerifyPlugin extends JavaPlugin {
      */
     public boolean denyOnMembershipLookupError() {
         return denyOnMembershipLookupError;
+    }
+
+    public void addPendingLink(UUID uuid) {
+        pendingLink.add(uuid);
+    }
+
+    public void removePendingLink(UUID uuid) {
+        pendingLink.remove(uuid);
+    }
+
+    public boolean isPendingLink(UUID uuid) {
+        return pendingLink.contains(uuid);
+    }
+
+    public long pendingLinkTimeoutTicks() {
+        return pendingLinkTimeoutTicks;
     }
 }
