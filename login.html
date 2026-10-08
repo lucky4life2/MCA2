@@ -310,16 +310,12 @@
           <!--
             Cloudflare Turnstile widget — real site key as of 2026-09-01.
 
-            The server-side half already exists: signup-with-email (deployed
-            outside this repo) POSTs the submitted token to
-            https://challenges.cloudflare.com/turnstile/v0/siteverify and
-            rejects the signup unless "success" is true. That check is gated
-            on the TURNSTILE_SECRET_KEY secret being set on the function, so
-            it stays dormant — accepting every signup, real widget or not —
-            until that secret is set to the value matching this site key
-            (dash.cloudflare.com > Turnstile > this widget > secret key).
-            Setting the secret to a mismatched value breaks signup instead,
-            so verify the pair together in a real signup before relying on it.
+            signup-with-email is deployed outside this repo; its current
+            verification behavior cannot be established from this client.
+            It must validate the token with Cloudflare Siteverify using the
+            matching TURNSTILE_SECRET_KEY, reject invalid tokens, and fail
+            closed if its secret is absent or verification is unavailable.
+            See SECURITY-PROGRAM.md section 8 for deployment checks.
           -->
           <div class="cf-turnstile" data-sitekey="0x4AAAAAAEkQfLOaNciyMxZ5" data-theme="light" style="margin-bottom: 14px;"></div>
 
@@ -940,11 +936,10 @@
     // Cloudflare Turnstile. Blocking an empty token here is only a UX
     // safeguard (it catches someone who skipped or closed the widget) — a
     // scripted request can still POST to the Edge Function directly with a
-    // fake or empty token. The check that actually matters runs server-side
-    // in signup-with-email, which verifies this token against
+    // fake or empty token. signup-with-email must verify this token against
     // https://challenges.cloudflare.com/turnstile/v0/siteverify before
-    // creating the account. That verification only engages once real keys
-    // are configured — see the widget markup above.
+    // creating an account. Its source/configuration is not included here;
+    // the client check does not establish server-side enforcement.
     const turnstileToken = (window.turnstile && document.querySelector('.cf-turnstile'))
       ? window.turnstile.getResponse()
       : '';
