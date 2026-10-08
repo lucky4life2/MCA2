@@ -2,6 +2,26 @@
 
 ## Files
 
+`client_table_privileges.sql` checks that neither browser role has effective
+`TRUNCATE`, `REFERENCES`, or `TRIGGER` privileges on public tables, including
+privileges inherited through `PUBLIC` or another role. Run after the corrective
+`20261008_revoke_client_ddl_privileges.sql` migration:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/client_table_privileges.sql
+```
+
+This is a read-only assertion, not a complete RLS audit. The migration is local
+and has not been applied to the live project.
+
+Validated on 2026-10-08 against an isolated PostgreSQL 17 fixture: the assertion
+failed on the original broad grants and passed after the correction (including
+a repeated application). Direct `TRUNCATE` succeeded despite deny-all RLS before
+the fix, and was denied to both browser roles afterward. CRUD, service-role
+administrative privileges, RLS, and fixture rows were preserved. A separately
+inherited `REFERENCES` privilege was also detected by the assertion. This was
+a synthetic fixture, not a reconstruction or test of the production schema.
+
 | File | What it covers | Status |
 |---|---|---|
 | `congress_voting.pgtap.sql` | All 12 backend-verifiable requirements from the Phase 4 spec: valid submission, duplicate/concurrent prevention, eligibility, chamber restriction, closed-vote rejection, quorum/threshold math, vote-change rules, version locking, amendment version creation, leadership/admin authorization, certified immutability, discussion-post RLS, and the audit-log gap. | Written and reviewed against the live schema; **not yet executed** (see below). |

@@ -3,7 +3,9 @@
 **Minecraft Club of America, Inc.** ("MCA")
 Effective: 2026-09-03. Required by the amended FTC COPPA Rule, 16 CFR § 312.8 (written information security program), effective June 23, 2025.
 
-This document is the organization's written information security program. It is kept in the repository (not publicly served — see `.assetsignore`) so it stays current with the code it describes, and is reviewed on the cadence in §6.
+This document is the organization's written information security program. It is kept in the repository (not publicly served — see `.assetsignore`) so it stays current with the code it describes, and is reviewed on the cadence in §7.
+
+**Repository review, 2026-10-08:** the safeguards described below include historical implementation claims, not a current verification of the deployed project. The repository contains only part of the database migration history and three Stripe Edge Functions; the signup Edge Function is absent. This review did not access the live project or establish whether a breach occurred. See §8 for outstanding verification steps. `.assetsignore` excludes this document from website assets, but does not make it private in a public GitHub repository.
 
 ## 1. Responsible individual
 
@@ -35,7 +37,7 @@ This program covers all personal information MCA collects through minecraftclubo
 - **Encryption in transit:** HSTS and `upgrade-insecure-requests` are set site-wide (`_headers`); all Supabase/API traffic is HTTPS/WSS.
 - **Secret handling:** one-time codes and consent tokens are SHA-256-hashed at rest; the anon key embedded in client code is the public, RLS-backed publishable key, never a service-role key.
 - **Audit trail:** `audit_log`, populated by diff-only triggers, covers `profiles` and (as of this effort) `minor_consent`, alongside its existing coverage of tasks, admin messaging, congress, and court actions.
-- **Bot/abuse protection:** Cloudflare Turnstile is wired into the signup Edge Function server-side (site key configuration is a manual step tracked separately, not part of this compliance effort).
+- **Bot/abuse protection:** `login.html` contains a Turnstile site key, blocks an empty challenge response, and submits `turnstileToken` to `signup-with-email`. Server-side verification and the matching secret remain unverified: that function's source and deployment configuration are absent from this repository. A site key is public; the secret belongs only on the server.
 
 ## 5. Data retention
 
@@ -66,4 +68,13 @@ This program, and the code it describes, should be reviewed:
 - At least annually, by the individual named in §1.
 - Immediately upon any known or suspected security incident involving personal information.
 
-No review has occurred yet beyond the authoring of this document and the Phase 1/Phase 2 compliance effort it accompanies (`PHASE1-AUDIT-COPPA.md`, this Phase 2 implementation).
+A repository-only follow-up on 2026-10-08 checked the coordinator/DPA entries, client Turnstile integration, selected access-control migrations, and common secret patterns in the current tracked files. It did not revalidate the historical live-database assertions or review all 559 commits.
+
+## 8. Outstanding verification and owner actions
+
+- **Coordinator:** the organization must designate an actual individual and replace `[NAME]` in §1. Record the designation date and acceptance; do not infer an appointment from repository ownership.
+- **Supabase agreement:** the coordinator must confirm the applicable data-processing agreement and record its version/date, review date, and evidence location. “Not reviewed” does not establish that no agreement exists. Keep executed agreements and private contact information outside the public repository.
+- **Leaked-password protection:** check the live Supabase Auth setting and enable it if available for the project's plan. Record the observed setting and date. In an isolated test project, verify enforcement for each supported password-setting path, including custom Edge Functions that use admin APIs; do not assume the dashboard toggle covers every custom path.
+- **Turnstile:** retrieve and review the deployed `signup-with-email` implementation. Confirm a matching server-only secret and Siteverify validation before any account creation or email side effect. Missing configuration, invalid/missing/expired/reused tokens, and verification outages must fail closed. Confirm the returned hostname is one of the configured site hostnames (and the expected action if one is used). Test rejection paths and a successful fresh token in an isolated project, and check any direct Auth signup path for bypasses. Neither the browser widget nor this document proves enforcement.
+- **Database grants:** `20260924_explicit_data_api_grants.sql` grants `TRUNCATE`, `REFERENCES`, and `TRIGGER` to browser roles. RLS does not restrict `TRUNCATE` or `REFERENCES`. The local corrective migration `20261008_revoke_client_ddl_privileges.sql` removes those privileges from `PUBLIC`, `anon`, and `authenticated` without changing CRUD or service-role grants. It is **not applied live**. Apply via the established migration workflow after review, then run `tests/client_table_privileges.sql` to check effective privileges, including inheritance. This finding does not establish that a deployed HTTP endpoint permits truncation.
+- **Live reconciliation:** obtain current policies, grants, triggers, function definitions, Auth configuration, and deployed Edge Function sources. Compare them with repository copies and test anonymous, ordinary-member, restricted-account, and staff boundaries in an isolated project. The partial local migrations cannot recreate or certify the full production schema.
