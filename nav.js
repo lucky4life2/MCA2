@@ -244,6 +244,11 @@ const _visibilityFailsafe = setTimeout(() => {
   document.documentElement.style.visibility = '';
 }, 14000);
 
+// Clear the early-hide.js failsafe: this module is evaluating, so the
+// page-visibility lifecycle is now owned here (including the 14s last-resort
+// failsafe above).
+if (window._mcaVisibilityFailsafe) clearTimeout(window._mcaVisibilityFailsafe);
+
 const _systemLockdownCheck = (async function checkSystemLockdown() {
   const SUPABASE_URL  = 'https://hjaywokvgdzhvsoygctc.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNzA2NTQsImV4cCI6MjA5NTg0NjY1NH0.nFqlc20iUDwE1sXLRi2Pev181v2RJKx_S6UcTkGgPWU';
@@ -432,6 +437,7 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
           <p style="color:#94a3b8;font-size:0.95rem;max-width:420px;line-height:1.6;margin:0 0 1.5rem;">
             We're unable to load the site right now because Supabase — the service we use for our database — appears to be unreachable. This is likely due to an ongoing outage.
           </p>
+          <button onclick="location.reload()" style="display:inline-block;background:#3ecf8e;color:#0a0f1e;font-weight:700;font-size:0.9rem;padding:10px 20px;border-radius:6px;border:none;cursor:pointer;margin:0 0.5rem 1rem 0;">Try Again</button>
           <a href="https://status.supabase.com" target="_blank" rel="noopener" style="display:inline-block;background:#3ecf8e;color:#0a0f1e;font-weight:700;font-size:0.9rem;padding:10px 20px;border-radius:6px;text-decoration:none;margin-bottom:1rem;">Check Supabase Status</a>
           <p style="color:#475569;font-size:0.8rem;margin:0;">Please try again once the outage is resolved.</p>
         </div>
