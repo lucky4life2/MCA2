@@ -432,6 +432,7 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
           <p style="color:#94a3b8;font-size:0.95rem;max-width:420px;line-height:1.6;margin:0 0 1.5rem;">
             We're unable to load the site right now because Supabase — the service we use for our database — appears to be unreachable. This is likely due to an ongoing outage.
           </p>
+          <button onclick="location.reload()" style="display:inline-block;background:#3ecf8e;color:#0a0f1e;font-weight:700;font-size:0.9rem;padding:10px 20px;border-radius:6px;border:none;cursor:pointer;margin:0 0.5rem 1rem 0;">Try Again</button>
           <a href="https://status.supabase.com" target="_blank" rel="noopener" style="display:inline-block;background:#3ecf8e;color:#0a0f1e;font-weight:700;font-size:0.9rem;padding:10px 20px;border-radius:6px;text-decoration:none;margin-bottom:1rem;">Check Supabase Status</a>
           <p style="color:#475569;font-size:0.8rem;margin:0;">Please try again once the outage is resolved.</p>
         </div>
