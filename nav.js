@@ -244,6 +244,11 @@ const _visibilityFailsafe = setTimeout(() => {
   document.documentElement.style.visibility = '';
 }, 14000);
 
+// Clear the early-hide.js failsafe: this module is evaluating, so the
+// page-visibility lifecycle is now owned here (including the 14s last-resort
+// failsafe above).
+if (window._mcaVisibilityFailsafe) clearTimeout(window._mcaVisibilityFailsafe);
+
 const _systemLockdownCheck = (async function checkSystemLockdown() {
   const SUPABASE_URL  = 'https://hjaywokvgdzhvsoygctc.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNzA2NTQsImV4cCI6MjA5NTg0NjY1NH0.nFqlc20iUDwE1sXLRi2Pev181v2RJKx_S6UcTkGgPWU';

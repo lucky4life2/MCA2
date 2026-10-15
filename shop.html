@@ -695,7 +695,9 @@
       const cartAllowed = p.cart_enabled !== false;
       let cartBtn = '';
       if (cartAllowed) {
-        if (_isLoggedIn) {
+        if (!_initialized) {
+          cartBtn = `<button class="btn-add-to-cart" disabled>Loading\u2026</button>`;
+        } else if (_isLoggedIn) {
           const prod = esc(JSON.stringify({id:p.id,name:p.name,price:p.price,image_url:p.image_url||null,product_type:p.product_type||null,billing_cycle:p.billing_cycle||null}));
           const isSub = p.product_type === 'subscription';
           const subState = isSub ? subscriptionState() : 'none';
