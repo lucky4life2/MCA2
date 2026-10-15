@@ -1590,7 +1590,7 @@ footer {
 .featured-banner-cta {
   font-size: 12px;
   font-weight: 600;
-  color: var(--green-text);
+  color: #fff;
   white-space: nowrap;
   letter-spacing: 0.3px;
 }
