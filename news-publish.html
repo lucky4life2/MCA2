@@ -249,6 +249,14 @@
           </div>
         </div>
 
+        <div class="form-group" style="position:relative;">
+          <label class="form-label">Coauthors</label>
+          <div id="np-coauthor-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>
+          <input type="text" id="np-coauthor-search" class="form-input" placeholder="Search members by name…" autocomplete="off">
+          <div id="np-coauthor-results" style="display:none;position:absolute;z-index:20;left:0;right:0;top:100%;background:var(--panel,#fff);border:1px solid var(--border);border-radius:6px;max-height:180px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.12);"></div>
+          <div class="form-hint">Coauthors appear in the byline and can edit this article.</div>
+        </div>
+
         <div class="form-group">
           <label class="form-label">Summary / Excerpt</label>
           <textarea id="np-summary" class="form-input" rows="2" placeholder="A short description shown in article listings (1–2 sentences)…"></textarea>
@@ -359,8 +367,11 @@ function safeUrl(url) {
   // Positive allowlist: the browser's own URL parser resolves the value (it
   // strips every leading C0 control char, which the old regex missed) and only
   // http(s) survives. Relative links resolve against this page, so they still work.
+  // Empty/missing input must NOT fall through: new URL('', base) resolves to the
+  // page URL itself, which would render a broken <img> pointing at this document.
+  if (url == null || String(url).trim() === '') return '';
   try {
-    const p = new URL(String(url ?? ''), location.href);
+    const p = new URL(String(url), location.href);
     return (p.protocol === 'https:' || p.protocol === 'http:') ? p.href : '';
   } catch { return ''; }
 }
@@ -409,6 +420,8 @@ let _allArticles = [];
 let _pendingArticles = [];
 let _editingId   = null;
 let _canApprove  = false;
+let _coauthors   = []; // [{id, name}] for the article in the editor
+let _coauthorsSupported = true; // false until the coauthoring migration is applied
 
 // ── Toast ─────────────────────────────────────────────────────
 function toast(msg, isError = false) {
@@ -452,6 +465,15 @@ async function init() {
   const name = profile?.display_name || profile?.username || _user.email;
   document.getElementById('np-author-meta').textContent = `Publishing as ${name}`;
 
+  // Coauthoring needs the migration applied — hide the picker until then.
+  try {
+    const { error } = await supabase.from('news_articles').select('coauthor_ids').limit(1);
+    _coauthorsSupported = !error;
+  } catch { _coauthorsSupported = false; }
+  if (!_coauthorsSupported) {
+    document.getElementById('np-coauthor-search').closest('.form-group').style.display = 'none';
+  }
+
   showState('main');
   await loadArticles();
 }
@@ -464,11 +486,22 @@ function showState(which) {
 
 // ── Load articles ─────────────────────────────────────────────
 async function loadArticles() {
-  // My articles (all statuses)
-  const { data: mine } = await supabase
-    .from('news_articles').select('*')
-    .eq('author_id', _user.id)
-    .order('created_at', { ascending: false });
+  // My articles (all statuses) — authored by me OR coauthored by me
+  // (coauthor lookup only once the migration exists)
+  let mine = null;
+  if (_coauthorsSupported) {
+    const res = await supabase
+      .from('news_articles').select('*')
+      .or(`author_id.eq.${_user.id},coauthor_ids.cs.{${_user.id}}`)
+      .order('created_at', { ascending: false });
+    mine = res.data;
+  } else {
+    const res = await supabase
+      .from('news_articles').select('*')
+      .eq('author_id', _user.id)
+      .order('created_at', { ascending: false });
+    mine = res.data;
+  }
   _myArticles = mine || [];
 
   // All published (any author)
@@ -566,6 +599,8 @@ function renderMyArticles() {
     const statusLabel = a.status === 'pending_review' ? 'Pending Review' : capitalise(a.status);
     const noteHtml = (a.status === 'draft' && a.rejection_note)
       ? `<div class="article-row-meta" style="color:#c0392b;margin-top:2px;">Sent back: ${esc(a.rejection_note)}</div>` : '';
+    const coauthoredBadge = (a.author_id !== _user?.id)
+      ? `<span style="font-size:10px;background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:1px 8px;margin-left:6px;">Coauthored</span>` : '';
     let actionBtn;
     if (a.status === 'published') {
       actionBtn = `<button class="btn btn-ghost btn-sm" onclick="quickUnpublish('${a.id}')">Unpublish</button>`;
@@ -579,7 +614,7 @@ function renderMyArticles() {
     return `<div class="article-row">
       <span class="status-pip ${esc(a.status)}"></span>
       <div class="article-row-info">
-        <div class="article-row-title">${esc(a.title)}</div>
+        <div class="article-row-title">${esc(a.title)}${coauthoredBadge}</div>
         <div class="article-row-meta">${esc(a.category||'General')} · ${esc(statusLabel)} · ${esc(date)}</div>
         ${noteHtml}
       </div>
@@ -616,6 +651,80 @@ function renderAllArticles() {
 
 function capitalise(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
+// ── Coauthors ─────────────────────────────────────────────────
+function coauthorDisplayName(p) { return p.display_name || p.username || 'Unknown'; }
+
+function renderCoauthorChips() {
+  const el = document.getElementById('np-coauthor-chips');
+  el.innerHTML = _coauthors.map((c, i) =>
+    `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:4px 6px 4px 12px;font-size:12px;">${esc(c.name)}<button type="button" data-coauthor-remove="${i}" style="border:none;background:none;cursor:pointer;font-size:14px;line-height:1;color:var(--muted);" aria-label="Remove coauthor">×</button></span>`
+  ).join('');
+  el.querySelectorAll('[data-coauthor-remove]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _coauthors.splice(parseInt(btn.dataset.coauthorRemove, 10), 1);
+      renderCoauthorChips();
+    });
+  });
+}
+
+function setCoauthors(list) {
+  // The signed-in user is the primary author, never a coauthor on their own article.
+  _coauthors = (list || []).filter(c => c && c.id && c.id !== _user?.id);
+  renderCoauthorChips();
+}
+
+let _coauthorSearchTimer = null;
+async function searchCoauthors(raw) {
+  const box = document.getElementById('np-coauthor-results');
+  const q = raw.trim().replace(/[,()%"]/g, '');
+  if (q.length < 2) { box.style.display = 'none'; return; }
+  const { data } = await supabase.from('public_profiles')
+    .select('id,username,display_name')
+    .or(`username.ilike.%${q}%,display_name.ilike.%${q}%`)
+    .limit(8);
+  const picked = new Set(_coauthors.map(c => c.id));
+  const rows = (data || []).filter(p => p.id !== _user.id && !picked.has(p.id));
+  if (!rows.length) {
+    box.innerHTML = `<div style="padding:.6rem .8rem;font-size:12px;color:var(--muted);">No members found.</div>`;
+  } else {
+    box.innerHTML = rows.map(p => {
+      const name = coauthorDisplayName(p);
+      const handle = (p.username && p.username !== name)
+        ? ` <span style="color:var(--muted);font-size:11px;">@${esc(p.username)}</span>` : '';
+      return `<div data-coauthor-pick="${p.id}" data-coauthor-name="${esc(name)}" style="padding:.6rem .8rem;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);">${esc(name)}${handle}</div>`;
+    }).join('');
+    box.querySelectorAll('[data-coauthor-pick]').forEach(row => {
+      row.addEventListener('click', () => {
+        _coauthors.push({ id: row.dataset.coauthorPick, name: row.dataset.coauthorName });
+        renderCoauthorChips();
+        document.getElementById('np-coauthor-search').value = '';
+        box.style.display = 'none';
+      });
+    });
+  }
+  box.style.display = '';
+}
+
+async function resolveCoauthorNames(ids) {
+  const need = (ids || []).filter(id => id && id !== _user?.id);
+  if (!need.length) return [];
+  const { data } = await supabase.from('public_profiles')
+    .select('id,username,display_name').in('id', need);
+  const byId = Object.fromEntries((data || []).map(p => [p.id, coauthorDisplayName(p)]));
+  return need.map(id => ({ id, name: byId[id] || 'Unknown' }));
+}
+
+const npCoauthorSearch = document.getElementById('np-coauthor-search');
+npCoauthorSearch.addEventListener('input', () => {
+  clearTimeout(_coauthorSearchTimer);
+  _coauthorSearchTimer = setTimeout(() => searchCoauthors(npCoauthorSearch.value), 250);
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#np-coauthor-search') && !e.target.closest('#np-coauthor-results')) {
+    document.getElementById('np-coauthor-results').style.display = 'none';
+  }
+});
+
 // ── Editor ────────────────────────────────────────────────────
 function slugify(text) {
   return text.toLowerCase().replace(/[^\w\s-]/g,'').replace(/\s+/g,'-').replace(/-+/g,'-').slice(0,80);
@@ -630,6 +739,7 @@ function clearEditor() {
   document.getElementById('np-body').value       = '';
   document.getElementById('np-author-name').value    = '';
   document.getElementById('np-published-at').value   = '';
+  setCoauthors([]);
   document.getElementById('editor-heading').textContent = 'New Article';
   document.getElementById('np-summary-count').textContent = '0 / 280';
   document.getElementById('np-body-count').textContent = '0 chars';
@@ -648,6 +758,7 @@ window.loadIntoEditor = async (id) => {
   document.getElementById('np-summary').value    = a.summary  || '';
   document.getElementById('np-body').value       = a.body     || '';
   document.getElementById('np-author-name').value = a.author_name || '';
+  setCoauthors(_coauthorsSupported ? await resolveCoauthorNames(a.coauthor_ids) : []);
   if (a.published_at) {
     const d = new Date(a.published_at);
     document.getElementById('np-published-at').value = d.toISOString().slice(0, 16);
@@ -806,6 +917,7 @@ async function saveArticle(forcedStatus) {
     author_name: authorName,
     published_at: publishedAt,
   };
+  if (_coauthorsSupported) payload.coauthor_ids = _coauthors.map(c => c.id);
   if (status === 'pending_review') payload.rejection_note = null; // clear old feedback on resubmission
 
   let error;
