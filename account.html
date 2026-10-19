@@ -1225,11 +1225,20 @@ function renderMembership() {
 window.openBillingPortal = async (btn) => {
   const prev = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Opening…'; }
+  // Clear any previous portal error.
+  document.querySelectorAll('.portal-error').forEach(function (e) { e.remove(); });
   try {
     window.location.href = await createBillingPortalSession('account.html');
   } catch (err) {
-    alert(err.message || 'Could not open the billing portal.');
     if (btn) { btn.disabled = false; btn.textContent = prev; }
+    // Inline error instead of alert(): e.g. an active membership record
+    // with no Stripe customer behind it (admin grants, test checkouts).
+    var msg = document.createElement('p');
+    msg.className = 'portal-error';
+    msg.style.cssText = 'color:#c0392b;font-size:13px;margin-top:8px;';
+    msg.textContent = err.message || 'Could not open the billing portal.';
+    if (btn && btn.parentNode) btn.parentNode.insertBefore(msg, btn.nextSibling);
+    else document.body.appendChild(msg);
   }
 };
 

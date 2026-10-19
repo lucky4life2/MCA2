@@ -29,12 +29,21 @@ let _isTreasury = false;
 // theirs), just no longer waiting in a queue behind unrelated requests.
 const [{ data: { session } }, settingsResult, companiesResult] = await Promise.all([
   supabase.auth.getSession(),
-  loadExchangeSettings(),
+  // U8: loadExchangeSettings throws on failure — don't let a dead exchange
+  // backend leave the whole page on "Loading…" with no recourse.
+  loadExchangeSettings().catch(function (e) { console.error('Exchange settings failed:', e); return null; }),
   loadCompanies().catch(() => []),
 ]);
 _session = session;
 _settings = settingsResult;
 _companies = companiesResult;
+if (!_settings) {
+  view.innerHTML = '<div class="econ-section"><div class="econ-section-body">' +
+    '<p class="econ-muted">Couldn\'t reach the exchange. Please check your connection and try again.</p>' +
+    '<p><button class="btn btn-primary" id="view-retry">Try Again</button></p></div></div>';
+  document.getElementById('view-retry').addEventListener('click', function () { location.reload(); });
+  throw new Error('exchange settings unavailable');
+}
 
 if (_session) {
   const [accountsResult, myRolesResult, isEconAdminResult, isTreasuryResult] = await Promise.all([
@@ -131,16 +140,26 @@ async function refreshState() {
 
 // ── Router ───────────────────────────────────────────────────
 async function route() {
-  const hash = location.hash || '#/';
-  if (hash.indexOf('#/c/') === 0) { setTab('#/'); return renderCompany(hash.slice(4)); }
-  if (hash.indexOf('#/manage/') === 0) { setTab('#/manage'); return renderManageCompany(hash.slice(9)); }
-  if (hash === '#/offerings') { setTab(hash); return renderOfferings(); }
-  if (hash === '#/portfolio') { setTab(hash); return renderPortfolio(); }
-  if (hash === '#/found') { setTab('#/manage'); return renderFoundCompany(); }
-  if (hash === '#/manage') { setTab(hash); return renderManageList(); }
-  if (hash === '#/admin') { setTab(hash); return renderAdmin(); }
-  setTab('#/');
-  return renderDiscovery();
+  // U8: a failed render used to leave "Loading…" on screen forever.
+  // Surface the failure with a retry instead.
+  try {
+    const hash = location.hash || '#/';
+    if (hash.indexOf('#/c/') === 0) { setTab('#/'); return renderCompany(hash.slice(4)); }
+    if (hash.indexOf('#/manage/') === 0) { setTab('#/manage'); return renderManageCompany(hash.slice(9)); }
+    if (hash === '#/offerings') { setTab(hash); return renderOfferings(); }
+    if (hash === '#/portfolio') { setTab(hash); return renderPortfolio(); }
+    if (hash === '#/found') { setTab('#/manage'); return renderFoundCompany(); }
+    if (hash === '#/manage') { setTab(hash); return renderManageList(); }
+    if (hash === '#/admin') { setTab(hash); return renderAdmin(); }
+    setTab('#/');
+    return renderDiscovery();
+  } catch (e) {
+    console.error('Route render failed:', e);
+    view.innerHTML = '<div class="econ-section"><div class="econ-section-body">' +
+      '<p class="econ-muted">Couldn\'t load this view. Please try again.</p>' +
+      '<p><button class="btn btn-primary" id="view-retry">Try Again</button></p></div></div>';
+    document.getElementById('view-retry').addEventListener('click', function () { location.reload(); });
+  }
 }
 
 // ── Exchange home: discovery, not speculation ────────────────

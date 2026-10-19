@@ -10,6 +10,23 @@ if (window._mcaMemberGate && !(await window._mcaMemberGate)) await new Promise((
 
 let _accounts = [];
 
+// ── Load failure handling (U8) ─────────────────────────────────
+// If the economy backend hangs, the "Loading…" placeholders used to sit
+// there forever. After 25s, swap any still-loading section for an error
+// with a retry button.
+setTimeout(function () {
+  ['econ-wallets', 'econ-history'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el && /Loading…/.test(el.textContent)) {
+      el.innerHTML = '<div class="econ-muted">Taking too long to load. ' +
+        '<button class="btn btn-outline" data-econ-retry>Try Again</button></div>';
+    }
+  });
+  document.querySelectorAll('[data-econ-retry]').forEach(function (b) {
+    b.addEventListener('click', function () { location.reload(); });
+  });
+}, 25000);
+
 // ── Boot ─────────────────────────────────────────────────────
 const { data: { session } } = await supabase.auth.getSession();
 if (!session) {

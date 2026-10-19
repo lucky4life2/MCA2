@@ -1034,4 +1034,30 @@ function bindModals() {
   });
 }
 
-init();
+// ── Load failure handling (U8) ─────────────────────────────────
+// The boot sequence used to leave the spinner up forever when a request
+// failed or hung. Time out slow loads and surface failures with a retry
+// button instead of a dead page.
+var LOAD_TIMEOUT_MS = 25000;
+
+function showLoadError(msg) {
+  // Only take over if boot never finished (spinner still visible).
+  if (document.getElementById('loading').style.display === 'none') return;
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('denied').style.display = 'none';
+  document.getElementById('main').style.display = 'none';
+  var e = document.getElementById('load-error');
+  e.querySelector('.load-error-msg').textContent = msg;
+  e.style.display = 'block';
+}
+
+document.getElementById('load-retry').addEventListener('click', function () { location.reload(); });
+
+setTimeout(function () {
+  showLoadError('This is taking longer than expected. Check your connection and try again.');
+}, LOAD_TIMEOUT_MS);
+
+init().catch(function (err) {
+  console.error('Congress page boot failed:', err);
+  showLoadError('Something went wrong while loading. Please try again.');
+});
