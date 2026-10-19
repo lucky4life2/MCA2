@@ -143,4 +143,43 @@ public class SupabaseClient {
         }
         throw new EconomyException(message);
     }
+
+    /**
+     * Upserts a heartbeat row into the {@code settings} table so the website's
+     * admin panel can tell this plugin is actually running. Uses its own key
+     * ({@code economy_plugin_heartbeat}) so it doesn't collide with the verify
+     * plugin's heartbeat. Returns false (never throws) on any failure — a
+     * missed heartbeat just shows as stale on the website.
+     */
+    public boolean sendHeartbeat(String serverName) {
+        JsonObject value = new JsonObject();
+        value.addProperty("last_seen", java.time.Instant.now().toString());
+        if (serverName != null && !serverName.isBlank()) {
+            value.addProperty("server", serverName);
+        } else {
+            value.add("server", com.google.gson.JsonNull.INSTANCE);
+        }
+
+        JsonObject body = new JsonObject();
+        body.addProperty("key", "economy_plugin_heartbeat");
+        body.addProperty("value", value.toString());
+        body.addProperty("updated_at", java.time.Instant.now().toString());
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/rest/v1/settings"))
+                .timeout(Duration.ofSeconds(15))
+                .header("apikey", serviceRoleKey)
+                .header("Authorization", "Bearer " + serviceRoleKey)
+                .header("Content-Type", "application/json")
+                .header("Prefer", "resolution=merge-duplicates,return=minimal")
+                .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(body)))
+                .build();
+        try {
+            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+            return response.statusCode() >= 200 && response.statusCode() < 300;
+        } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            return false;
+        }
+    }
 }

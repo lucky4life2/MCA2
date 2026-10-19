@@ -14,6 +14,14 @@ cache-refresh-seconds: 30
 
 # Currency display
 currency:
-  symbol: "$"
-  name-singular: "Dollar"
-  name-plural: "Dollars"
+  symbol: "M"
+  name-singular: "Mark"
+  name-plural: "Marks"
+
+# Heartbeat: periodically tells the website this plugin is alive, so the
+# admin panel can show "last seen …" instead of guessing. Same mechanism
+# as the verify plugin, under its own settings key.
+heartbeat:
+  enabled: true
+  interval-seconds: 60
+  server-name: ""
