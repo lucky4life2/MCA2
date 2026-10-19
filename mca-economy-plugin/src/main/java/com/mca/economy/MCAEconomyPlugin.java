@@ -28,6 +28,7 @@ public class MCAEconomyPlugin extends JavaPlugin implements Listener {
     private ShopManager shopManager;
     private ShopInteractListener shopInteractListener;
     private ExecutorService asyncExecutor;
+    private org.bukkit.scheduler.BukkitTask heartbeatTask;
 
     private String currencySymbol;
     private String currencyNameSingular;
@@ -95,12 +96,42 @@ public class MCAEconomyPlugin extends JavaPlugin implements Listener {
             if (vaultProvider == null) return;
             getServer().getOnlinePlayers().forEach(p -> vaultProvider.refresh(p.getUniqueId()));
         }, 20L * refreshSeconds, 20L * refreshSeconds);
+
+        startHeartbeat();
     }
 
     @Override
     public void onDisable() {
+        if (heartbeatTask != null) {
+            heartbeatTask.cancel();
+            heartbeatTask = null;
+        }
         HandlerList.unregisterAll((Listener) this);
         if (asyncExecutor != null) asyncExecutor.shutdownNow();
+    }
+
+    /**
+     * Pings Supabase every heartbeat.interval-seconds (default 60s) so the
+     * website's admin panel can show this plugin is alive, mirroring the
+     * verify plugin's heartbeat under its own settings key.
+     */
+    private void startHeartbeat() {
+        if (!getConfig().getBoolean("heartbeat.enabled", true)) {
+            getLogger().info("Heartbeat disabled in config.yml (heartbeat.enabled: false).");
+            return;
+        }
+        long intervalSeconds = Math.max(15, getConfig().getLong("heartbeat.interval-seconds", 60));
+        String serverName = getConfig().getString("heartbeat.server-name", "");
+        String name = serverName.isBlank() ? getServer().getName() : serverName;
+
+        heartbeatTask = getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
+            boolean ok = supabaseClient.sendHeartbeat(name);
+            if (!ok) {
+                getLogger().fine("Economy heartbeat send failed (will retry next interval).");
+            }
+        }, 0L, intervalSeconds * 20L);
+
+        getLogger().info("Heartbeat started, pinging every " + intervalSeconds + "s.");
     }
 
     @EventHandler(priority = EventPriority.MONITOR)

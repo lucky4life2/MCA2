@@ -536,6 +536,10 @@
           <div class="plugin-dot unknown" id="plugin-dot"></div>
           <span id="plugin-status-text">Checking plugin connection...</span>
         </div>
+        <div class="plugin-status">
+          <div class="plugin-dot unknown" id="economy-plugin-dot"></div>
+          <span id="economy-plugin-status-text">Checking economy plugin...</span>
+        </div>
         <div style="padding:0 1.5rem 1.25rem;">
           <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:.75rem;">
             The plugin bridge allows the MCA Minecraft server to call the <code style="font-family:monospace;font-size:12px;">/mcaverify</code> Supabase Edge Function when a player runs the command in-game.
@@ -1417,6 +1421,7 @@ async function init() {
 
     await Promise.all([loadAll(), loadAllRoles()]);
     checkPluginBridge();
+    checkEconomyPlugin();
     loadLockState();
     loadPendingNewsCount();
     loadPendingCompanyCount();
@@ -2928,8 +2933,35 @@ async function checkPluginBridge() {
 }
 document.getElementById('btn-ping-plugin').addEventListener('click', () => {
   document.getElementById('plugin-status-text').textContent = 'Pinging...';
+  document.getElementById('economy-plugin-status-text').textContent = 'Pinging...';
   checkPluginBridge();
+  checkEconomyPlugin();
 });
+
+// Economy plugin heartbeat — same settings-table mechanism as MCAVerify,
+// under its own key. No Edge Function involved.
+async function checkEconomyPlugin() {
+  const dot = document.getElementById('economy-plugin-dot'), text = document.getElementById('economy-plugin-status-text');
+  try {
+    const { data, error } = await supabase.from('settings').select('value').eq('key', 'economy_plugin_heartbeat').single();
+    if (error || !data) {
+      dot.className = 'plugin-dot offline'; text.textContent = 'Economy plugin: no heartbeat yet. Is MCAEconomy installed and running?';
+      return;
+    }
+    const heartbeat = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+    const lastSeen = new Date(heartbeat.last_seen);
+    const ageMs = Date.now() - lastSeen.getTime();
+    const ago = humanizeDuration(ageMs);
+    if (isNaN(ageMs) || ageMs > PLUGIN_HEARTBEAT_STALE_MS) {
+      dot.className = 'plugin-dot offline'; text.textContent = `Economy plugin: heartbeat stale (last seen ${ago}).`;
+      return;
+    }
+    const server = heartbeat.server ? ` · ${heartbeat.server}` : '';
+    dot.className = 'plugin-dot online'; text.textContent = `Economy plugin running (last heartbeat ${ago}${server}).`;
+  } catch(e) {
+    dot.className = 'plugin-dot offline'; text.textContent = 'Economy plugin: could not read heartbeat from Supabase.';
+  }
+}
 
 // ── Shop ──────────────────────────────────────────────────────
 let _products = [];
