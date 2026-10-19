@@ -668,8 +668,11 @@ function renderCoauthorChips() {
 }
 
 function setCoauthors(list) {
-  // The signed-in user is the primary author, never a coauthor on their own article.
-  _coauthors = (list || []).filter(c => c && c.id && c.id !== _user?.id);
+  // The picker UI already excludes the signed-in user from search results,
+  // so the author can't add themselves. Never strip ids here: when a
+  // coauthor edits, their own id must survive the round-trip or the
+  // UPDATE's RLS check (auth.uid() = ANY (coauthor_ids)) will reject it.
+  _coauthors = (list || []).filter(c => c && c.id);
   renderCoauthorChips();
 }
 
@@ -706,7 +709,7 @@ async function searchCoauthors(raw) {
 }
 
 async function resolveCoauthorNames(ids) {
-  const need = (ids || []).filter(id => id && id !== _user?.id);
+  const need = (ids || []).filter(id => id);
   if (!need.length) return [];
   const { data } = await supabase.from('public_profiles')
     .select('id,username,display_name').in('id', need);
