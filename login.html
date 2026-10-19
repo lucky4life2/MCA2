@@ -1023,6 +1023,25 @@
       }
       // Set the session manually from the tokens returned
       await supabase.auth.setSession({ access_token: json.access_token, refresh_token: json.refresh_token });
+      // Backfill a username if signup didn't set one: derive from the email
+      // prefix so the account page shows a name instead of an email fragment.
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: prof } = await supabase.from('profiles').select('username').eq('id', user.id).single();
+          if (prof && !prof.username) {
+            let base = (user.email || '').split('@')[0].split('+')[0].replace(/[^a-zA-Z0-9_]/g, '').slice(0, 24) || 'member';
+            let candidate = base, n = 0;
+            for (;;) {
+              const { data: taken } = await supabase.from('profiles').select('id').eq('username', candidate).limit(1);
+              if (!taken || !taken.length) break;
+              n += 1; candidate = `${base}${n}`;
+              if (n > 99) break;
+            }
+            await supabase.from('profiles').update({ username: candidate }).eq('id', user.id);
+          }
+        }
+      } catch (e) { /* non-fatal: account page falls back to email prefix */ }
       window.location.replace(returnTo);
     } catch (e) {
       errEl.textContent = 'Could not reach the server. Please try again.';
