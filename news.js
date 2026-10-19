@@ -143,12 +143,44 @@ function renderFeaturedBanner(article) {
   });
 }
 
+// ── Coauthor bylines ──────────────────────────────────────────
+let _coauthorNames = {}; // user id -> display name, filled once per page load
+
+async function loadCoauthorNames(articles) {
+  const ids = [...new Set((articles || []).flatMap(a => a.coauthor_ids || []))];
+  if (!ids.length) return;
+  const { data } = await supabase.from('public_profiles')
+    .select('id,username,display_name').in('id', ids);
+  for (const p of (data || [])) {
+    _coauthorNames[p.id] = p.display_name || p.username || 'Unknown';
+  }
+}
+
+function bylineNames(article) {
+  const names = [];
+  if (article.author_name) names.push(article.author_name);
+  for (const id of (article.coauthor_ids || [])) {
+    const n = _coauthorNames[id];
+    if (n && !names.includes(n)) names.push(n);
+  }
+  return names;
+}
+
+function formatByline(article) {
+  const names = bylineNames(article);
+  if (!names.length) return '';
+  if (names.length === 1) return `By ${names[0]}`;
+  if (names.length === 2) return `By ${names[0]} and ${names[1]}`;
+  return `By ${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
 // ── Card renderer ─────────────────────────────────────────────
 function renderCard(a) {
   const rawExcerpt = a.summary || (a.body || '').replace(/^#+\s+.+$/gm,'').replace(/[*_`#>\[\]]/g,'').replace(/\s+/g,' ').trim();
   const excerpt = truncate(rawExcerpt, 160);
   const cat = a.category || 'General';
   const href = a.slug ? `article.html?slug=${encodeURIComponent(a.slug)}` : '#';
+  const byline = formatByline(a);
   return `
     <a href="${esc(href)}" class="news-card" data-id="${esc(a.id)}" style="cursor:pointer;display:block;text-decoration:none;color:inherit;">
       <div class="news-card-meta">
@@ -157,7 +189,7 @@ function renderCard(a) {
       </div>
       <div class="news-card-title">${esc(a.title)}</div>
       ${excerpt ? `<div class="news-card-summary">${esc(excerpt)}</div>` : ''}
-      ${a.author_name ? `<div class="news-card-byline">By ${esc(a.author_name)}</div>` : ''}
+      ${byline ? `<div class="news-card-byline">${esc(byline)}</div>` : ''}
     </a>`;
 }
 
@@ -199,6 +231,7 @@ function openArticleModal(article) {
   }
 
   const cat = article.category || 'General';
+  const byline = formatByline(article);
   overlay.innerHTML = `
     <div style="background:var(--white);border-radius:8px;border:1px solid var(--border);
       width:100%;max-width:720px;overflow:hidden;box-shadow:0 20px 60px rgba(10,15,30,.25);
@@ -212,7 +245,7 @@ function openArticleModal(article) {
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:1.25rem;flex-wrap:wrap;">
           <span class="news-card-category">${esc(cat)}</span>
           <span style="font-size:12px;color:var(--muted);">${esc(formatDate(article.published_at))}</span>
-          ${article.author_name ? `<span style="font-size:12px;color:var(--muted);">By ${esc(article.author_name)}</span>` : ''}
+          ${byline ? `<span style="font-size:12px;color:var(--muted);">${esc(byline)}</span>` : ''}
         </div>
         <h1 style="font-family:'Times New Roman',serif;font-size:clamp(1.5rem,4vw,2.25rem);
           color:var(--blue);font-weight:700;line-height:1.2;margin-bottom:1.5rem;">${esc(article.title)}</h1>
@@ -269,6 +302,7 @@ function applySearch(query) {
         (a.title||'').toLowerCase().includes(q) ||
         (a.summary||'').toLowerCase().includes(q) ||
         (a.author_name||'').toLowerCase().includes(q) ||
+        bylineNames(a).join(' ').toLowerCase().includes(q) ||
         (a.category||'').toLowerCase().includes(q))
     : _allArticles;
 
@@ -301,6 +335,17 @@ try {
   if (error) throw error;
 
   if (articles && articles.length > 0) {
+    // Coauthor ids — best-effort: the column only exists once the
+    // coauthoring migration has been applied. Until then, bylines show
+    // the primary author only and nothing breaks.
+    try {
+      const { data: co } = await supabase.from('news_articles')
+        .select('id,coauthor_ids')
+        .in('id', articles.map(a => a.id));
+      const byId = Object.fromEntries((co || []).map(r => [r.id, r.coauthor_ids || []]));
+      for (const a of articles) a.coauthor_ids = byId[a.id] || [];
+    } catch { /* migration not applied yet */ }
+    await loadCoauthorNames(articles);
     // Featured banner — shows on every page except admin, news, account, help,
     // tasks, news-publish, archive-publish, and shop
     const BANNER_EXCLUDED_PAGES = [
