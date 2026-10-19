@@ -275,6 +275,11 @@ public class SupabaseClient {
         String url = baseUrl + "/rest/v1/" + urlEncodePath(table) + "?id=eq." + urlEncode(profileId);
         JsonObject body = new JsonObject();
         body.addProperty(columns.minecraftVerified, Boolean.FALSE);
+        // Also clear the stored UUID: the join gate looks players up by UUID,
+        // so leaving it set would let an unverified player keep joining.
+        if (columns.minecraftUuid != null && !columns.minecraftUuid.isBlank()) {
+            body.add(columns.minecraftUuid, JsonNull.INSTANCE);
+        }
         try {
             HttpRequest request = baseRequest(url)
                     .header("Content-Type", "application/json")
