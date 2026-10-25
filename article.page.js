@@ -12,8 +12,11 @@ function safeUrl(url) {
   // Positive allowlist: the browser's own URL parser resolves the value (it
   // strips every leading C0 control char, which the old regex missed) and only
   // http(s) survives. Relative links resolve against this page, so they still work.
+  // Empty/missing input must NOT fall through: new URL('', base) resolves to the
+  // page URL itself, which would render a broken <img> pointing at this document.
+  if (url == null || String(url).trim() === '') return '';
   try {
-    const p = new URL(String(url ?? ''), location.href);
+    const p = new URL(String(url), location.href);
     return (p.protocol === 'https:' || p.protocol === 'http:') ? p.href : '';
   } catch { return ''; }
 }
@@ -118,6 +121,25 @@ if (!slug) {
       document.title = `${article.title} — Minecraft Club of America`;
       const cat = (article.category && article.category.toLowerCase() !== 'featured') ? article.category : 'General';
 
+      // Coauthor byline — best-effort until the coauthoring migration is applied.
+      let byline = '';
+      try {
+        const { data: co } = await supabase.from('news_articles')
+          .select('coauthor_ids').eq('id', article.id).limit(1);
+        const ids = co?.[0]?.coauthor_ids || [];
+        if (ids.length) {
+          const { data: profiles } = await supabase.from('public_profiles')
+            .select('id,username,display_name').in('id', ids);
+          const names = (profiles || []).map(p => p.display_name || p.username || 'Unknown');
+          const all = [...(article.author_name ? [article.author_name] : []),
+                       ...names.filter(n => n !== article.author_name)];
+          if (all.length === 1) byline = `By ${all[0]}`;
+          else if (all.length === 2) byline = `By ${all[0]} and ${all[1]}`;
+          else if (all.length > 2) byline = `By ${all.slice(0, -1).join(', ')} and ${all[all.length - 1]}`;
+        }
+      } catch { /* migration not applied yet — fall through to author-only */ }
+      if (!byline && article.author_name) byline = `By ${article.author_name}`;
+
       // Strip leading # Title from body if it duplicates the article title
       const bodyMd = (article.body || '').replace(/^#\s+.+\n?/, '').trim();
 
@@ -135,7 +157,7 @@ if (!slug) {
             <div class="article-meta-top">
               <span class="news-card-category">${esc(cat)}</span>
               <span style="font-size:12px;color:var(--muted);">${esc(formatDate(article.published_at))}</span>
-              ${article.author_name ? `<span style="font-size:12px;color:var(--muted);">By ${esc(article.author_name)}</span>` : ''}
+              ${byline ? `<span style="font-size:12px;color:var(--muted);">${esc(byline)}</span>` : ''}
             </div>
             <h1 class="article-title">${esc(article.title)}</h1>
             ${article.summary ? `<p class="article-summary">${esc(article.summary)}</p>` : ''}

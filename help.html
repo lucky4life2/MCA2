@@ -128,8 +128,11 @@ function safeUrl(url) {
   // Positive allowlist: the browser's own URL parser resolves the value (it
   // strips every leading C0 control char, which the old regex missed) and only
   // http(s) survives. Relative links resolve against this page, so they still work.
+  // Empty/missing input must NOT fall through: new URL('', base) resolves to the
+  // page URL itself, which would render a broken <img> pointing at this document.
+  if (url == null || String(url).trim() === '') return '';
   try {
-    const p = new URL(String(url ?? ''), location.href);
+    const p = new URL(String(url), location.href);
     return (p.protocol === 'https:' || p.protocol === 'http:') ? p.href : '';
   } catch { return ''; }
 }
