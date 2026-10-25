@@ -22,6 +22,8 @@ function safeLinkUrl(url, fallback) {
 // Discord URL and site config — loaded from Supabase settings, falls back to hardcoded value
 let DISCORD_URL = 'https://discord.gg/hZrt28vG29';
 let YOUTUBE_URL = 'https://www.youtube.com/@MinecraftClubOfAmerica';
+let INSTAGRAM_URL = '';
+let TWITTER_URL = '';
 let EMAIL_US = 'minecraftclubofamerica@gmail.com';
 let SITE_CONFIG = {};
 // Set right before a same-site navigation happens (link click / form
@@ -52,6 +54,8 @@ const _configReady = new Promise(r => { _configResolve = r; });
         const withProtocol = (u) => u && !/^https?:\/\//i.test(u) ? 'https://' + u : u;
         if (SITE_CONFIG.discord_url) DISCORD_URL = withProtocol(SITE_CONFIG.discord_url);
         if (SITE_CONFIG.youtube_url) YOUTUBE_URL = withProtocol(SITE_CONFIG.youtube_url);
+        if (SITE_CONFIG.instagram_url) INSTAGRAM_URL = withProtocol(SITE_CONFIG.instagram_url);
+        if (SITE_CONFIG.twitter_url) TWITTER_URL = withProtocol(SITE_CONFIG.twitter_url);
         if (SITE_CONFIG.email_us) EMAIL_US = SITE_CONFIG.email_us;
       }
     }
@@ -157,6 +161,14 @@ const FOOTER_HTML = () => {
         <a href="${safeLinkUrl(YOUTUBE_URL, 'https://www.youtube.com/@MinecraftClubOfAmerica')}" data-youtube target="_blank" rel="noopener noreferrer">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
           YouTube
+        </a>
+        <a href="${safeLinkUrl(INSTAGRAM_URL, '#')}" data-instagram target="_blank" rel="noopener noreferrer"${INSTAGRAM_URL ? '' : ' style="display:none"'}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+          Instagram
+        </a>
+        <a href="${safeLinkUrl(TWITTER_URL, '#')}" data-twitter target="_blank" rel="noopener noreferrer"${TWITTER_URL ? '' : ' style="display:none"'}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg>
+          X (Twitter)
         </a>
         <a href="#" id="footer-email-btn" data-copy-email>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
@@ -643,6 +655,14 @@ async function injectNav() {
   Promise.race([_configReady, new Promise(r => setTimeout(r, 1500))]).then(() => {
     document.querySelectorAll('a[data-discord]').forEach(a => { a.href = DISCORD_URL; });
     document.querySelectorAll('a[data-youtube]').forEach(a => { a.href = YOUTUBE_URL; });
+    document.querySelectorAll('a[data-instagram]').forEach(a => {
+      if (INSTAGRAM_URL) { a.href = INSTAGRAM_URL; a.style.display = ''; }
+      else { a.style.display = 'none'; }
+    });
+    document.querySelectorAll('a[data-twitter]').forEach(a => {
+      if (TWITTER_URL) { a.href = TWITTER_URL; a.style.display = ''; }
+      else { a.style.display = 'none'; }
+    });
   });
 
   // Inject footer + toast

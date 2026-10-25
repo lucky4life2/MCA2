@@ -864,6 +864,14 @@
           <input type="text" id="cfg-youtube-url" class="search-input" placeholder="https://www.youtube.com/@..." style="width:100%;box-sizing:border-box;">
         </div>
         <div style="padding:0 1.5rem 1rem;">
+          <label class="stat-cfg-label">Instagram Page URL</label>
+          <input type="text" id="cfg-instagram-url" class="search-input" placeholder="https://www.instagram.com/..." style="width:100%;box-sizing:border-box;">
+        </div>
+        <div style="padding:0 1.5rem 1rem;">
+          <label class="stat-cfg-label">X (Twitter) Page URL</label>
+          <input type="text" id="cfg-twitter-url" class="search-input" placeholder="https://x.com/..." style="width:100%;box-sizing:border-box;">
+        </div>
+        <div style="padding:0 1.5rem 1rem;">
           <label class="stat-cfg-label">Email Us Address</label>
           <input type="text" id="cfg-email-us" class="search-input" placeholder="you@example.com" style="width:100%;box-sizing:border-box;">
         </div>
@@ -3206,7 +3214,7 @@ async function loadConfigTab() { await loadSiteConfig(); }
 async function loadSiteConfig() {
   const { data } = await supabase.from('settings').select('value').eq('key','site_config').single();
   let cfg = {}; if (data?.value) { try { cfg = JSON.parse(data.value); } catch(e) {} }
-  ['discord-url','youtube-url','email-us','stat1-label','stat1-value','stat1-sub','stat2-label','stat2-value','stat2-sub','stat3-label','stat3-value','stat3-sub','stat4-label','stat4-value','stat4-sub'].forEach(k => {
+  ['discord-url','youtube-url','instagram-url','twitter-url','email-us','stat1-label','stat1-value','stat1-sub','stat2-label','stat2-value','stat2-sub','stat3-label','stat3-value','stat3-sub','stat4-label','stat4-value','stat4-sub'].forEach(k => {
     const el = document.getElementById('cfg-'+k);
     if (el) el.value = cfg[k.replace('-','_')]||'';
   });
@@ -3215,9 +3223,9 @@ document.getElementById('btn-save-config').addEventListener('click', async () =>
   const statusEl = document.getElementById('cfg-status');
   statusEl.textContent = 'Saving...';
   const cfg = {};
-  ['discord-url','youtube-url','email-us','stat1-label','stat1-value','stat1-sub','stat2-label','stat2-value','stat2-sub','stat3-label','stat3-value','stat3-sub','stat4-label','stat4-value','stat4-sub'].forEach(k => {
+  ['discord-url','youtube-url','instagram-url','twitter-url','email-us','stat1-label','stat1-value','stat1-sub','stat2-label','stat2-value','stat2-sub','stat3-label','stat3-value','stat3-sub','stat4-label','stat4-value','stat4-sub'].forEach(k => {
     let v = document.getElementById('cfg-'+k)?.value.trim()||'';
-    if ((k === 'discord-url' || k === 'youtube-url') && v && !/^https?:\/\//i.test(v)) v = 'https://' + v;
+    if ((k === 'discord-url' || k === 'youtube-url' || k === 'instagram-url' || k === 'twitter-url') && v && !/^https?:\/\//i.test(v)) v = 'https://' + v;
     cfg[k.replace('-','_')] = v;
   });
   const { error } = await supabase.from('settings').upsert({ key:'site_config', value: JSON.stringify(cfg) }, { onConflict:'key' });
