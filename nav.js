@@ -209,7 +209,7 @@ const COOKIE_BANNER_HTML = `<div class="cookie-banner" id="cookie-banner" role="
 </div>`;
 
 // Declared here (before the site-lock IIFE below) because that IIFE can call
-// injectNav() synchronously on some pages (e.g. admin.html, or ?preview=key),
+// injectNav() synchronously on some pages (e.g. admin.html),
 // with no `await` in between — meaning it runs before the rest of this
 // script's top-level code has executed. If _mcaAuthResolve were declared
 // further down the file (as a `let`), that early synchronous call would hit
@@ -220,8 +220,8 @@ window._mcaAuthReady = new Promise(r => { _mcaAuthResolve = r; });
 
 
 /* ── SYSTEM LOCKDOWN (separate from the site lock below) ─────
-   This is a second, independent kill switch. It has no admin bypass, no
-   preview-key bypass, and applies to every page including admin.html. There
+   This is a second, independent kill switch. It has no bypass of any
+   kind, and applies to every page including admin.html. There
    is no button or RPC anywhere in the app that can flip it — the
    `system_lockdown` table only accepts SELECT from anon/authenticated (see
    migration), so the only way to turn it on/off is to run SQL directly in
@@ -291,7 +291,6 @@ const _systemLockdownCheck = (async function checkSystemLockdown() {
 })();
 
 
-const PREVIEW_KEY     = 'I-pG1idLnWhIjId9i1TLAumZkBQjVcvc';
 const SUPABASE_URL    = 'https://hjaywokvgdzhvsoygctc.supabase.co';
 const SUPABASE_ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNzA2NTQsImV4cCI6MjA5NTg0NjY1NH0.nFqlc20iUDwE1sXLRi2Pev181v2RJKx_S6UcTkGgPWU';
 
@@ -320,12 +319,9 @@ let _siteLocked = false;
 let _lockCheckResolve;
 const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
 
-// Hide page until lock check completes (unless preview key present)
+// Hide page until lock check completes.
 (function() {
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('preview') !== PREVIEW_KEY) {
-    document.documentElement.style.visibility = 'hidden';
-  }
+  document.documentElement.style.visibility = 'hidden';
 })();
 
 (async function checkLock() {
@@ -334,15 +330,6 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
   // (including the admin.html fast-path) should run.
   const lockdownState = await _systemLockdownCheck;
   if (lockdownState.locked) { return; }
-
-  // If preview key is in the URL, reveal immediately and skip lock check
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('preview') === PREVIEW_KEY) {
-    document.documentElement.style.visibility = '';
-    _lockCheckResolve();
-    injectNav();
-    return;
-  }
 
   // Admin pages are never locked — admins need access to turn the lock off
   // Cloudflare Pages strips .html extensions, so /admin.html is served at /admin
@@ -449,7 +436,7 @@ const _lockCheckDone = new Promise(r => { _lockCheckResolve = r; });
           <p style="color:#94a3b8;font-size:0.95rem;max-width:420px;line-height:1.6;margin:0 0 1.5rem;">
             We're unable to load the site right now because Supabase — the service we use for our database — appears to be unreachable. This is likely due to an ongoing outage.
           </p>
-          <button onclick="location.reload()" style="display:inline-block;background:#3ecf8e;color:#0a0f1e;font-weight:700;font-size:0.9rem;padding:10px 20px;border-radius:6px;border:none;cursor:pointer;margin:0 0.5rem 1rem 0;">Try Again</button>
+          <button type="button" data-nav-reload style="display:inline-block;background:#3ecf8e;color:#0a0f1e;font-weight:700;font-size:0.9rem;padding:10px 20px;border-radius:6px;border:none;cursor:pointer;margin:0 0.5rem 1rem 0;">Try Again</button>
           <a href="https://status.supabase.com" target="_blank" rel="noopener" style="display:inline-block;background:#3ecf8e;color:#0a0f1e;font-weight:700;font-size:0.9rem;padding:10px 20px;border-radius:6px;text-decoration:none;margin-bottom:1rem;">Check Supabase Status</a>
           <p style="color:#475569;font-size:0.8rem;margin:0;">Please try again once the outage is resolved.</p>
         </div>
@@ -847,6 +834,15 @@ document.addEventListener('click', e => {
   if (!el) return;
   e.preventDefault();
   copyEmail(el);
+});
+
+// Same delegation pattern for the outage page's Try Again button, which is
+// injected via innerHTML (so it cannot use an inline onclick under the
+// strict CSP).
+document.addEventListener('click', e => {
+  const el = e.target.closest?.('[data-nav-reload]');
+  if (!el) return;
+  location.reload();
 });
 
 // ── Nav auth + cart ───────────────────────────────────────────
