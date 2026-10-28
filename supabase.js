@@ -8,7 +8,23 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
 const SUPABASE_URL = 'https://hjaywokvgdzhvsoygctc.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNzA2NTQsImV4cCI6MjA5NTg0NjY1NH0.nFqlc20iUDwE1sXLRi2Pev181v2RJKx_S6UcTkGgPWU';
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    // PKCE instead of the default implicit flow: no #access_token fragment
+    // ever lands in the URL (fragments leak via referrers and logs), and
+    // the callback code is exchanged with the stored code_verifier.
+    flowType: 'pkce',
+    // detectSessionInUrl used to run on every page. OAuth/link callbacks
+    // can land on account.html (default return page and linkIdentity),
+    // shop.html (nav sign-in buttons), or any ?return= page named from
+    // login.html — so a page allowlist would break real logins. The
+    // reliable gate is the callback itself: only exchange a code on a
+    // page load that actually carries ?code=.
+    detectSessionInUrl:
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).has('code'),
+  },
+});
 
 // ── Auth helpers ─────────────────────────────────────────────
 

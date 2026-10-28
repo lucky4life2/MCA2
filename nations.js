@@ -51,16 +51,17 @@ function renderGrid(nations) {
     const flagFile = safeFlagFile(n.flag);
     const flagHtml = `<div class="nation-flag-box">${
       flagFile
-        ? `<img src="images/flags/${encodeURIComponent(flagFile)}" alt="${esc(n.name)} flag" onload="applyFlagClass(this)">`
+        ? `<img src="images/flags/${encodeURIComponent(flagFile)}" alt="${esc(n.name)} flag" data-flag="class">`
         : `<span class="flag-placeholder">No flag</span>`
     }</div>`;
     return `
-      <div class="nation-flag-item" data-season="${esc(n.season || '')}" onclick="openNationDetail(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openNationDetail(${i})}" role="button" tabindex="0" style="cursor:pointer;" title="View ${esc(n.name)}">
+      <div class="nation-flag-item" data-season="${esc(n.season || '')}" data-action="open-nation-detail" data-index="${i}" role="button" tabindex="0" style="cursor:pointer;" title="View ${esc(n.name)}">
         ${flagHtml}
         <div class="nation-name">${esc(n.name)}</div>
         ${n.season ? `<div class="nation-season-tag">${esc(n.season)}</div>` : ''}
       </div>`;
   }).join('');
+  bindFlagImages(grid);
 }
 
 /* ── YEAR / SERVER FILTER ────────────────────────────────────── */
@@ -135,7 +136,7 @@ function openNationDetail(i) {
 
   const detailFlagFile = safeFlagFile(n.flag);
   const flagHtml = detailFlagFile
-    ? `<img src="images/flags/${encodeURIComponent(detailFlagFile)}" alt="${esc(n.name)} flag" onload="applyFlagDetailClass(this)">`
+    ? `<img src="images/flags/${encodeURIComponent(detailFlagFile)}" alt="${esc(n.name)} flag" data-flag="detail">`
     : '';
 
   const tableRows = [...coreFields, ...extraFields.map(f => [f.key, f.value])]
@@ -179,6 +180,7 @@ function openNationDetail(i) {
     </div>` : '';
 
   document.getElementById('nation-detail-body').innerHTML = flagHtml + lockedHtml + editHtml + tableHtml + bodyHtml;
+  bindFlagImages(document.getElementById('nation-detail-body'));
 
   if (canEdit) {
     const toggle = document.getElementById('nation-owner-edit-toggle');
@@ -314,3 +316,34 @@ window.applyFlagDetailClass = applyFlagDetailClass;
   // flight, re-render that detail now that edit rights are actually known.
   if (_openDetailIndex !== null) openNationDetail(_openDetailIndex);
 })();
+
+
+// ── Delegated actions (strict CSP) ────────────────────────────────
+// Replaces the inline click/keydown/onload attributes this file used to
+// render: flag images get their orientation class bound after render
+// (immediately if already loaded, otherwise on load), and grid items go
+// through the same delegated listeners the other pages use.
+function bindFlagImages(root) {
+  root.querySelectorAll('img[data-flag]').forEach((img) => {
+    const apply = img.dataset.flag === 'detail' ? applyFlagDetailClass : applyFlagClass;
+    if (img.complete && img.naturalWidth) apply(img);
+    else img.addEventListener('load', () => apply(img));
+  });
+}
+document.addEventListener('click', (e) => {
+  const actionEl = e.target.closest?.('[data-action]');
+  if (!actionEl) return;
+  if (actionEl.dataset.action === 'open-nation-detail') openNationDetail(Number(actionEl.dataset.index));
+  else if (actionEl.dataset.action === 'close-nation-detail') closeNationDetail();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const t = e.target;
+  if (!t || !t.closest) return;
+  if (['BUTTON', 'A', 'INPUT', 'SELECT', 'TEXTAREA'].includes(t.tagName)) return;
+  const actionEl = t.closest('[data-action]');
+  if (!actionEl) return;
+  e.preventDefault();
+  if (actionEl.dataset.action === 'open-nation-detail') openNationDetail(Number(actionEl.dataset.index));
+  else if (actionEl.dataset.action === 'close-nation-detail') closeNationDetail();
+});
