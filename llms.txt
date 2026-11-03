@@ -28,4 +28,4 @@
 
 Contact: minecraftclubofamerica@gmail.com
 
-Note: This file describes the site for readers. It does not grant any AI training, ingestion, or crawling rights. The site's AI-crawler policy is undecided; robots.txt governs crawler access.
+Note: This file describes the site for readers. It does not grant any AI training, ingestion, or crawling rights. The site's AI-crawler policy is decided: search indexing is allowed and AI training is blocked; robots.txt governs crawler access.

@@ -9,4 +9,17 @@ Disallow: /news-publish.html
 Disallow: /archive-publish.html
 Disallow: /parental-consent.html
 
+# AI training crawlers are blocked from the whole site.
+# Search-engine crawlers remain allowed (see User-agent: * above).
+User-agent: GPTBot
+User-agent: ChatGPT-User
+User-agent: Google-Extended
+User-agent: CCBot
+User-agent: anthropic-ai
+User-agent: Claude-Web
+User-agent: PerplexityBot
+User-agent: Applebot-Extended
+User-agent: Meta-ExternalAgent
+Disallow: /
+
 Sitemap: https://minecraftclubofamerica.me/sitemap.xml
