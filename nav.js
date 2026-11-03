@@ -183,6 +183,7 @@ const FOOTER_HTML = () => {
         <a href="accessibility.html">Accessibility</a>
         <a href="cookies.html">Cookie Policy</a>
         <a href="refund.html">Refund Policy</a>
+        <a href="unsubscribe.html">Email Unsubscribe</a>
       </div>
     </div>
 

@@ -354,7 +354,7 @@ document.addEventListener('keydown', (e) => {
           <button class="detail-modal-close" type="button" aria-label="Close product details" data-action="close-detail">✕</button>
         </div>
         <div class="detail-modal-price">${priceLabel(p)}</div>
-        ${p.product_type === 'subscription' ? `<div class="detail-modal-stock" style="color:var(--green);font-weight:600;">${billingPeriod(p.billing_cycle).label}</div>` : `<div class="detail-modal-stock ${p.inventory===0?'out':p.inventory<5?'low':''}">` + (p.inventory===0 ? 'Out of stock' : p.inventory+' in stock') + '</div>'}
+        ${p.product_type === 'subscription' ? `<div class="detail-modal-stock" style="color:var(--green-text);font-weight:600;">${billingPeriod(p.billing_cycle).label}</div>` : `<div class="detail-modal-stock ${p.inventory===0?'out':p.inventory<5?'low':''}">` + (p.inventory===0 ? 'Out of stock' : p.inventory+' in stock') + '</div>'}
         ${p.description ? `<div class="detail-modal-desc">${esc(p.description)}</div>` : ''}
         ${specs.length ? `
           <div class="detail-modal-specs">
@@ -407,7 +407,7 @@ document.addEventListener('keydown', (e) => {
       _checkoutHandled = true;
       if (_checkoutReturn === 'success' && _userId) {
         saveCart([]);
-        alert('Payment received! Your order or membership is now active — it may take a minute to update on your account page.');
+        alert('Payment received! Your order or membership will activate once payment is confirmed — it may take a minute to update on your account page.');
       } else if (_checkoutReturn === 'cancel') {
         alert('Checkout was canceled — your cart is still here whenever you\'re ready.');
       }
@@ -515,7 +515,7 @@ document.addEventListener('keydown', (e) => {
           <div class="product-card-footer">
             <div class="product-card-price">${priceLabel(p)}</div>
             ${p.product_type === 'subscription'
-              ? `<div class="product-card-stock" style="color:var(--green);font-weight:600;">${billingPeriod(p.billing_cycle).label}</div>`
+              ? `<div class="product-card-stock" style="color:var(--green-text);font-weight:600;">${billingPeriod(p.billing_cycle).label}</div>`
               : `<div class="product-card-stock ${p.inventory===0?'out':p.inventory<5?'low':''}">${p.inventory===0?'Out of stock':`${p.inventory} in stock`}</div>`}
           </div>
           ${cartBtn}
