@@ -22,6 +22,61 @@ const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
 
+// ── Server-side error capture (approved 2026-11-02, server-side first) ──
+// Only active when a SENTRY_DSN secret is set in the Supabase dashboard;
+// with no DSN this is a no-op and console.error remains the only log.
+// No Sentry project or DSN exists yet — creating one and setting the
+// secret is the remaining dashboard step. Browser error logging is NOT
+// added here (held until a privacy review).
+// Everything sent is scrubbed: emails, JWTs/tokens, Stripe keys, and
+// card-like digit runs. Request bodies, user emails, and payment data are
+// never sent — only the scrubbed error message and the call site.
+const SENTRY_DSN = Deno.env.get('SENTRY_DSN') ?? '';
+function scrubText(s: string): string {
+  return s
+    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[token]')
+    .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[email]')
+    .replace(/\b(sk|pk|rk|whsec)_(live|test)_[A-Za-z0-9]+\b/g, '[stripe-key]')
+    .replace(/\bBearer\s+\S+/gi, 'Bearer [token]')
+    .replace(/\b\d{13,19}\b/g, '[card]');
+}
+function reportError(where: string, err: unknown): void {
+  if (!SENTRY_DSN) return;
+  try {
+    const m = SENTRY_DSN.match(/^https:\/\/([^@]+)@([^/]+)\/(\d+)$/);
+    if (!m) return;
+    const [, publicKey, host, projectId] = m;
+    const eventId = crypto.randomUUID().replaceAll('-', '');
+    const event = {
+      event_id: eventId,
+      timestamp: Date.now() / 1000,
+      level: 'error',
+      logger: 'edge-function',
+      message: { formatted: scrubText(`${where}: ${err instanceof Error ? err.message : String(err)}`) },
+    };
+    const eventJson = JSON.stringify(event);
+    const body = [
+      JSON.stringify({ event_id: eventId, sent_at: new Date().toISOString() }),
+      JSON.stringify({ type: 'event', content_type: 'application/json', length: new TextEncoder().encode(eventJson).length }),
+      eventJson,
+    ].join('\n');
+    const req = fetch(`https://${host}/api/${projectId}/envelope/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-sentry-envelope',
+        'X-Sentry-Auth': `Sentry sentry_version=7, sentry_client=mca-edge/1.0, sentry_key=${publicKey}`,
+      },
+      body,
+    });
+    const waitUntil = (globalThis as unknown as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime?.waitUntil;
+    if (typeof waitUntil === 'function') waitUntil(req.catch(() => {}));
+    else req.catch(() => {});
+  } catch {
+    // Reporting must never break the function it reports on.
+  }
+}
+
+
 const SITE_URL = (Deno.env.get('SITE_URL') ?? '').replace(/\/+$/, '');
 const ALLOWED_ORIGINS = [
   SITE_URL,
@@ -115,6 +170,7 @@ Deno.serve(async (req: Request) => {
     return json({ url: session.url });
   } catch (err) {
     console.error('Stripe billing portal session creation failed:', err);
+    reportError('create-billing-portal-session', err);
     return json({ error: err instanceof Error ? err.message : 'Could not open the billing portal.' }, 500);
   }
 });

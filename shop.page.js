@@ -108,7 +108,7 @@ document.addEventListener('keydown', (e) => {
   function isSubscription(x) { return !!x && x.product_type === 'subscription'; }
   // A subscription is one seat: Stripe is sent quantity 1 no matter what
   // the cart says, so letting the cart show 2 only misprices the subtotal.
-  function maxQty(x) { return isSubscription(x) ? 1 : 99; }
+  function maxQty(x) { return isSubscription(x) ? 1 : 10; }
   function priceLabel(x) {
     const amount = '$' + Number(x.price).toFixed(2);
     return isSubscription(x) ? amount + billingPeriod(x.billing_cycle).short : amount;

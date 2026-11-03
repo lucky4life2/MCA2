@@ -1,4 +1,4 @@
-import { supabase, signOut, createBillingPortalSession } from './supabase.js';
+import { supabase, signOut, createBillingPortalSession, optimizeImageFile } from './supabase.js';
 
 // ── Delegated actions (strict CSP) ────────────────────────────────
 // Inline handler attributes are blocked by the strict script-src policy,
@@ -1983,8 +1983,12 @@ function renderMsgAttachments(attachments) {
 }
 
 async function uploadMsgAttachments(files) {
+  // Images are optimized before upload (resized, converted, EXIF stripped);
+  // non-images pass through unchanged.
+  const optimizedFiles = [];
+  for (const file of files) optimizedFiles.push(await optimizeImageFile(file));
   const uploaded = [];
-  for (const file of files) {
+  for (const file of optimizedFiles) {
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
     const path = `${_user.id}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
     const { error } = await supabase.storage.from('message-attachments').upload(path, file);
@@ -2090,7 +2094,7 @@ function renderMyMessages() {
       <div style="margin-top:10px;">
         <textarea class="form-input" id="my-reply-input-${m.id}" rows="2" placeholder="Add another message..." style="resize:vertical;min-height:50px;width:100%;box-sizing:border-box;font-size:13px;"></textarea>
         <input type="file" id="my-reply-file-${m.id}" accept="image/*" multiple style="font-size:11px;max-width:200px;margin-top:6px;display:block;">
-        <div style="font-size:10px;color:var(--muted);margin-top:2px;">Photos up to 10 MB total.</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px;">Photos up to 10 MB total. Photos are optimized on upload.</div>
         <div id="my-reply-preview-${m.id}" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;"></div>
         <button class="btn btn-outline btn-sm" style="margin-top:6px;" data-action="send-my-message-reply" data-id="${m.id}">Send</button>
       </div>` : ''}

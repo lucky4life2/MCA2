@@ -342,3 +342,52 @@ export async function createBillingPortalSession(returnTo = 'account.html') {
   if (!res.ok || !result.url) throw new Error(result.error || 'Could not open the billing portal.');
   return result.url;
 }
+
+// ── Image upload optimization ─────────────────────────────────────
+// Club decision (2026-11-02): user-uploaded images are resized, converted,
+// and stripped of EXIF before they reach Storage. A phone photo's EXIF can
+// carry GPS coordinates, so drawing through a canvas (which drops all
+// metadata) is a privacy fix, not just a size win. Non-images, SVGs
+// (vector — rasterizing would destroy them), and GIFs (animation would be
+// lost to a single frame) pass through unchanged. Avatars don't exist on
+// the site, so the 512px avatar size has no call site yet; pass maxEdge
+// explicitly if one is ever added.
+export async function optimizeImageFile(file, maxEdge = 2048) {
+  if (!file || !file.type.startsWith('image/')) return file;
+  if (file.type === 'image/svg+xml' || file.type === 'image/gif') return file;
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch {
+    throw new Error('That image could not be processed — please choose another file.');
+  }
+  const longest = Math.max(bitmap.width, bitmap.height);
+  const scale = longest > maxEdge ? maxEdge / longest : 1;
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  if (bitmap.close) bitmap.close();
+  const toBlob = (type, quality) => new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+  // WebP keeps alpha, so it is the first choice for every image.
+  let blob = await toBlob('image/webp', 0.8);
+  let ext = 'webp';
+  if (!blob) {
+    // No WebP encoder (old browser): JPEG for opaque images, original file
+    // for images with any alpha, so transparency is never silently lost.
+    const data = ctx.getImageData(0, 0, width, height).data;
+    let hasAlpha = false;
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] < 255) { hasAlpha = true; break; }
+    }
+    if (hasAlpha) return file;
+    blob = await toBlob('image/jpeg', 0.8);
+    ext = 'jpg';
+    if (!blob) return file;
+  }
+  const base = file.name.replace(/\.[^.]+$/, '') || 'image';
+  return new File([blob], `${base}.${ext}`, { type: blob.type });
+}

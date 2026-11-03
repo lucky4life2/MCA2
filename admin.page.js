@@ -1,4 +1,4 @@
-import { supabase, isAdmin, isOwner, startRolePreview, getMyRolePreview, requireAal2 } from './supabase.js';
+import { supabase, isAdmin, isOwner, startRolePreview, getMyRolePreview, requireAal2, optimizeImageFile } from './supabase.js';
 
 // ── Delegated actions (strict CSP) ────────────────────────────────
 // Inline handler attributes are blocked by the strict script-src policy,
@@ -1867,12 +1867,14 @@ async function pmUploadPendingImages(productIdHint) {
   const uploaded = [];
   for (const img of _pmImages) {
     if (img.type === 'existing') { uploaded.push({ url: img.url, name: img.name || '', size: img.size || 0 }); continue; }
-    const ext = (img.file.name.split('.').pop() || 'jpg').toLowerCase();
+    // Product photos are optimized before upload (resized, converted, EXIF stripped).
+    const file = await optimizeImageFile(img.file);
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
     const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
-    const { error } = await supabase.storage.from('shop-images').upload(path, img.file);
+    const { error } = await supabase.storage.from('shop-images').upload(path, file);
     if (error) throw error;
     const { data } = supabase.storage.from('shop-images').getPublicUrl(path);
-    uploaded.push({ url: data.publicUrl, name: img.file.name, size: img.file.size });
+    uploaded.push({ url: data.publicUrl, name: file.name, size: file.size });
   }
   return uploaded;
 }
@@ -2532,8 +2534,12 @@ function renderMsgAttachments(attachments) {
 
 async function uploadMsgAttachments(files) {
   const { data: { user } } = await supabase.auth.getUser();
+  // Images are optimized before upload (resized, converted, EXIF stripped);
+  // non-images pass through unchanged.
+  const optimizedFiles = [];
+  for (const file of files) optimizedFiles.push(await optimizeImageFile(file));
   const uploaded = [];
-  for (const file of files) {
+  for (const file of optimizedFiles) {
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
     const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
     const { error } = await supabase.storage.from('message-attachments').upload(path, file);
@@ -2656,7 +2662,7 @@ function renderMessages() {
               <input type="checkbox" id="reply-share-name-${m.id}" checked> Share my name with the member
             </label>
           </div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px;">Photos up to 10 MB total.</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">Photos up to 10 MB total. Photos are optimized on upload.</div>
           <div id="reply-preview-${m.id}" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;"></div>
           <button class="btn btn-primary btn-sm" style="margin-top:6px;" data-action="send-message-reply" data-id="${m.id}">Send</button>
         </div>` : ''}
