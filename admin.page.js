@@ -1,4 +1,4 @@
-import { supabase, isAdmin, isOwner, startRolePreview, getMyRolePreview, requireAal2 } from './supabase.js';
+import { supabase, isAdmin, isOwner, startRolePreview, getMyRolePreview, requireAal2, optimizeImageFile } from './supabase.js';
 
 // ── Delegated actions (strict CSP) ────────────────────────────────
 // Inline handler attributes are blocked by the strict script-src policy,
@@ -748,8 +748,7 @@ document.getElementById('rm-save').addEventListener('click', async () => {
 });
 
 window.deleteRole = async (id) => {
-  if (!confirm('Delete this role? Users with this role will lose it.')) return;
-  if (!confirm('Are you sure? This cannot be undone.')) return;
+  if (!(await mcaConfirm({ title: 'Delete role?', message: 'Delete this role? Users with this role will lose it. This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
   const { error } = await supabase.from('roles').delete().eq('id', id);
   if (error) { alert(error.message); return; }
   await loadAllRoles();
@@ -1020,8 +1019,7 @@ window.unpublishArticle = async (id) => {
   loadNewsAdmin();
 };
 window.deleteArticle = async (id) => {
-  if (!confirm('Delete this article? This cannot be undone.')) return;
-  if (!confirm('Are you sure? This cannot be undone.')) return;
+  if (!(await mcaConfirm({ title: 'Delete article?', message: 'Delete this article? This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
   await supabase.from('news_articles').delete().eq('id', id);
   loadNewsAdmin();
   loadPendingNewsCount();
@@ -1229,8 +1227,7 @@ window.unpublishDoc = async (id) => {
   loadArchiveAdmin();
 };
 window.deleteDoc = async (id) => {
-  if (!confirm('Delete this document? This cannot be undone.')) return;
-  if (!confirm('Are you sure? This cannot be undone.')) return;
+  if (!(await mcaConfirm({ title: 'Delete document?', message: 'Delete this document? This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
   await supabase.from('archive_documents').delete().eq('id', id);
   loadArchiveAdmin();
 };
@@ -1352,8 +1349,7 @@ window.unpublishFaq = async (id) => {
   loadFaqAdmin();
 };
 window.deleteFaq = async (id) => {
-  if (!confirm('Delete this question? This cannot be undone.')) return;
-  if (!confirm('Are you sure? This cannot be undone.')) return;
+  if (!(await mcaConfirm({ title: 'Delete question?', message: 'Delete this question? This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
   await supabase.from('faqs').delete().eq('id', id);
   loadFaqAdmin();
 };
@@ -1630,8 +1626,7 @@ window.revokeMembership = async (id) => {
 window.deleteAccount = async (id) => {
   const member = _allMembers.find(m => m.id === id);
   const name = member?.display_name || member?.username || 'this account';
-  if (!confirm(`⚠️ DELETE ACCOUNT\n\nYou are about to permanently delete ${name}'s account. All their data will be erased.\n\nAre you sure you want to proceed?`)) return;
-  if (!confirm(`⚠️ SECOND CONFIRMATION\n\nDeleting ${name} is irreversible. There is no undo, no recovery, no way back.\n\nDo you still want to delete this account?`)) return;
+  if (!(await mcaConfirm({ title: 'Delete account?', message: `You are about to permanently delete ${name}'s account. All their data will be erased. This is irreversible. There is no undo, no recovery, no way back.`, confirmText: 'Delete account', danger: true }))) return;
   const input = prompt(`⚠️ FINAL CONFIRMATION\n\nType the username or display name of the account to confirm deletion:\n\nExpected: "${name}"`);
   if (input?.trim() !== name) { alert('Name did not match. Deletion cancelled.'); return; }
   const { error } = await supabase.rpc('delete_account', { user_id: id });
@@ -1867,12 +1862,14 @@ async function pmUploadPendingImages(productIdHint) {
   const uploaded = [];
   for (const img of _pmImages) {
     if (img.type === 'existing') { uploaded.push({ url: img.url, name: img.name || '', size: img.size || 0 }); continue; }
-    const ext = (img.file.name.split('.').pop() || 'jpg').toLowerCase();
+    // Product photos are optimized before upload (resized, converted, EXIF stripped).
+    const file = await optimizeImageFile(img.file);
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
     const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
-    const { error } = await supabase.storage.from('shop-images').upload(path, img.file);
+    const { error } = await supabase.storage.from('shop-images').upload(path, file);
     if (error) throw error;
     const { data } = supabase.storage.from('shop-images').getPublicUrl(path);
-    uploaded.push({ url: data.publicUrl, name: img.file.name, size: img.file.size });
+    uploaded.push({ url: data.publicUrl, name: file.name, size: file.size });
   }
   return uploaded;
 }
@@ -1955,7 +1952,10 @@ document.getElementById('pm-save').addEventListener('click', async () => {
   closeProductModal(); loadAdminProducts();
 });
 window.adminEditProduct = async (id) => { const { data } = await supabase.from('products').select('*').eq('id',id).single(); if (data) openProductModal(data); };
-window.adminDeleteProduct = async (id) => { if (!confirm('Delete this product?')) return; if (!confirm('Are you sure? This cannot be undone.')) return; await supabase.from('products').delete().eq('id',id); loadAdminProducts(); };
+window.adminDeleteProduct = async (id) => {
+  if (!(await mcaConfirm({ title: 'Delete product?', message: 'Delete this product? This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
+  await supabase.from('products').delete().eq('id',id); loadAdminProducts();
+};
 
 // ── Config ────────────────────────────────────────────────────
 async function loadConfigTab() { await loadSiteConfig(); }
@@ -2197,7 +2197,10 @@ document.getElementById('nm-save').addEventListener('click', async () => {
   }
   closeNationModal(); await loadNationsAdmin();
 });
-window.deleteNation = async (id) => { if (!confirm('Delete this nation?')) return; if (!confirm('Are you sure? This cannot be undone.')) return; await supabase.from('nations').delete().eq('id',id); await loadNationsAdmin(); };
+window.deleteNation = async (id) => {
+  if (!(await mcaConfirm({ title: 'Delete nation?', message: 'Delete this nation? This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
+  await supabase.from('nations').delete().eq('id',id); await loadNationsAdmin();
+};
 
 document.getElementById('btn-add-leader').addEventListener('click', () => openLeaderModal(null));
 window.openLeaderModal = (id) => {
@@ -2228,7 +2231,10 @@ document.getElementById('lm-save').addEventListener('click', async () => {
   if (error) { const e = document.getElementById('lm-error'); e.textContent = 'Error: ' + error.message; e.style.display = 'block'; return; }
   closeLeaderModal(); await loadLeadershipAdmin();
 });
-window.deleteLeader = async (id) => { if (!confirm('Remove this person?')) return; if (!confirm('Are you sure? This cannot be undone.')) return; await supabase.from('leadership').delete().eq('id',id); await loadLeadershipAdmin(); };
+window.deleteLeader = async (id) => {
+  if (!(await mcaConfirm({ title: 'Remove person?', message: 'Remove this person? This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
+  await supabase.from('leadership').delete().eq('id',id); await loadLeadershipAdmin();
+};
 
 // ── History Servers ──────────────────────────────────────────
 let _historyServersAdmin = [];
@@ -2274,7 +2280,10 @@ document.getElementById('hs-save').addEventListener('click', async () => {
   _seasonServerNames = null; // server list changed — refresh the nation dropdown cache
   closeHistoryServerModal(); await loadHistoryServersAdmin();
 });
-window.deleteHistoryServer = async (id) => { if (!confirm('Delete this server?')) return; if (!confirm('Are you sure? This cannot be undone.')) return; await supabase.from('history_servers').delete().eq('id', id); _seasonServerNames = null; await loadHistoryServersAdmin(); };
+window.deleteHistoryServer = async (id) => {
+  if (!(await mcaConfirm({ title: 'Delete server?', message: 'Delete this server? This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
+  await supabase.from('history_servers').delete().eq('id', id); _seasonServerNames = null; await loadHistoryServersAdmin();
+};
 
 // ── Club Presidents ───────────────────────────────────────────
 let _clubPresidents = [];
@@ -2341,8 +2350,7 @@ document.getElementById('cp-save').addEventListener('click', async () => {
 });
 
 window.deleteClubPresident = async (id) => {
-  if (!confirm('Remove this club president?')) return;
-  if (!confirm('Are you sure? This cannot be undone.')) return;
+  if (!(await mcaConfirm({ title: 'Remove president?', message: 'Remove this club president? This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
   await supabase.from('club_presidents').delete().eq('id', id);
   await loadClubPresidentsAdmin();
 };
@@ -2532,8 +2540,12 @@ function renderMsgAttachments(attachments) {
 
 async function uploadMsgAttachments(files) {
   const { data: { user } } = await supabase.auth.getUser();
+  // Images are optimized before upload (resized, converted, EXIF stripped);
+  // non-images pass through unchanged.
+  const optimizedFiles = [];
+  for (const file of files) optimizedFiles.push(await optimizeImageFile(file));
   const uploaded = [];
-  for (const file of files) {
+  for (const file of optimizedFiles) {
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
     const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
     const { error } = await supabase.storage.from('message-attachments').upload(path, file);
@@ -2656,7 +2668,7 @@ function renderMessages() {
               <input type="checkbox" id="reply-share-name-${m.id}" checked> Share my name with the member
             </label>
           </div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px;">Photos up to 10 MB total.</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">Photos up to 10 MB total. Photos are optimized on upload.</div>
           <div id="reply-preview-${m.id}" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;"></div>
           <button class="btn btn-primary btn-sm" style="margin-top:6px;" data-action="send-message-reply" data-id="${m.id}">Send</button>
         </div>` : ''}
@@ -2790,8 +2802,7 @@ window.toggleMessageRead = async (id, read) => {
 };
 
 window.deleteMessage = async (id) => {
-  if (!confirm('Delete this message?')) return;
-  if (!confirm('Are you sure? This cannot be undone.')) return;
+  if (!(await mcaConfirm({ title: 'Delete message?', message: 'Delete this message? This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
   await supabase.from('admin_messages').delete().eq('id', id);
   _messages = _messages.filter(x => x.id !== id);
   delete _items[id];
@@ -2842,7 +2853,7 @@ function auditTableLabel(t) {
 async function populateAuditTableFilter() {
   if (_auditTablesLoaded) return;
   try {
-    const { data, error } = await supabase.from('audit_log').select('table_name, actor_id, actor_name');
+    const { data, error } = await supabase.from('audit_log').select('table_name, actor_id, actor_name').limit(1000);
     if (error) throw error;
     const tables = [...new Set((data || []).map(r => r.table_name))].sort();
     const sel = document.getElementById('audit-filter-table');

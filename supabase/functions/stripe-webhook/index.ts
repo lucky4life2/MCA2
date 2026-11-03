@@ -21,6 +21,61 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
+
+// ── Server-side error capture (approved 2026-11-02, server-side first) ──
+// Only active when a SENTRY_DSN secret is set in the Supabase dashboard;
+// with no DSN this is a no-op and console.error remains the only log.
+// No Sentry project or DSN exists yet — creating one and setting the
+// secret is the remaining dashboard step. Browser error logging is NOT
+// added here (held until a privacy review).
+// Everything sent is scrubbed: emails, JWTs/tokens, Stripe keys, and
+// card-like digit runs. Request bodies, user emails, and payment data are
+// never sent — only the scrubbed error message and the call site.
+const SENTRY_DSN = Deno.env.get('SENTRY_DSN') ?? '';
+function scrubText(s: string): string {
+  return s
+    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[token]')
+    .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[email]')
+    .replace(/\b(sk|pk|rk|whsec)_(live|test)_[A-Za-z0-9]+\b/g, '[stripe-key]')
+    .replace(/\bBearer\s+\S+/gi, 'Bearer [token]')
+    .replace(/\b\d{13,19}\b/g, '[card]');
+}
+function reportError(where: string, err: unknown): void {
+  if (!SENTRY_DSN) return;
+  try {
+    const m = SENTRY_DSN.match(/^https:\/\/([^@]+)@([^/]+)\/(\d+)$/);
+    if (!m) return;
+    const [, publicKey, host, projectId] = m;
+    const eventId = crypto.randomUUID().replaceAll('-', '');
+    const event = {
+      event_id: eventId,
+      timestamp: Date.now() / 1000,
+      level: 'error',
+      logger: 'edge-function',
+      message: { formatted: scrubText(`${where}: ${err instanceof Error ? err.message : String(err)}`) },
+    };
+    const eventJson = JSON.stringify(event);
+    const body = [
+      JSON.stringify({ event_id: eventId, sent_at: new Date().toISOString() }),
+      JSON.stringify({ type: 'event', content_type: 'application/json', length: new TextEncoder().encode(eventJson).length }),
+      eventJson,
+    ].join('\n');
+    const req = fetch(`https://${host}/api/${projectId}/envelope/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-sentry-envelope',
+        'X-Sentry-Auth': `Sentry sentry_version=7, sentry_client=mca-edge/1.0, sentry_key=${publicKey}`,
+      },
+      body,
+    });
+    const waitUntil = (globalThis as unknown as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime?.waitUntil;
+    if (typeof waitUntil === 'function') waitUntil(req.catch(() => {}));
+    else req.catch(() => {});
+  } catch {
+    // Reporting must never break the function it reports on.
+  }
+}
+
 const STRIPE_WEBHOOK_SECRET = Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? '';
 
 const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
@@ -152,6 +207,7 @@ async function handleCompletedSession(session: Stripe.Checkout.Session) {
     // An order that records nothing about its contents is still better than
     // no order at all, so this never fails the webhook.
     console.error('Could not read line items for session', session.id, err);
+    reportError('stripe-webhook:line-items', err);
   }
 
   const shipping = (session as unknown as { shipping_details?: unknown }).shipping_details
@@ -212,6 +268,7 @@ async function recordRenewalOrder(invoice: Stripe.Invoice, subscriptionId: strin
     userId = subscription.metadata?.user_id ?? null;
   } catch (err) {
     console.error('Could not read subscription for renewal order:', err);
+    reportError('stripe-webhook:renewal', err);
   }
   if (!userId) {
     const { data } = await admin.from('profiles').select('id').eq('stripe_subscription_id', subscriptionId).maybeSingle();
@@ -249,6 +306,7 @@ Deno.serve(async (req: Request) => {
     event = await stripe.webhooks.constructEventAsync(rawBody, signature, STRIPE_WEBHOOK_SECRET);
   } catch (err) {
     console.error('Webhook signature verification failed:', err);
+    reportError('stripe-webhook:signature', err);
     return new Response(`Webhook Error: ${err instanceof Error ? err.message : 'invalid signature'}`, { status: 400 });
   }
 
@@ -294,6 +352,7 @@ Deno.serve(async (req: Request) => {
     }
   } catch (err) {
     console.error('Error handling Stripe webhook event:', err);
+    reportError('stripe-webhook:handler', err);
     return new Response('Webhook handler error', { status: 500 });
   }
 

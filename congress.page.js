@@ -1045,16 +1045,23 @@ var LOAD_TIMEOUT_MS = 25000;
 
 function showLoadError(msg) {
   // Only take over if boot never finished (spinner still visible).
-  if (document.getElementById('loading').style.display === 'none') return;
-  document.getElementById('loading').style.display = 'none';
-  document.getElementById('denied').style.display = 'none';
-  document.getElementById('main').style.display = 'none';
+  // Guarded throughout: the error UI must never throw itself — a missing
+  // element used to mask the original failure with a TypeError.
+  var loadingEl = document.getElementById('loading');
+  if (loadingEl && loadingEl.style.display === 'none') return;
+  if (loadingEl) loadingEl.style.display = 'none';
+  var deniedEl = document.getElementById('denied');
+  if (deniedEl) deniedEl.style.display = 'none';
+  var mainEl = document.getElementById('main');
+  if (mainEl) mainEl.style.display = 'none';
   var e = document.getElementById('load-error');
-  e.querySelector('.load-error-msg').textContent = msg;
+  if (!e) { console.error('Load error:', msg); return; }
+  var msgEl = e.querySelector('.load-error-msg');
+  if (msgEl) msgEl.textContent = msg;
   e.style.display = 'block';
 }
 
-document.getElementById('load-retry').addEventListener('click', function () { location.reload(); });
+document.getElementById('load-retry')?.addEventListener('click', function () { location.reload(); });
 
 setTimeout(function () {
   showLoadError('This is taking longer than expected. Check your connection and try again.');

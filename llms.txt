@@ -1,0 +1,32 @@
+# Minecraft Club of America
+
+> A leadership and learning organization that uses Minecraft to explore government, economics, and civics.
+
+## Pages
+
+- [Home](https://minecraftclubofamerica.me/)
+- [News](https://minecraftclubofamerica.me/news.html)
+- [Archive](https://minecraftclubofamerica.me/archive.html)
+- [Congress](https://minecraftclubofamerica.me/congress.html)
+- [World Court](https://minecraftclubofamerica.me/court.html)
+- [Server](https://minecraftclubofamerica.me/server.html)
+- [Shop](https://minecraftclubofamerica.me/shop.html)
+- [Leadership](https://minecraftclubofamerica.me/leadership.html)
+- [Nations](https://minecraftclubofamerica.me/nations.html)
+- [History](https://minecraftclubofamerica.me/history.html)
+- [Help](https://minecraftclubofamerica.me/help.html)
+- [Search](https://minecraftclubofamerica.me/search.html)
+- [Economy](https://minecraftclubofamerica.me/economy.html)
+- [Stock Exchange](https://minecraftclubofamerica.me/stocks.html)
+- [Sign In](https://minecraftclubofamerica.me/login.html)
+- [Privacy Policy](https://minecraftclubofamerica.me/privacy.html)
+- [Terms of Service](https://minecraftclubofamerica.me/terms.html)
+- [Accessibility](https://minecraftclubofamerica.me/accessibility.html)
+- [Cookie Policy](https://minecraftclubofamerica.me/cookies.html)
+- [Refund Policy](https://minecraftclubofamerica.me/refund.html)
+- [Articles](https://minecraftclubofamerica.me/article.html)
+- [Documents](https://minecraftclubofamerica.me/document.html)
+
+Contact: minecraftclubofamerica@gmail.com
+
+Note: This file describes the site for readers. It does not grant any AI training, ingestion, or crawling rights. The site's AI-crawler policy is decided: search indexing is allowed and AI training is blocked; robots.txt governs crawler access.

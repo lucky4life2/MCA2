@@ -12,7 +12,7 @@ async function checkStatus() {
   if (!badge || !text) return;
 
   try {
-    const res  = await fetch(API_URL, { cache: 'no-store' });
+    const res  = await fetch(API_URL, { cache: 'no-store', signal: AbortSignal.timeout(8000) });
     const data = await res.json();
 
     if (data && data.online === true) {

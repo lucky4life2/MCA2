@@ -339,14 +339,17 @@ async function renderCompany(tickerRaw) {
   document.getElementById('page-sub').textContent = c.ticker + (c.industry ? ' · ' + c.industry : '');
   view.innerHTML = '<div class="econ-muted">Loading…</div>';
 
-  const summary = await loadMarketSummary(c.id);
-  const book = await loadOrderBook(c.id, 8);
-  const trades = await loadRecentTrades(c.id, 15);
-  const { data: register } = await supabase.rpc('economy_shareholder_register', { p_company_id: c.id });
-  const { data: reports } = await supabase.from('economy_company_reports')
-    .select('*').eq('company_id', c.id).order('period_end', { ascending: false }).limit(4);
-  const { data: dividends } = await supabase.from('economy_dividends')
-    .select('*').eq('company_id', c.id).eq('status', 'paid').order('paid_at', { ascending: false }).limit(6);
+  // Independent reads for one company — run them together instead of
+  // waiting out six round trips in sequence. Values are identical;
+  // only the waiting changes.
+  const [summary, book, trades, { data: register }, { data: reports }, { data: dividends }] = await Promise.all([
+    loadMarketSummary(c.id),
+    loadOrderBook(c.id, 8),
+    loadRecentTrades(c.id, 15),
+    supabase.rpc('economy_shareholder_register', { p_company_id: c.id }),
+    supabase.from('economy_company_reports').select('*').eq('company_id', c.id).order('period_end', { ascending: false }).limit(4),
+    supabase.from('economy_dividends').select('*').eq('company_id', c.id).eq('status', 'paid').order('paid_at', { ascending: false }).limit(6),
+  ]);
 
   const bids = book.filter(function (r) { return r.side === 'buy'; });
   const asks = book.filter(function (r) { return r.side === 'sell'; });

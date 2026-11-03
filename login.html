@@ -5,6 +5,15 @@
   <script src="early-hide.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sign In — Minecraft Club of America</title>
+  <meta name="description" content="Sign in to your Minecraft Club of America account.">
+  <link rel="canonical" href="https://minecraftclubofamerica.me/login.html">
+  <meta property="og:title" content="Sign In — Minecraft Club of America">
+  <meta property="og:description" content="Sign in to your Minecraft Club of America account.">
+  <meta property="og:image" content="https://minecraftclubofamerica.me/images/widelogo.png">
+  <meta property="og:image:width" content="500">
+  <meta property="og:image:height" content="198">
+  <meta property="og:url" content="https://minecraftclubofamerica.me/login.html">
+  <meta property="og:type" content="website">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600&display=swap">
@@ -45,7 +54,7 @@
     }
     .login-card-eyebrow {
       font-size: 10px; font-weight: 700; letter-spacing: 2px;
-      text-transform: uppercase; color: var(--green); margin-bottom: 6px;
+      text-transform: uppercase; color: var(--green-text); margin-bottom: 6px;
     }
     .login-card-title {
       font-family: 'Times New Roman', serif;
@@ -212,7 +221,7 @@
       <div class="login-card-header">
         <img src="images/logo.png" width="500" height="500" alt="MCA" class="login-card-logo">
         <div class="login-card-eyebrow">MCA Account</div>
-        <div class="login-card-title" id="card-title">Welcome Back</div>
+        <h1 class="login-card-title" id="card-title">Welcome Back</h1>
       </div>
 
       <div class="login-card-body">
@@ -265,6 +274,7 @@
             <svg width="16" height="16" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.47c-.28 1.5-1.13 2.78-2.4 3.63v3.02h3.88c2.27-2.09 3.57-5.17 3.57-8.84z"/><path fill="#34A853" d="M12 24c3.24 0 5.96-1.08 7.95-2.9l-3.88-3.02c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.12A11.998 11.998 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.27 14.27a7.2 7.2 0 0 1-.38-2.27c0-.79.14-1.56.38-2.27V6.61H1.27A11.998 11.998 0 0 0 0 12c0 1.94.46 3.77 1.27 5.39l4-3.12z"/><path fill="#EA4335" d="M12 4.77c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.69 1.27 6.61l4 3.12C6.22 6.88 8.87 4.77 12 4.77z"/></svg>
             Sign up with Google
           </button>
+          <div class="login-oauth-consent-note">Signing up with Discord or Google shares your name, email address, and profile photo with us to create your account.</div>
           <div class="login-divider"><span class="login-divider-text">or</span></div>
           <div class="login-form-group">
             <label class="login-form-label" for="signup-email">Email</label>
@@ -301,6 +311,7 @@
           </div>
           <div class="login-error" id="signup-error"></div>
 
+          <p class="login-oauth-consent-note" style="margin-bottom:10px;">We collect your email address, date of birth, and optional club choice to create and protect your account. Date of birth is used only to apply age-appropriate protections — see the <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>
           <div class="login-consent">
             <input type="checkbox" id="signup-consent">
             <label for="signup-consent">I agree to the <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</label>

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <script src="early-hide.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Search — Minecraft Club of America</title>
+  <meta name="description" content="Search the Minecraft Club of America website: pages, news articles, and archive documents.">
+  <link rel="canonical" href="https://minecraftclubofamerica.me/search.html">
+  <meta property="og:title" content="Search — Minecraft Club of America">
+  <meta property="og:description" content="Search the Minecraft Club of America website: pages, news articles, and archive documents.">
+  <meta property="og:image" content="https://minecraftclubofamerica.me/images/widelogo.png">
+  <meta property="og:image:width" content="500">
+  <meta property="og:image:height" content="198">
+  <meta property="og:url" content="https://minecraftclubofamerica.me/search.html">
+  <meta property="og:type" content="website">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/x-icon" href="images/icon.ico">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#18489e">
+  <link rel="apple-touch-icon" href="/images/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="MCA">
+</head>
+<body>
+
+<!-- nav + footer injected by nav.js -->
+
+<div class="page-wrap">
+
+  <div class="hero">
+    <div class="hero-eyebrow">MCA Website</div>
+    <h1>Search</h1>
+    <p class="hero-sub">Search pages, news articles, and archive documents across the MCA website.</p>
+  </div>
+
+  <div class="content">
+    <div class="section">
+      <label class="search-label" for="site-search">Search the site</label>
+      <input
+        type="search"
+        id="site-search"
+        class="search-input"
+        placeholder="Try “congress”, “refund”, or “membership”…"
+        autocomplete="off"
+      >
+      <p class="search-status" id="search-status" aria-live="polite"></p>
+      <div id="search-loading" class="search-loading">Loading articles and documents…</div>
+      <ul id="search-results" class="search-results" style="display:none;"></ul>
+      <div id="search-empty" class="search-empty" style="display:none;">No pages match your search.</div>
+      <p id="search-note" class="search-note" style="display:none;"></p>
+    </div>
+  </div>
+
+</div>
+
+<script type="module" src="nav.js"></script>
+<script type="module" src="search.page.js"></script>
+</body>
+</html>

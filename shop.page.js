@@ -108,7 +108,7 @@ document.addEventListener('keydown', (e) => {
   function isSubscription(x) { return !!x && x.product_type === 'subscription'; }
   // A subscription is one seat: Stripe is sent quantity 1 no matter what
   // the cart says, so letting the cart show 2 only misprices the subtotal.
-  function maxQty(x) { return isSubscription(x) ? 1 : 99; }
+  function maxQty(x) { return isSubscription(x) ? 1 : 10; }
   function priceLabel(x) {
     const amount = '$' + Number(x.price).toFixed(2);
     return isSubscription(x) ? amount + billingPeriod(x.billing_cycle).short : amount;
@@ -267,7 +267,7 @@ document.addEventListener('keydown', (e) => {
     const sub = items.reduce((s, i) => s + (Number(i.price) || 0) * Math.min(maxQty(i), i.qty || 1), 0);
     elCartBody.innerHTML = items.map(i => `
       <div class="cart-item">
-        ${safeUrl(i.image_url) ? `<img class="cart-item-img" src="${esc(safeUrl(i.image_url))}" alt="${esc(i.name)}">` : `<div class="cart-item-img-placeholder"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></div>`}
+        ${safeUrl(i.image_url) ? `<img class="cart-item-img" src="${esc(safeUrl(i.image_url))}" alt="${esc(i.name)}" loading="lazy" decoding="async">` : `<div class="cart-item-img-placeholder"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></div>`}
         <div class="cart-item-info">
           <div class="cart-item-name">${esc(i.name)}</div>
           <div class="cart-item-price">${isSubscription(i) ? priceLabel(i) : priceLabel(i) + ' each'}</div>
@@ -332,7 +332,7 @@ document.addEventListener('keydown', (e) => {
       : [p.image_url, p.image_url2].filter(Boolean);
 
     const mainImg = gallery[0]
-      ? `<img class="detail-modal-img" id="detail-modal-main-img" src="${esc(safeUrl(gallery[0]))}" alt="${esc(p.name)}">`
+      ? `<img class="detail-modal-img" id="detail-modal-main-img" src="${esc(safeUrl(gallery[0]))}" alt="${esc(p.name)}" decoding="async">`
       : `<div class="detail-modal-img-placeholder"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9l4-4 4 4 4-4 4 4"/><circle cx="8.5" cy="13.5" r="1.5"/></svg></div>`;
 
     window._detailGallery = gallery;
@@ -354,7 +354,7 @@ document.addEventListener('keydown', (e) => {
           <button class="detail-modal-close" type="button" aria-label="Close product details" data-action="close-detail">✕</button>
         </div>
         <div class="detail-modal-price">${priceLabel(p)}</div>
-        ${p.product_type === 'subscription' ? `<div class="detail-modal-stock" style="color:var(--green);font-weight:600;">${billingPeriod(p.billing_cycle).label}</div>` : `<div class="detail-modal-stock ${p.inventory===0?'out':p.inventory<5?'low':''}">` + (p.inventory===0 ? 'Out of stock' : p.inventory+' in stock') + '</div>'}
+        ${p.product_type === 'subscription' ? `<div class="detail-modal-stock" style="color:var(--green-text);font-weight:600;">${billingPeriod(p.billing_cycle).label}</div>` : `<div class="detail-modal-stock ${p.inventory===0?'out':p.inventory<5?'low':''}">` + (p.inventory===0 ? 'Out of stock' : p.inventory+' in stock') + '</div>'}
         ${p.description ? `<div class="detail-modal-desc">${esc(p.description)}</div>` : ''}
         ${specs.length ? `
           <div class="detail-modal-specs">
@@ -407,7 +407,7 @@ document.addEventListener('keydown', (e) => {
       _checkoutHandled = true;
       if (_checkoutReturn === 'success' && _userId) {
         saveCart([]);
-        alert('Payment received! Your order or membership is now active — it may take a minute to update on your account page.');
+        alert('Payment received! Your order or membership will activate once payment is confirmed — it may take a minute to update on your account page.');
       } else if (_checkoutReturn === 'cancel') {
         alert('Checkout was canceled — your cart is still here whenever you\'re ready.');
       }
@@ -507,7 +507,7 @@ document.addEventListener('keydown', (e) => {
         }
       }
       return `<div class="product-card" role="button" tabindex="0" aria-label="View ${esc(p.name)}" data-action="open-product-detail" data-id="${esc(p.id)}">
-        ${safeUrl(p.image_url) ? `<img class="product-card-img" src="${esc(safeUrl(p.image_url))}" alt="${esc(p.name)}">` : `<div class="product-card-img-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9l4-4 4 4 4-4 4 4"/><circle cx="8.5" cy="13.5" r="1.5"/></svg></div>`}
+        ${safeUrl(p.image_url) ? `<img class="product-card-img" src="${esc(safeUrl(p.image_url))}" alt="${esc(p.name)}" loading="lazy" decoding="async">` : `<div class="product-card-img-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9l4-4 4 4 4-4 4 4"/><circle cx="8.5" cy="13.5" r="1.5"/></svg></div>`}
         <div class="product-card-body">
           ${p.category ? `<div class="product-card-category">${esc(p.category)}</div>` : ''}
           <div class="product-card-name">${esc(p.name)}</div>
@@ -515,7 +515,7 @@ document.addEventListener('keydown', (e) => {
           <div class="product-card-footer">
             <div class="product-card-price">${priceLabel(p)}</div>
             ${p.product_type === 'subscription'
-              ? `<div class="product-card-stock" style="color:var(--green);font-weight:600;">${billingPeriod(p.billing_cycle).label}</div>`
+              ? `<div class="product-card-stock" style="color:var(--green-text);font-weight:600;">${billingPeriod(p.billing_cycle).label}</div>`
               : `<div class="product-card-stock ${p.inventory===0?'out':p.inventory<5?'low':''}">${p.inventory===0?'Out of stock':`${p.inventory} in stock`}</div>`}
           </div>
           ${cartBtn}

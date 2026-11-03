@@ -6,6 +6,15 @@
   <script src="early-hide.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Minecraft Club of America</title>
+  <meta name="description" content="A leadership and learning organization that uses Minecraft to explore government, economics, and civics.">
+  <link rel="canonical" href="https://minecraftclubofamerica.me/">
+  <meta property="og:title" content="Minecraft Club of America">
+  <meta property="og:description" content="A leadership and learning organization that uses Minecraft to explore government, economics, and civics.">
+  <meta property="og:image" content="https://minecraftclubofamerica.me/images/widelogo.png">
+  <meta property="og:image:width" content="500">
+  <meta property="og:image:height" content="198">
+  <meta property="og:url" content="https://minecraftclubofamerica.me/">
+  <meta property="og:type" content="website">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600&display=swap">
@@ -18,6 +27,36 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="MCA">
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://minecraftclubofamerica.me/#organization",
+      "name": "Minecraft Club of America",
+      "url": "https://minecraftclubofamerica.me/",
+      "logo": "https://minecraftclubofamerica.me/images/widelogo.png",
+      "description": "A leadership and learning organization that uses Minecraft to explore government, economics, and civics.",
+      "email": "minecraftclubofamerica@gmail.com",
+      "sameAs": [
+        "https://discord.gg/hZrt28vG29",
+        "https://www.youtube.com/@MinecraftClubOfAmerica",
+        "https://www.instagram.com/minecraft_club_of_america/"
+      ]
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://minecraftclubofamerica.me/#website",
+      "url": "https://minecraftclubofamerica.me/",
+      "name": "Minecraft Club of America",
+      "publisher": {
+        "@id": "https://minecraftclubofamerica.me/#organization"
+      }
+    }
+  ]
+}
+  </script>
 </head>
 <body>
 
@@ -145,7 +184,7 @@
       </div>
 
       <figure class="section-image" style="margin-top:2rem;">
-        <img src="images/expansion-map.webp" width="1920" height="1080" loading="lazy" alt="MCA club expansion map showing current clubs, clubs on track for 2026, and possible future locations">
+        <img src="images/expansion-map.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="MCA club expansion map showing current clubs, clubs on track for 2026, and possible future locations">
         <figcaption>MCA clubs across Utah — with chapters on track for expansion in 2026</figcaption>
       </figure>
     </div>
@@ -163,7 +202,7 @@
       </ul>
 
       <figure class="section-image" style="margin-top:2rem;">
-        <img src="images/nations-simulation.webp" width="1456" height="840" loading="lazy" alt="Nations, flags, and political map from the MCA server">
+        <img src="images/nations-simulation.webp" width="1456" height="840" loading="lazy" decoding="async" alt="Nations, flags, and political map from the MCA server">
         <figcaption>Player-created nations, flags, and a political map from the MCA Medieval Craft server</figcaption>
       </figure>
     </div>
@@ -229,6 +268,6 @@
 <script type="module" src="nav.js"></script>
 <script type="module" src="news.js"></script>
 <script src="slideshow.js"></script>
-<script src="index.page.js"></script>
+<script type="module" src="index.page.js"></script>
 </body>
 </html>

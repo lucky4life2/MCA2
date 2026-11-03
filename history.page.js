@@ -9,7 +9,7 @@
   try {
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/history_servers?select=*&order=sort_order.asc`,
-      { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } }
+      { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` }, signal: AbortSignal.timeout(15000) }
     );
     if (!res.ok) throw new Error('fetch failed');
     const servers = await res.json();

@@ -1,4 +1,4 @@
-import { supabase, getMyRolePreview, requireAal2 } from './supabase.js';
+import { supabase, getMyRolePreview, requireAal2, optimizeImageFile } from './supabase.js';
 
 // ── Delegated actions (strict CSP) ────────────────────────────────
 // Inline handler attributes are blocked by the strict script-src policy,
@@ -474,6 +474,8 @@ let _uploadFolder = `draft-${Date.now()}-${Math.random().toString(36).slice(2,8)
 function uploadFolder() { return _editingId || _uploadFolder; }
 
 async function uploadNewsImage(file) {
+  // News photos are optimized before upload (resized, converted, EXIF stripped).
+  file = await optimizeImageFile(file);
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
   const path = `${uploadFolder()}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
   const { error } = await supabase.storage.from('news-images').upload(path, file);
@@ -663,8 +665,7 @@ window.quickUnpublish = async (id) => {
   await loadArticles();
 };
 window.deleteArticle = async (id) => {
-  if (!confirm('Delete this article? This cannot be undone.')) return;
-  if (!confirm('Are you sure? This cannot be undone.')) return;
+  if (!(await mcaConfirm({ title: 'Delete article?', message: 'Delete this article? This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
   const { error } = await supabase.from('news_articles').delete().eq('id', id);
   if (error) { toast('Error: '+error.message, true); return; }
   if (_editingId === id) clearEditor();

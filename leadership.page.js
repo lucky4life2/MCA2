@@ -6,10 +6,16 @@
   // into innerHTML, so every interpolated field is escaped first.
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+  // Start the presidents fetch now so it runs in parallel with leadership
+  // instead of waiting for it; it is awaited in its own try block below.
+  const cpPromise = fetch(
+    `${SUPABASE_URL}/rest/v1/club_presidents?select=*&order=region.asc,name.asc`,
+    { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` }, signal: AbortSignal.timeout(15000) }
+  );
   try {
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/leadership?select=*&order=sort_order.asc`,
-      { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } }
+      { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` }, signal: AbortSignal.timeout(15000) }
     );
     if (!res.ok) throw new Error('fetch failed');
     const people = await res.json();
@@ -44,10 +50,7 @@
 
   // Club Presidents
   try {
-    const cpRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/club_presidents?select=*&order=region.asc,name.asc`,
-      { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } }
-    );
+    const cpRes = await cpPromise;
     if (cpRes.ok) {
       const presidents = await cpRes.json();
       if (presidents.length) {

@@ -1,4 +1,4 @@
-import { supabase, signOut, createBillingPortalSession } from './supabase.js';
+import { supabase, signOut, createBillingPortalSession, optimizeImageFile } from './supabase.js';
 
 // ── Delegated actions (strict CSP) ────────────────────────────────
 // Inline handler attributes are blocked by the strict script-src policy,
@@ -639,12 +639,12 @@ function renderMembership() {
       </p>`
       : `
       <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
-        ${periodEnd ? `Your membership renews on <strong>${escapeHtml(periodEnd.toLocaleDateString())}</strong>. ` : ''}This unlocks the Minecraft server and the member-only pages of the site.
+        ${periodEnd ? `Your membership renews on <strong>${escapeHtml(periodEnd.toLocaleDateString())}</strong> at $12/year. ` : ''}This unlocks the Minecraft server and the member-only pages of the site.
       </p>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <button class="btn btn-outline" type="button" data-action="open-billing-portal">Manage Billing</button>
         <a class="btn btn-outline" href="shop.html" style="text-decoration:none;display:inline-block;">Manage in Shop</a>
-        <button type="button" class="btn btn-outline" id="btn-cancel-membership">Cancel Membership</button>
+        <button type="button" class="btn btn-outline" id="btn-cancel-membership">Request Cancellation</button>
       </div>
       <p style="font-size:12px;color:var(--muted);margin-top:0.75rem;">Cancelling stops future renewal charges — you keep access through the end of the period you already paid for. See our <a href="refund.html">Refund &amp; Cancellation Policy</a>.</p>`;
     wireCancelMembershipButton();
@@ -1830,7 +1830,7 @@ function closeDeleteModal() {
 document.getElementById('btn-delete-account').addEventListener('click', openDeleteModal);
 
 document.getElementById('btn-deactivate-account').addEventListener('click', async () => {
-  if (!confirm('Deactivate your account? You\'ll be signed out, and signing back in reactivates it.')) return;
+  if (!(await mcaConfirm({ title: 'Deactivate account?', message: 'Deactivate your account? You\'ll be signed out, and signing back in reactivates it.', confirmText: 'Deactivate', danger: true }))) return;
   const btn = document.getElementById('btn-deactivate-account');
   btn.disabled = true; btn.textContent = 'Deactivating...';
   const { error } = await supabase.rpc('deactivate_own_account');
@@ -1983,8 +1983,12 @@ function renderMsgAttachments(attachments) {
 }
 
 async function uploadMsgAttachments(files) {
+  // Images are optimized before upload (resized, converted, EXIF stripped);
+  // non-images pass through unchanged.
+  const optimizedFiles = [];
+  for (const file of files) optimizedFiles.push(await optimizeImageFile(file));
   const uploaded = [];
-  for (const file of files) {
+  for (const file of optimizedFiles) {
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
     const path = `${_user.id}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
     const { error } = await supabase.storage.from('message-attachments').upload(path, file);
@@ -2090,7 +2094,7 @@ function renderMyMessages() {
       <div style="margin-top:10px;">
         <textarea class="form-input" id="my-reply-input-${m.id}" rows="2" placeholder="Add another message..." style="resize:vertical;min-height:50px;width:100%;box-sizing:border-box;font-size:13px;"></textarea>
         <input type="file" id="my-reply-file-${m.id}" accept="image/*" multiple style="font-size:11px;max-width:200px;margin-top:6px;display:block;">
-        <div style="font-size:10px;color:var(--muted);margin-top:2px;">Photos up to 10 MB total.</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px;">Photos up to 10 MB total. Photos are optimized on upload.</div>
         <div id="my-reply-preview-${m.id}" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;"></div>
         <button class="btn btn-outline btn-sm" style="margin-top:6px;" data-action="send-my-message-reply" data-id="${m.id}">Send</button>
       </div>` : ''}
@@ -2146,10 +2150,12 @@ document.getElementById('btn-contact-admin').addEventListener('click', () => {
   document.getElementById('contact-subject').focus();
 });
 
-// "Cancel Membership" opens the same staff-message form used for support
+// "Request Cancellation" opens the same staff-message form used for support
 // requests, pre-filled so cancelling takes one click to send rather than
-// requiring the member to know who to contact or what to say — this is the
-// self-service cancellation path referenced in the Refund & Cancellation Policy.
+// requiring the member to know who to contact or what to say. This is a
+// staff-handled request, not an instant cancellation: true self-serve
+// cancellation lives in the Stripe billing portal ("Manage Billing"), and
+// only if the portal configuration allows subscription cancellation.
 function wireCancelMembershipButton() {
   const btn = document.getElementById('btn-cancel-membership');
   if (!btn) return;

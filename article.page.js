@@ -86,7 +86,30 @@ async function shareArticle(article) {
       setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
     }
   } catch {
-    prompt('Copy this link:', url);
+    // Fallback for browsers without clipboard permission: copy from a
+    // temporary field; only fall back to a manual prompt if that fails.
+    let copied = false;
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      copied = document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch (err) { /* fall through to prompt */ }
+    if (copied) {
+      const btn = document.getElementById('share-btn');
+      if (btn) {
+        const orig = btn.innerHTML;
+        btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied!`;
+        btn.style.background = 'var(--green, #22c55e)'; btn.style.color = '#fff'; btn.style.borderColor = 'transparent';
+        setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
+      }
+    } else {
+      prompt('Copy this link:', url);
+    }
   }
 }
 
@@ -105,7 +128,7 @@ if (!slug) {
   try {
     const { data: articles, error } = await supabase
       .from('news_articles')
-      .select('id,title,slug,summary,body,category,author_name,published_at,image_url,status')
+      .select('id,title,slug,summary,body,category,author_name,published_at,updated_at,image_url,status')
       .eq('status', 'published')
       .eq('slug', slug)
       .limit(1);
@@ -157,6 +180,7 @@ if (!slug) {
             <div class="article-meta-top">
               <span class="news-card-category">${esc(cat)}</span>
               <span style="font-size:12px;color:var(--muted);">${esc(formatDate(article.published_at))}</span>
+              ${article.updated_at && article.published_at && new Date(article.updated_at) > new Date(article.published_at) ? `<span style="font-size:12px;color:var(--muted);">Last updated ${esc(formatDate(article.updated_at))}</span>` : ''}
               ${byline ? `<span style="font-size:12px;color:var(--muted);">${esc(byline)}</span>` : ''}
             </div>
             <h1 class="article-title">${esc(article.title)}</h1>

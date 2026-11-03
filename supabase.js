@@ -26,6 +26,26 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   },
 });
 
+// ── Network resilience helpers (pass 3) ──────────────────────────
+// withRetry retries only thrown (network) failures, never { error }
+// results — callers must still check `error` on the returned value.
+// tries/backoff are proposals matching the shop page's existing 8s
+// timeout scale, not club policy.
+export async function withRetry(fn, tries = 3) {
+  let lastErr;
+  for (let i = 0; i < tries; i++) {
+    try { return await fn(); } catch (e) { lastErr = e; await new Promise(r => setTimeout(r, 500 * (i + 1))); }
+  }
+  throw lastErr;
+}
+
+// withTimeout rejects after ms without cancelling the underlying request
+// (Supabase queries take no signal) — same limitation as shop.page.js's
+// existing wrapper, shared here so pages stop re-implementing it.
+export function withTimeout(promise, ms = 8000) {
+  return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out — having trouble reaching the server.')), ms))]);
+}
+
 // ── Auth helpers ─────────────────────────────────────────────
 
 /** Returns the current session user, or null */
@@ -41,12 +61,19 @@ export async function getUser() {
  * Returns the stacked roles for the current authenticated user.
  * Each role: { role_id, name, label, color, level, is_system, permissions, granted_at }
  */
+// Roles are re-read on every page load by nav + each page; memoise for
+// 60s within a page lifetime (proposal TTL — roles change rarely
+// mid-session, and a reload always refetches). A failed lookup is not
+// cached, and starting/ending a role preview clears the memo.
+let _rolesCache = null, _rolesAt = 0;
 export async function getCurrentUserRoles() {
+  if (_rolesCache && Date.now() - _rolesAt < 60000) return _rolesCache;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
   const { data, error } = await supabase.rpc('get_user_roles', { p_user_id: user.id });
   if (error) { console.error('getCurrentUserRoles error:', error.message); return []; }
-  return data || [];
+  _rolesCache = data || []; _rolesAt = Date.now();
+  return _rolesCache;
 }
 
 /**
@@ -70,12 +97,20 @@ export async function getCurrentUserPermissions() {
  * Returns true if the current user has the given permission flag.
  * Uses server-side RPC for reliable enforcement.
  */
+const _permInflight = {};
 export async function hasPermission(perm) {
-  try {
-    const { data, error } = await supabase.rpc('user_has_permission', { perm });
-    if (error) return false;
-    return !!data;
-  } catch { return false; }
+  // Dedupe only concurrent identical checks. No time-based memo: a cached
+  // permission could outlive a demotion or a role-preview change.
+  if (_permInflight[perm]) return _permInflight[perm];
+  const p = (async () => {
+    try {
+      const { data, error } = await supabase.rpc('user_has_permission', { perm });
+      if (error) return false;
+      return !!data;
+    } catch { return false; }
+  })();
+  _permInflight[perm] = p;
+  try { return await p; } finally { delete _permInflight[perm]; }
 }
 
 /**
@@ -132,12 +167,14 @@ export async function canManageNews() {
 export async function startRolePreview(roleId) {
   const { error } = await supabase.rpc('start_role_preview', { p_role_id: roleId });
   if (error) throw error;
+  _rolesCache = null;
 }
 
 /** Ends the current preview (if any), returning to the user's real roles. */
 export async function endRolePreview() {
   const { error } = await supabase.rpc('end_role_preview');
   if (error) throw error;
+  _rolesCache = null;
 }
 
 // Same as endRolePreview(), but issued with fetch(..., { keepalive: true })
@@ -231,14 +268,22 @@ export async function createCheckoutSession(items) {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
   if (!token) throw new Error('You must be signed in to check out.');
+  // One idempotency key per checkout click: the Edge Function passes it
+  // to Stripe, so a retried or double-clicked checkout returns the original
+  // session instead of creating a second one. Two different tabs still get
+  // different keys (residual path — see docs/pass3-protection.md).
+  const idempotencyKey = (crypto?.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const res = await fetch(`${SUPABASE_URL}/functions/v1/create-checkout-session`, {
     method: 'POST',
+    signal: AbortSignal.timeout(15000),
     headers: {
       'Content-Type': 'application/json',
       apikey: SUPABASE_KEY,
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ items }),
+    body: JSON.stringify({ items, idempotencyKey }),
   });
   const result = await res.json().catch(() => ({}));
   if (!res.ok || !result.url) throw new Error(result.error || 'Could not start checkout.');
@@ -285,6 +330,7 @@ export async function createBillingPortalSession(returnTo = 'account.html') {
   if (!token) throw new Error('You must be signed in to manage billing.');
   const res = await fetch(`${SUPABASE_URL}/functions/v1/create-billing-portal-session`, {
     method: 'POST',
+    signal: AbortSignal.timeout(15000),
     headers: {
       'Content-Type': 'application/json',
       apikey: SUPABASE_KEY,
@@ -295,4 +341,53 @@ export async function createBillingPortalSession(returnTo = 'account.html') {
   const result = await res.json().catch(() => ({}));
   if (!res.ok || !result.url) throw new Error(result.error || 'Could not open the billing portal.');
   return result.url;
+}
+
+// ── Image upload optimization ─────────────────────────────────────
+// Club decision (2026-11-02): user-uploaded images are resized, converted,
+// and stripped of EXIF before they reach Storage. A phone photo's EXIF can
+// carry GPS coordinates, so drawing through a canvas (which drops all
+// metadata) is a privacy fix, not just a size win. Non-images, SVGs
+// (vector — rasterizing would destroy them), and GIFs (animation would be
+// lost to a single frame) pass through unchanged. Avatars don't exist on
+// the site, so the 512px avatar size has no call site yet; pass maxEdge
+// explicitly if one is ever added.
+export async function optimizeImageFile(file, maxEdge = 2048) {
+  if (!file || !file.type.startsWith('image/')) return file;
+  if (file.type === 'image/svg+xml' || file.type === 'image/gif') return file;
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch {
+    throw new Error('That image could not be processed — please choose another file.');
+  }
+  const longest = Math.max(bitmap.width, bitmap.height);
+  const scale = longest > maxEdge ? maxEdge / longest : 1;
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  if (bitmap.close) bitmap.close();
+  const toBlob = (type, quality) => new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+  // WebP keeps alpha, so it is the first choice for every image.
+  let blob = await toBlob('image/webp', 0.8);
+  let ext = 'webp';
+  if (!blob) {
+    // No WebP encoder (old browser): JPEG for opaque images, original file
+    // for images with any alpha, so transparency is never silently lost.
+    const data = ctx.getImageData(0, 0, width, height).data;
+    let hasAlpha = false;
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] < 255) { hasAlpha = true; break; }
+    }
+    if (hasAlpha) return file;
+    blob = await toBlob('image/jpeg', 0.8);
+    ext = 'jpg';
+    if (!blob) return file;
+  }
+  const base = file.name.replace(/\.[^.]+$/, '') || 'image';
+  return new File([blob], `${base}.${ext}`, { type: blob.type });
 }

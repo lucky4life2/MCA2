@@ -54,6 +54,87 @@
 /nav.js
   Cache-Control: public, max-age=300, must-revalidate
 
+/supabase.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/news.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/slideshow.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/early-hide.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/member-gate.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/economy.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/nations.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/archive.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/server-status.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/account.page.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/admin.page.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/archive-publish.page.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/article.page.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/congress.page.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/court.page.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/economy.page.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/help.page.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/index.page.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/leadership.page.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/login.page.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/news-publish.page.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/parental-consent.page.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/server.page.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/shop.page.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/stocks.page.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/tasks.page.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+/unsubscribe.page.js
+  Cache-Control: public, max-age=300, must-revalidate
+
 # ── Strict tier: no 'unsafe-inline' for scripts ──────────────────────────
 # The /* policy above is now the same strict policy; these per-page blocks
 # remain as explicit overrides (and the list documents which pages were

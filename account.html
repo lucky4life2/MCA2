@@ -5,6 +5,15 @@
   <script src="early-hide.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Account — Minecraft Club of America</title>
+  <meta name="description" content="Manage your MCA account, membership, and settings.">
+  <link rel="canonical" href="https://minecraftclubofamerica.me/account.html">
+  <meta property="og:title" content="My Account — Minecraft Club of America">
+  <meta property="og:description" content="Manage your MCA account, membership, and settings.">
+  <meta property="og:image" content="https://minecraftclubofamerica.me/images/widelogo.png">
+  <meta property="og:image:width" content="500">
+  <meta property="og:image:height" content="198">
+  <meta property="og:url" content="https://minecraftclubofamerica.me/account.html">
+  <meta property="og:type" content="website">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600&display=swap">
@@ -19,7 +28,7 @@
   <style>
     .account-wrap { max-width: 720px; margin: 0 auto; padding: 4rem 2.5rem 6rem; }
     .account-hero { border-bottom: 1px solid var(--border); padding-bottom: 2.5rem; margin-bottom: 2.5rem; }
-    .account-hero-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 2.5px; text-transform: uppercase; color: var(--green); margin-bottom: 1rem; display: flex; align-items: center; gap: 10px; }
+    .account-hero-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 2.5px; text-transform: uppercase; color: var(--green-text); margin-bottom: 1rem; display: flex; align-items: center; gap: 10px; }
     .account-hero-eyebrow::after { content: ''; display: block; height: 1px; width: 40px; background: var(--green); opacity: .6; }
     .account-hero h1 { font-family: 'Times New Roman', serif; font-size: clamp(28px, 4vw, 42px); font-weight: 700; color: var(--blue); line-height: 1.15; }
     .account-hero-sub { font-size: 14px; color: var(--muted); margin-top: 0.5rem; }
@@ -66,7 +75,7 @@
     .mc-code-command { font-family: monospace; font-size: 13px; color: var(--mid); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 8px 12px; margin: 0.5rem 0 1rem; display: block; }
     .btn-copy { background: transparent; border: 1px solid var(--border); color: var(--muted); font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: 3px; cursor: pointer; transition: all .15s; white-space: nowrap; }
     .btn-copy:hover { border-color: var(--blue); color: var(--blue); }
-    .btn-copy.copied { border-color: var(--green); color: #2d7d2f; }
+    .btn-copy.copied { border-color: var(--green); color: var(--green-text); }
 
     /* Connected accounts row */
     .connected-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); gap: 12px; }
@@ -205,7 +214,7 @@
     Serving it ourselves also keeps a third-party script off the page that
     handles TOTP secrets, and lets the CSP drop cdn.jsdelivr.net entirely.
   -->
-  <script src="vendor/qrcode.min.js"></script>
+  <script src="vendor/qrcode.min.js" defer></script>
 </head>
 <body>
 <script type="module" src="nav.js"></script>
@@ -607,7 +616,7 @@
       <div class="form-group">
         <label class="form-label" for="contact-files">Attach Photos (optional)</label>
         <input type="file" id="contact-files" accept="image/*" multiple>
-        <div class="form-hint">For evidence of bans or other issues. Up to 10 MB total.</div>
+        <div class="form-hint">For evidence of bans or other issues. Up to 10 MB total. Photos are optimized on upload (resized, converted, location data stripped).</div>
         <div id="contact-files-preview" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;"></div>
       </div>
       <div class="form-error" id="contact-error"></div>

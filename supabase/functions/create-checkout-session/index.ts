@@ -22,6 +22,61 @@ const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
 
+// ── Server-side error capture (approved 2026-11-02, server-side first) ──
+// Only active when a SENTRY_DSN secret is set in the Supabase dashboard;
+// with no DSN this is a no-op and console.error remains the only log.
+// No Sentry project or DSN exists yet — creating one and setting the
+// secret is the remaining dashboard step. Browser error logging is NOT
+// added here (held until a privacy review).
+// Everything sent is scrubbed: emails, JWTs/tokens, Stripe keys, and
+// card-like digit runs. Request bodies, user emails, and payment data are
+// never sent — only the scrubbed error message and the call site.
+const SENTRY_DSN = Deno.env.get('SENTRY_DSN') ?? '';
+function scrubText(s: string): string {
+  return s
+    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[token]')
+    .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[email]')
+    .replace(/\b(sk|pk|rk|whsec)_(live|test)_[A-Za-z0-9]+\b/g, '[stripe-key]')
+    .replace(/\bBearer\s+\S+/gi, 'Bearer [token]')
+    .replace(/\b\d{13,19}\b/g, '[card]');
+}
+function reportError(where: string, err: unknown): void {
+  if (!SENTRY_DSN) return;
+  try {
+    const m = SENTRY_DSN.match(/^https:\/\/([^@]+)@([^/]+)\/(\d+)$/);
+    if (!m) return;
+    const [, publicKey, host, projectId] = m;
+    const eventId = crypto.randomUUID().replaceAll('-', '');
+    const event = {
+      event_id: eventId,
+      timestamp: Date.now() / 1000,
+      level: 'error',
+      logger: 'edge-function',
+      message: { formatted: scrubText(`${where}: ${err instanceof Error ? err.message : String(err)}`) },
+    };
+    const eventJson = JSON.stringify(event);
+    const body = [
+      JSON.stringify({ event_id: eventId, sent_at: new Date().toISOString() }),
+      JSON.stringify({ type: 'event', content_type: 'application/json', length: new TextEncoder().encode(eventJson).length }),
+      eventJson,
+    ].join('\n');
+    const req = fetch(`https://${host}/api/${projectId}/envelope/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-sentry-envelope',
+        'X-Sentry-Auth': `Sentry sentry_version=7, sentry_client=mca-edge/1.0, sentry_key=${publicKey}`,
+      },
+      body,
+    });
+    const waitUntil = (globalThis as unknown as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime?.waitUntil;
+    if (typeof waitUntil === 'function') waitUntil(req.catch(() => {}));
+    else req.catch(() => {});
+  } catch {
+    // Reporting must never break the function it reports on.
+  }
+}
+
+
 // Lets the whole shop → checkout → membership/order → Minecraft-plugin-gate
 // flow be exercised end to end before a real Stripe account exists, without
 // touching Stripe at all. Only takes effect when STRIPE_SECRET_KEY is still
@@ -152,10 +207,26 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'Too many checkout attempts — please wait a few minutes and try again.' }, 429);
   }
 
-  const body = await req.json().catch(() => ({}));
+  // Bound the request body: a checkout body is { items: [...] } plus an
+  // idempotency key and never legitimately approaches 64KB.
+  const rawBody = await req.text().catch(() => '');
+  if (rawBody.length > 65536) return json({ error: 'Request too large.' }, 413);
+  let body: { items?: unknown; idempotencyKey?: unknown } = {};
+  try { body = rawBody ? JSON.parse(rawBody) : {}; } catch { body = {}; }
   const requested: { id?: string; qty?: number }[] = Array.isArray(body?.items) ? body.items : [];
   const ids = requested.map((i) => i.id).filter((id): id is string => !!id);
   if (!ids.length) return json({ error: 'Your cart is empty.' }, 400);
+  // The webhook records a single page of 100 Stripe line items (no
+  // pagination there), so a cart larger than that would record a truncated
+  // order. Cap distinct items here instead of touching the webhook.
+  if (ids.length > 100) return json({ error: 'Too many distinct items in one checkout (maximum 100).' }, 400);
+  // Idempotency: same key + same params makes Stripe return the original
+  // session instead of creating a second one, so a retried or
+  // double-clicked checkout cannot double-charge. Keys are accepted only
+  // in a strict shape; anything else is ignored (old clients keep working).
+  const idempotencyKey = typeof body?.idempotencyKey === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(body.idempotencyKey)
+    ? body.idempotencyKey
+    : undefined;
 
   const { data: products, error: productsError } = await admin
     .from('products')
@@ -195,7 +266,7 @@ Deno.serve(async (req: Request) => {
     }
     const isSubscription = product.product_type === 'subscription';
     isSubscription ? (hasSubscription = true) : (hasGoods = true);
-    const requestedQty = Math.max(1, Math.min(99, Math.floor(Number(item.qty) || 1)));
+    const requestedQty = Math.max(1, Math.min(10, Math.floor(Number(item.qty) || 1)));
 
     // Stock is only tracked for physical goods, never for a subscription
     // seat. A null inventory means the product doesn't track stock at
@@ -258,6 +329,12 @@ Deno.serve(async (req: Request) => {
   if (hasSubscription && lineItems.length > 1) {
     return json({ error: 'Only one subscription can be checked out at a time.' }, 400);
   }
+  // Club decision (2026-11-02): max order total $500. mockLines mirrors
+  // the Stripe line items exactly, so this is the order total.
+  const orderTotal = mockLines.reduce((sum, l) => sum + l.amount_total, 0);
+  if (orderTotal > 500) {
+    return json({ error: 'Orders are limited to $500 total.' }, 400);
+  }
 
   // A membership subscription is a single global seat on the profile
   // (profiles.membership_status), not a per-product purchase — someone
@@ -281,6 +358,21 @@ Deno.serve(async (req: Request) => {
     if (isActiveMember) {
       return json({ error: "You're already a member — no need to subscribe again." }, 400);
     }
+  }
+
+  // Club decision (2026-11-02): max 3 orders per member per day.
+  // Orders are only recorded on completed payment, so every row counts.
+  // Fail closed: an error checking recent orders blocks checkout rather
+  // than silently skipping the limit.
+  const todayStart = new Date().toISOString().slice(0, 10) + 'T00:00:00Z';
+  const { count: ordersToday, error: ordersTodayError } = await admin
+    .from('orders')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .gte('created_at', todayStart);
+  if (ordersTodayError) return json({ error: 'Could not verify your recent orders.' }, 500);
+  if ((ordersToday ?? 0) >= 3) {
+    return json({ error: 'You have already placed 3 orders today — please try again tomorrow.' }, 429);
   }
 
   const origin = returnOrigin(req);
@@ -378,10 +470,11 @@ Deno.serve(async (req: Request) => {
       params.phone_number_collection = { enabled: true };
     }
 
-    const session = await stripe.checkout.sessions.create(params);
+    const session = await stripe.checkout.sessions.create(params, idempotencyKey ? { idempotencyKey } : undefined);
     return json({ url: session.url });
   } catch (err) {
     console.error('Stripe checkout session creation failed:', err);
+    reportError('create-checkout-session', err);
     return json({ error: err instanceof Error ? err.message : 'Could not start checkout.' }, 500);
   }
 });

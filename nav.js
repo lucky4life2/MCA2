@@ -1,6 +1,8 @@
-// Apply dark mode immediately to prevent flash
+// Apply dark mode immediately to prevent flash. A stored choice wins;
+// otherwise the operating system's preference is the default.
 (function() {
-  if (localStorage.getItem('mca_theme') === 'dark') {
+  const stored = localStorage.getItem('mca_theme');
+  if (stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
     document.documentElement.setAttribute('data-theme', 'dark');
   }
 })();
@@ -45,7 +47,7 @@ const _configReady = new Promise(r => { _configResolve = r; });
   try {
     const res = await fetch(
       `${SUPABASE_URL_CFG}/rest/v1/settings?key=eq.site_config&select=value`,
-      { headers: { 'apikey': SUPABASE_ANON_CFG, 'Authorization': `Bearer ${SUPABASE_ANON_CFG}` } }
+      { headers: { 'apikey': SUPABASE_ANON_CFG, 'Authorization': `Bearer ${SUPABASE_ANON_CFG}` }, signal: AbortSignal.timeout(15000) }
     );
     if (res.ok) {
       const rows = await res.json();
@@ -60,6 +62,7 @@ const _configReady = new Promise(r => { _configResolve = r; });
       }
     }
   } catch(e) {}
+  window._siteConfig = SITE_CONFIG;
   _configResolve();
   window.EMAIL_US = EMAIL_US;
 })();
@@ -101,6 +104,7 @@ const NAV_HTML = () => {
         <li><a href="history.html"    data-page="history">History</a></li>
       </ul>
     </li>
+    <li><a href="search.html" data-page="search">Search</a></li>
     <li><a href="${safeLinkUrl(DISCORD_URL, 'https://discord.gg/hZrt28vG29')}" data-discord target="_blank" rel="noopener noreferrer" class="nav-discord">Discord</a></li>
     <li class="nav-theme-item nav-theme-item-mobile">
       <div class="nav-account nav-account-mobile" id="nav-account-mobile"></div>
@@ -150,6 +154,7 @@ const FOOTER_HTML = () => {
         <a href="news.html">News</a>
         <a href="archive.html">Archive</a>
         <a href="help.html">Help</a>
+        <a href="search.html">Search</a>
       </div>
 
       <div class="footer-col">
@@ -158,6 +163,7 @@ const FOOTER_HTML = () => {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.002.022.015.043.03.057a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
           Discord
         </a>
+        <button type="button" class="footer-copy-btn" data-copy-invite>Copy invite link</button>
         <a href="${safeLinkUrl(YOUTUBE_URL, 'https://www.youtube.com/@MinecraftClubOfAmerica')}" data-youtube target="_blank" rel="noopener noreferrer">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
           YouTube
@@ -183,6 +189,7 @@ const FOOTER_HTML = () => {
         <a href="accessibility.html">Accessibility</a>
         <a href="cookies.html">Cookie Policy</a>
         <a href="refund.html">Refund Policy</a>
+        <a href="unsubscribe.html">Email Unsubscribe</a>
       </div>
     </div>
 
@@ -570,6 +577,7 @@ function showLockScreen(cfg) {
     btn.textContent = 'Signing in…'; btn.disabled = true;
     try {
       const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/sign-in-with-email', {
+        signal: AbortSignal.timeout(15000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -1346,3 +1354,171 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   });
 }
+
+// ── Curated features pass (2026-11-03) ──────────────────────────────────
+// Site-wide helpers: back-to-top button, password visibility toggles,
+// accessible confirmation modal, footer Discord-invite copy. nav.js loads
+// before every page script, so window.mcaConfirm is available to them.
+
+// Back-to-top: appears after scrolling, keyboard-focusable, honors
+// reduced motion, and sits clear of the cookie banner.
+(function initBackToTop() {
+  const run = () => {
+    if (document.getElementById('mca-back-to-top')) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'mca-back-to-top';
+    btn.className = 'mca-back-to-top';
+    btn.setAttribute('aria-label', 'Back to top');
+    btn.textContent = '↑ Top';
+    btn.addEventListener('click', () => {
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
+    });
+    document.body.appendChild(btn);
+    const onScroll = () => btn.classList.toggle('show', window.scrollY > 600);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+})();
+
+// Password visibility toggles: one small Show/Hide button per password
+// field, present in the markup. The visible state is never persisted and
+// values are never logged; toggling only flips the input's type.
+function enhancePasswordToggles() {
+  document.querySelectorAll('input[type="password"]').forEach(input => {
+    if (input.dataset.mcaPwEnhanced) return;
+    input.dataset.mcaPwEnhanced = '1';
+    const wrap = document.createElement('span');
+    wrap.className = 'mca-pw-wrap';
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'mca-pw-toggle';
+    btn.textContent = 'Show';
+    btn.setAttribute('aria-label', 'Show password');
+    btn.setAttribute('aria-pressed', 'false');
+    btn.addEventListener('click', () => {
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.textContent = show ? 'Hide' : 'Show';
+      btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      btn.setAttribute('aria-pressed', show ? 'true' : 'false');
+      input.focus();
+    });
+    wrap.appendChild(btn);
+  });
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', enhancePasswordToggles);
+else enhancePasswordToggles();
+
+// Accessible confirmation modal for destructive actions. Resolves true
+// only on an explicit Confirm click. It replaces native confirm() on
+// delete paths so the dialog is keyboard accessible; the underlying
+// action's checks are unchanged. Message text is set via textContent,
+// never innerHTML, so names and other data cannot inject markup.
+let _mcaModalEls = null;
+
+function _mcaModalBuild() {
+  const overlay = document.createElement('div');
+  overlay.className = 'mca-modal-overlay';
+  overlay.style.display = 'none';
+  const dialog = document.createElement('div');
+  dialog.className = 'mca-modal';
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('aria-labelledby', 'mca-modal-title');
+  dialog.setAttribute('aria-describedby', 'mca-modal-message');
+  const title = document.createElement('h2');
+  title.className = 'mca-modal-title';
+  title.id = 'mca-modal-title';
+  const message = document.createElement('p');
+  message.className = 'mca-modal-message';
+  message.id = 'mca-modal-message';
+  const actions = document.createElement('div');
+  actions.className = 'mca-modal-actions';
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'btn btn-outline';
+  const confirm = document.createElement('button');
+  confirm.type = 'button';
+  confirm.className = 'btn btn-danger';
+  actions.appendChild(cancel);
+  actions.appendChild(confirm);
+  dialog.appendChild(title);
+  dialog.appendChild(message);
+  dialog.appendChild(actions);
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+  return { overlay, title, message, cancel, confirm };
+}
+
+function mcaConfirm({ title = 'Are you sure?', message = '', confirmText = 'Delete', cancelText = 'Cancel' } = {}) {
+  return new Promise((resolve) => {
+    if (!_mcaModalEls) _mcaModalEls = _mcaModalBuild();
+    const els = _mcaModalEls;
+    els.title.textContent = title;
+    els.message.textContent = message;
+    els.confirm.textContent = confirmText;
+    els.cancel.textContent = cancelText;
+    const opener = document.activeElement;
+    let done = false;
+    const close = (value) => {
+      if (done) return;
+      done = true;
+      els.overlay.style.display = 'none';
+      document.removeEventListener('keydown', onKey);
+      if (opener && opener.focus) opener.focus();
+      resolve(value);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); close(false); return; }
+      if (e.key === 'Tab') {
+        const items = [els.cancel, els.confirm];
+        if (e.shiftKey && document.activeElement === items[0]) { e.preventDefault(); items[1].focus(); }
+        else if (!e.shiftKey && document.activeElement === items[1]) { e.preventDefault(); items[0].focus(); }
+      }
+    };
+    els.cancel.onclick = () => close(false);
+    els.confirm.onclick = () => close(true);
+    els.overlay.onclick = (e) => { if (e.target === els.overlay) close(false); };
+    document.addEventListener('keydown', onKey);
+    els.overlay.style.display = 'flex';
+    // Focus Cancel by default so Enter never confirms a destructive action.
+    els.cancel.focus();
+  });
+}
+window.mcaConfirm = mcaConfirm;
+
+// Footer Discord-invite copy (delegated, mirroring the footer email copy).
+// Shows "Copied!" only on a real success; silent failure keeps the label.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest?.('[data-copy-invite]');
+  if (!btn) return;
+  e.preventDefault();
+  const anchor = document.querySelector('[data-discord]');
+  const url = (anchor && anchor.getAttribute('href')) || DISCORD_URL || 'https://discord.gg/hZrt28vG29';
+  const done = () => {
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  };
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = url;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { if (document.execCommand('copy')) done(); } catch (err) { /* keep label */ }
+    document.body.removeChild(ta);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(done).catch(fallback);
+  } else {
+    fallback();
+  }
+});
