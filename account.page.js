@@ -1830,7 +1830,7 @@ function closeDeleteModal() {
 document.getElementById('btn-delete-account').addEventListener('click', openDeleteModal);
 
 document.getElementById('btn-deactivate-account').addEventListener('click', async () => {
-  if (!confirm('Deactivate your account? You\'ll be signed out, and signing back in reactivates it.')) return;
+  if (!(await mcaConfirm({ title: 'Deactivate account?', message: 'Deactivate your account? You\'ll be signed out, and signing back in reactivates it.', confirmText: 'Deactivate', danger: true }))) return;
   const btn = document.getElementById('btn-deactivate-account');
   btn.disabled = true; btn.textContent = 'Deactivating...';
   const { error } = await supabase.rpc('deactivate_own_account');

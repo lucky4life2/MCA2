@@ -15,6 +15,7 @@
 - [Nations](https://minecraftclubofamerica.me/nations.html)
 - [History](https://minecraftclubofamerica.me/history.html)
 - [Help](https://minecraftclubofamerica.me/help.html)
+- [Search](https://minecraftclubofamerica.me/search.html)
 - [Economy](https://minecraftclubofamerica.me/economy.html)
 - [Stock Exchange](https://minecraftclubofamerica.me/stocks.html)
 - [Sign In](https://minecraftclubofamerica.me/login.html)

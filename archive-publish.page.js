@@ -356,8 +356,7 @@ window.quickUnpublish = async (id) => {
   await loadDocs();
 };
 window.deleteDoc = async (id) => {
-  if (!confirm('Delete this document? This cannot be undone.')) return;
-  if (!confirm('Are you sure? This cannot be undone.')) return;
+  if (!(await mcaConfirm({ title: 'Delete document?', message: 'Delete this document? This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
   const { error } = await supabase.from('archive_documents').delete().eq('id', id);
   if (error) { toast('Error: '+error.message, true); return; }
   if (_editingId === id) clearEditor();

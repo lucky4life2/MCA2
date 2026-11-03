@@ -2234,3 +2234,80 @@ html[data-member-gate] body > :not(nav):not(footer):not(script):not(.member-gate
 @media (max-width: 480px) {
   .member-gate-panel { margin: 2rem 16px; }
 }
+
+/* ── Curated features pass (2026-11-03) ─────────────────────────────── */
+
+/* Password visibility toggles */
+.mca-pw-wrap { position: relative; display: block; width: 100%; }
+.mca-pw-wrap input { padding-right: 64px; }
+.mca-pw-toggle {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; color: var(--blue);
+  font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 6px;
+}
+.mca-pw-toggle:focus { outline: 3px solid var(--blue); outline-offset: 1px; border-radius: 4px; }
+
+/* Back-to-top button (sits clear of the cookie banner) */
+.mca-back-to-top {
+  position: fixed; right: 1.5rem; bottom: calc(1.5rem + var(--cookie-banner-h, 0px));
+  z-index: 400; display: none; padding: 0.6rem 1rem; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--white); color: var(--black);
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+}
+.mca-back-to-top.show { display: block; }
+.mca-back-to-top:focus { outline: 3px solid var(--blue); outline-offset: 2px; }
+
+/* Accessible confirmation modal */
+.mca-modal-overlay {
+  position: fixed; inset: 0; background: rgba(17,17,17,.55);
+  display: flex; align-items: center; justify-content: center;
+  padding: 1.5rem; z-index: 5000;
+}
+.mca-modal {
+  background: var(--white); color: var(--black);
+  border: 1px solid var(--border); border-radius: 8px;
+  max-width: 480px; width: 100%; padding: 1.5rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+}
+.mca-modal-title { margin: 0 0 0.75rem; font-size: 1.25rem; }
+.mca-modal-message { margin: 0 0 1.5rem; line-height: 1.6; white-space: pre-line; }
+.mca-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+/* Footer copy-invite button, styled like the other footer links */
+.footer-copy-btn {
+  background: none; border: none; padding: 0;
+  font-size: 13px; color: var(--muted); cursor: pointer; text-align: left;
+  display: flex; align-items: center;
+}
+.footer-copy-btn:hover { color: var(--blue); }
+.footer-copy-btn:focus { outline: 3px solid var(--blue); outline-offset: 1px; border-radius: 4px; }
+
+/* Site search page */
+.search-label { display: block; font-weight: 600; margin-bottom: 0.5rem; }
+.search-input {
+  width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 6px;
+  font-size: 15px; background: var(--white); color: var(--black); box-sizing: border-box;
+}
+.search-input:focus { outline: 3px solid var(--blue); outline-offset: 1px; border-color: var(--blue); }
+.search-status { color: var(--muted); font-size: 13px; margin: 0.75rem 0 0; }
+.search-loading { color: var(--muted); font-size: 14px; margin-top: 1.5rem; }
+.search-results { list-style: none; margin: 1.5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 1rem; }
+.search-result { border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; background: var(--white); }
+.search-result a { font-weight: 600; font-size: 16px; text-decoration: none; }
+.search-result a:hover { text-decoration: underline; }
+.search-result-kind { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.search-result-desc { color: var(--mid); font-size: 14px; line-height: 1.5; margin: 0.35rem 0 0; }
+.search-empty { color: var(--muted); font-size: 15px; margin-top: 1.5rem; }
+.search-note { color: var(--muted); font-size: 13px; margin-top: 1.5rem; }
+
+/* Print: hide navigation and interactive chrome, expand the content. */
+@media print {
+  nav, footer, .cookie-banner, .toast, .mca-back-to-top, .mca-modal-overlay,
+  button, .btn, .news-search-wrap, .search-input-wrap { display: none !important; }
+  body { background: #fff !important; color: #000 !important; }
+  .page-wrap, .content { max-width: none !important; padding: 0 !important; margin: 0 !important; }
+  a { text-decoration: underline; color: #000 !important; }
+  h1, h2, h3, img, table { break-inside: avoid; }
+  .article-body a[href]::after { content: " (" attr(href) ")"; font-size: 0.85em; }
+}
