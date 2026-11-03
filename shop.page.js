@@ -267,7 +267,7 @@ document.addEventListener('keydown', (e) => {
     const sub = items.reduce((s, i) => s + (Number(i.price) || 0) * Math.min(maxQty(i), i.qty || 1), 0);
     elCartBody.innerHTML = items.map(i => `
       <div class="cart-item">
-        ${safeUrl(i.image_url) ? `<img class="cart-item-img" src="${esc(safeUrl(i.image_url))}" alt="${esc(i.name)}">` : `<div class="cart-item-img-placeholder"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></div>`}
+        ${safeUrl(i.image_url) ? `<img class="cart-item-img" src="${esc(safeUrl(i.image_url))}" alt="${esc(i.name)}" loading="lazy" decoding="async">` : `<div class="cart-item-img-placeholder"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></div>`}
         <div class="cart-item-info">
           <div class="cart-item-name">${esc(i.name)}</div>
           <div class="cart-item-price">${isSubscription(i) ? priceLabel(i) : priceLabel(i) + ' each'}</div>
@@ -332,7 +332,7 @@ document.addEventListener('keydown', (e) => {
       : [p.image_url, p.image_url2].filter(Boolean);
 
     const mainImg = gallery[0]
-      ? `<img class="detail-modal-img" id="detail-modal-main-img" src="${esc(safeUrl(gallery[0]))}" alt="${esc(p.name)}">`
+      ? `<img class="detail-modal-img" id="detail-modal-main-img" src="${esc(safeUrl(gallery[0]))}" alt="${esc(p.name)}" decoding="async">`
       : `<div class="detail-modal-img-placeholder"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9l4-4 4 4 4-4 4 4"/><circle cx="8.5" cy="13.5" r="1.5"/></svg></div>`;
 
     window._detailGallery = gallery;
@@ -507,7 +507,7 @@ document.addEventListener('keydown', (e) => {
         }
       }
       return `<div class="product-card" role="button" tabindex="0" aria-label="View ${esc(p.name)}" data-action="open-product-detail" data-id="${esc(p.id)}">
-        ${safeUrl(p.image_url) ? `<img class="product-card-img" src="${esc(safeUrl(p.image_url))}" alt="${esc(p.name)}">` : `<div class="product-card-img-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9l4-4 4 4 4-4 4 4"/><circle cx="8.5" cy="13.5" r="1.5"/></svg></div>`}
+        ${safeUrl(p.image_url) ? `<img class="product-card-img" src="${esc(safeUrl(p.image_url))}" alt="${esc(p.name)}" loading="lazy" decoding="async">` : `<div class="product-card-img-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9l4-4 4 4 4-4 4 4"/><circle cx="8.5" cy="13.5" r="1.5"/></svg></div>`}
         <div class="product-card-body">
           ${p.category ? `<div class="product-card-category">${esc(p.category)}</div>` : ''}
           <div class="product-card-name">${esc(p.name)}</div>

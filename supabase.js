@@ -97,12 +97,20 @@ export async function getCurrentUserPermissions() {
  * Returns true if the current user has the given permission flag.
  * Uses server-side RPC for reliable enforcement.
  */
+const _permInflight = {};
 export async function hasPermission(perm) {
-  try {
-    const { data, error } = await supabase.rpc('user_has_permission', { perm });
-    if (error) return false;
-    return !!data;
-  } catch { return false; }
+  // Dedupe only concurrent identical checks. No time-based memo: a cached
+  // permission could outlive a demotion or a role-preview change.
+  if (_permInflight[perm]) return _permInflight[perm];
+  const p = (async () => {
+    try {
+      const { data, error } = await supabase.rpc('user_has_permission', { perm });
+      if (error) return false;
+      return !!data;
+    } catch { return false; }
+  })();
+  _permInflight[perm] = p;
+  try { return await p; } finally { delete _permInflight[perm]; }
 }
 
 /**

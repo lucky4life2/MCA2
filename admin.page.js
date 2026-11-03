@@ -2842,7 +2842,7 @@ function auditTableLabel(t) {
 async function populateAuditTableFilter() {
   if (_auditTablesLoaded) return;
   try {
-    const { data, error } = await supabase.from('audit_log').select('table_name, actor_id, actor_name');
+    const { data, error } = await supabase.from('audit_log').select('table_name, actor_id, actor_name').limit(1000);
     if (error) throw error;
     const tables = [...new Set((data || []).map(r => r.table_name))].sort();
     const sel = document.getElementById('audit-filter-table');

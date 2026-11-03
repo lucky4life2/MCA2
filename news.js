@@ -322,33 +322,47 @@ function applySearch(query) {
 
 // ── Init ──────────────────────────────────────────────────────
 const indexEl   = document.getElementById('news-index');
+// Banner-only pages (no news index) need just the featured article, not
+// every published body — the banner renders title + date and links by slug.
+const bannerOnly = !indexEl;
 const loadingEl = document.getElementById('news-loading');
 const errorEl   = document.getElementById('news-error');
 const searchEl  = document.getElementById('news-search');
 
 // Always fetch articles — needed for featured banner on any page, and for the news index
 try {
-  const { data: articles, error } = await supabase
-    .from('news_articles')
-    .select('id,title,slug,summary,body,category,author_name,published_at,image_url,status')
-    .eq('status', 'published')
-    .order('published_at', { ascending: false });
+  const { data: articles, error } = bannerOnly
+    ? await supabase
+        .from('news_articles')
+        .select('id,title,slug,summary,body,category,author_name,published_at,image_url,status')
+        .eq('status', 'published')
+        .ilike('category', 'featured')
+        .order('published_at', { ascending: false })
+    : await supabase
+        .from('news_articles')
+        .select('id,title,slug,summary,body,category,author_name,published_at,image_url,status')
+        .eq('status', 'published')
+        .order('published_at', { ascending: false });
 
   if (loadingEl) loadingEl.style.display = 'none';
   if (error) throw error;
 
   if (articles && articles.length > 0) {
-    // Coauthor ids — best-effort: the column only exists once the
-    // coauthoring migration has been applied. Until then, bylines show
-    // the primary author only and nothing breaks.
-    try {
-      const { data: co } = await supabase.from('news_articles')
-        .select('id,coauthor_ids')
-        .in('id', articles.map(a => a.id));
-      const byId = Object.fromEntries((co || []).map(r => [r.id, r.coauthor_ids || []]));
-      for (const a of articles) a.coauthor_ids = byId[a.id] || [];
-    } catch { /* migration not applied yet */ }
-    await loadCoauthorNames(articles);
+    // Bylines are only shown on the news index, so banner-only pages skip
+    // the coauthor round-trip entirely.
+    if (!bannerOnly) {
+      // Coauthor ids — best-effort: the column only exists once the
+      // coauthoring migration has been applied. Until then, bylines show
+      // the primary author only and nothing breaks.
+      try {
+        const { data: co } = await supabase.from('news_articles')
+          .select('id,coauthor_ids')
+          .in('id', articles.map(a => a.id));
+        const byId = Object.fromEntries((co || []).map(r => [r.id, r.coauthor_ids || []]));
+        for (const a of articles) a.coauthor_ids = byId[a.id] || [];
+      } catch { /* migration not applied yet */ }
+      await loadCoauthorNames(articles);
+    }
     // Featured banner — shows on every page except admin, news, account, help,
     // tasks, news-publish, archive-publish, and shop
     const BANNER_EXCLUDED_PAGES = [

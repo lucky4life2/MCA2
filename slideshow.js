@@ -53,6 +53,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   startTimer();
 
+  // Warm the cache for the remaining slides: they are display:none with
+  // loading="lazy", so without this the first auto-advance can show a
+  // blank slide while the image starts downloading. This runs after
+  // parsing, so it never competes with first paint.
+  slides.forEach((s, i) => {
+    if (i === 0) return;
+    const img = s.querySelector('img');
+    const src = img && img.getAttribute('src');
+    if (src) { const pre = new Image(); pre.src = src; }
+  });
+
   // Pause on hover so users can look at a slide without it flipping
   container.addEventListener('mouseenter', stopTimer);
   container.addEventListener('mouseleave', startTimer);

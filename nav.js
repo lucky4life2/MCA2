@@ -45,7 +45,7 @@ const _configReady = new Promise(r => { _configResolve = r; });
   try {
     const res = await fetch(
       `${SUPABASE_URL_CFG}/rest/v1/settings?key=eq.site_config&select=value`,
-      { headers: { 'apikey': SUPABASE_ANON_CFG, 'Authorization': `Bearer ${SUPABASE_ANON_CFG}` } }
+      { headers: { 'apikey': SUPABASE_ANON_CFG, 'Authorization': `Bearer ${SUPABASE_ANON_CFG}` }, signal: AbortSignal.timeout(15000) }
     );
     if (res.ok) {
       const rows = await res.json();
@@ -60,6 +60,7 @@ const _configReady = new Promise(r => { _configResolve = r; });
       }
     }
   } catch(e) {}
+  window._siteConfig = SITE_CONFIG;
   _configResolve();
   window.EMAIL_US = EMAIL_US;
 })();
@@ -571,6 +572,7 @@ function showLockScreen(cfg) {
     btn.textContent = 'Signing in…'; btn.disabled = true;
     try {
       const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/sign-in-with-email', {
+        signal: AbortSignal.timeout(15000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
