@@ -152,10 +152,26 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'Too many checkout attempts — please wait a few minutes and try again.' }, 429);
   }
 
-  const body = await req.json().catch(() => ({}));
+  // Bound the request body: a checkout body is { items: [...] } plus an
+  // idempotency key and never legitimately approaches 64KB.
+  const rawBody = await req.text().catch(() => '');
+  if (rawBody.length > 65536) return json({ error: 'Request too large.' }, 413);
+  let body: { items?: unknown; idempotencyKey?: unknown } = {};
+  try { body = rawBody ? JSON.parse(rawBody) : {}; } catch { body = {}; }
   const requested: { id?: string; qty?: number }[] = Array.isArray(body?.items) ? body.items : [];
   const ids = requested.map((i) => i.id).filter((id): id is string => !!id);
   if (!ids.length) return json({ error: 'Your cart is empty.' }, 400);
+  // The webhook records a single page of 100 Stripe line items (no
+  // pagination there), so a cart larger than that would record a truncated
+  // order. Cap distinct items here instead of touching the webhook.
+  if (ids.length > 100) return json({ error: 'Too many distinct items in one checkout (maximum 100).' }, 400);
+  // Idempotency: same key + same params makes Stripe return the original
+  // session instead of creating a second one, so a retried or
+  // double-clicked checkout cannot double-charge. Keys are accepted only
+  // in a strict shape; anything else is ignored (old clients keep working).
+  const idempotencyKey = typeof body?.idempotencyKey === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(body.idempotencyKey)
+    ? body.idempotencyKey
+    : undefined;
 
   const { data: products, error: productsError } = await admin
     .from('products')
@@ -378,7 +394,7 @@ Deno.serve(async (req: Request) => {
       params.phone_number_collection = { enabled: true };
     }
 
-    const session = await stripe.checkout.sessions.create(params);
+    const session = await stripe.checkout.sessions.create(params, idempotencyKey ? { idempotencyKey } : undefined);
     return json({ url: session.url });
   } catch (err) {
     console.error('Stripe checkout session creation failed:', err);

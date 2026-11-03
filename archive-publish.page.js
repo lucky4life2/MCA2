@@ -258,6 +258,11 @@ window.loadIntoEditor = async (id) => {
 
 async function uploadFileIfNeeded() {
   if (!_pendingFile) return { url: _currentFileUrl, name: _currentFileName };
+  // Archive docs previously had no size check at all. Mirror the 10 MB cap
+  // already enforced for message/product photos (proposal, not club policy).
+  // Type allowlisting is intentionally not added here: what counts as a
+  // legitimate club document is a policy call for Kyden, not a guess.
+  if (_pendingFile.size > 10 * 1024 * 1024) throw new Error('That file is over 10 MB. Please choose a smaller file.');
   const ext = (_pendingFile.name.split('.').pop() || '').toLowerCase();
   const path = `${_user.id}/${Date.now()}-${slugify(_pendingFile.name.replace(/\.[^.]+$/, ''))}.${ext}`;
   const { error } = await supabase.storage.from(BUCKET).upload(path, _pendingFile);
@@ -266,7 +271,16 @@ async function uploadFileIfNeeded() {
   return { url: data.publicUrl, name: _pendingFile.name };
 }
 
+// Double-clicking Save used to re-upload the file and insert a second
+// document (the slug carries a timestamp, so no constraint saved it).
+// The wrapper below is the only guard; saveDocInner holds the old body.
+let _savingDoc = false;
 async function saveDoc(forcedStatus) {
+  if (_savingDoc) return;
+  _savingDoc = true;
+  try { await saveDocInner(forcedStatus); } finally { _savingDoc = false; }
+}
+async function saveDocInner(forcedStatus) {
   const id      = document.getElementById('ap-editing-id').value;
   const title   = document.getElementById('ap-title').value.trim();
   const body    = document.getElementById('ap-body').value.trim();

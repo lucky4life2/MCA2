@@ -179,7 +179,9 @@ function show(which) {
 }
 
 async function loadAll() {
-  const [{ data: projects }, { data: tasks }, { data: profiles }, { data: userRoles }, { data: comments }, { data: tags }, { data: roles }, { data: access }, { data: assignees }] = await Promise.all([
+  const boardEl = document.getElementById('board');
+  if (boardEl) boardEl.innerHTML = '<div class="t-empty">Loading…</div>';
+  const [{ data: projects, error: projectsErr }, { data: tasks, error: tasksErr }, { data: profiles, error: profilesErr }, { data: userRoles, error: userRolesErr }, { data: comments, error: commentsErr }, { data: tags, error: tagsErr }, { data: roles, error: rolesErr }, { data: access, error: accessErr }, { data: assignees, error: assigneesErr }] = await Promise.all([
     supabase.from('task_projects').select('*').order('sort_order').order('created_at'),
     supabase.from('tasks').select('*').order('due_date', { nullsFirst: false }),
     // public_profiles, not profiles: a member can only read their own profiles
@@ -193,6 +195,13 @@ async function loadAll() {
     _access.manage ? supabase.from('task_project_access').select('*') : Promise.resolve({ data: [] }),
     supabase.from('task_assignees').select('task_id, user_id'),
   ]);
+  // A failed query used to render as an empty board with no message. Surface
+  // the failure instead of masquerading it as "no projects yet".
+  const loadErr = projectsErr || tasksErr || profilesErr || userRolesErr || commentsErr || tagsErr || rolesErr || accessErr || assigneesErr;
+  if (loadErr) {
+    if (boardEl) boardEl.innerHTML = `<div class="t-empty">Could not load tasks: ${escapeHtml(loadErr.message)} — please refresh and try again.</div>`;
+    return;
+  }
   _projects = projects || []; _tasks = tasks || [];
   _roles = roles || []; _projectAccess = access || [];
   _allProfiles = profiles || []; // used for name lookups (assignees, commenters, checked-off-by) regardless of level
@@ -798,6 +807,12 @@ async function notifyTaskAssignee(taskId, userId) {
   }
 }
 document.getElementById('tk-save').onclick = async () => {
+  // Double-clicking Save on a new task used to run two inserts (same bug
+  // class as the already-fixed news double-publish). Guard the button.
+  const _tkSaveBtn = document.getElementById('tk-save');
+  if (_tkSaveBtn.disabled) return;
+  _tkSaveBtn.disabled = true;
+  try {
   const id = document.getElementById('tk-id').value;
   const title = document.getElementById('tk-name').value.trim();
   const errEl = document.getElementById('tk-error');
@@ -845,6 +860,7 @@ document.getElementById('tk-save').onclick = async () => {
   }
 
   document.getElementById('tk-modal').style.display = 'none'; clearShareUrlParam(); loadAll();
+  } finally { _tkSaveBtn.disabled = false; }
 };
 document.getElementById('tk-delete').onclick = async () => {
   const id = document.getElementById('tk-id').value;
@@ -1042,4 +1058,10 @@ document.getElementById('tk-comment-add').onclick = async () => {
   loadComments(taskId);
 };
 
-init();
+// A network throw inside init/loadAll used to be an unhandled rejection
+// with an empty board. Surface it instead.
+init().catch((e) => {
+  console.error('Tasks page boot failed:', e);
+  const boardEl = document.getElementById('board');
+  if (boardEl) boardEl.innerHTML = '<div class="t-empty">Could not load tasks — please refresh and try again.</div>';
+});
