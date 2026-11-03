@@ -639,12 +639,12 @@ function renderMembership() {
       </p>`
       : `
       <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
-        ${periodEnd ? `Your membership renews on <strong>${escapeHtml(periodEnd.toLocaleDateString())}</strong>. ` : ''}This unlocks the Minecraft server and the member-only pages of the site.
+        ${periodEnd ? `Your membership renews on <strong>${escapeHtml(periodEnd.toLocaleDateString())}</strong> at $12/year. ` : ''}This unlocks the Minecraft server and the member-only pages of the site.
       </p>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <button class="btn btn-outline" type="button" data-action="open-billing-portal">Manage Billing</button>
         <a class="btn btn-outline" href="shop.html" style="text-decoration:none;display:inline-block;">Manage in Shop</a>
-        <button type="button" class="btn btn-outline" id="btn-cancel-membership">Cancel Membership</button>
+        <button type="button" class="btn btn-outline" id="btn-cancel-membership">Request Cancellation</button>
       </div>
       <p style="font-size:12px;color:var(--muted);margin-top:0.75rem;">Cancelling stops future renewal charges — you keep access through the end of the period you already paid for. See our <a href="refund.html">Refund &amp; Cancellation Policy</a>.</p>`;
     wireCancelMembershipButton();
@@ -2150,10 +2150,12 @@ document.getElementById('btn-contact-admin').addEventListener('click', () => {
   document.getElementById('contact-subject').focus();
 });
 
-// "Cancel Membership" opens the same staff-message form used for support
+// "Request Cancellation" opens the same staff-message form used for support
 // requests, pre-filled so cancelling takes one click to send rather than
-// requiring the member to know who to contact or what to say — this is the
-// self-service cancellation path referenced in the Refund & Cancellation Policy.
+// requiring the member to know who to contact or what to say. This is a
+// staff-handled request, not an instant cancellation: true self-serve
+// cancellation lives in the Stripe billing portal ("Manage Billing"), and
+// only if the portal configuration allows subscription cancellation.
 function wireCancelMembershipButton() {
   const btn = document.getElementById('btn-cancel-membership');
   if (!btn) return;
