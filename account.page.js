@@ -625,6 +625,12 @@ function renderMembership() {
     // than saying plainly that it was granted.
     const comped = _profile.membership_source === 'admin_grant';
     const isTestCheckout = _profile.membership_source === 'test_checkout';
+    // One-time membership (membership_source 'stripe_onetime'): a single
+    // $12 payment for one year, no Stripe subscription behind it, so no
+    // billing portal and nothing to cancel. Gating is on the source
+    // value rather than the subscription id because the id is not
+    // client-readable (see PROFILE_COLUMNS); the source is.
+    const isOneTime = _profile.membership_source === 'stripe_onetime';
     badge.textContent = comped ? 'Complimentary' : isTestCheckout ? 'Active (Test)' : 'Active';
     badge.className = 'account-section-badge badge-verified';
     body.innerHTML = comped
@@ -635,8 +641,16 @@ function renderMembership() {
       : isTestCheckout
       ? `
       <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
-        This membership came from a TEST_CHECKOUT_MODE checkout (no real payment, no Stripe account behind it) — it renews on <strong>${periodEnd ? escapeHtml(periodEnd.toLocaleDateString()) : 'n/a'}</strong> for testing purposes. This unlocks the Minecraft server and the member-only pages of the site.
+        This membership came from a TEST_CHECKOUT_MODE checkout (no real payment, no Stripe account behind it) — it expires on <strong>${periodEnd ? escapeHtml(periodEnd.toLocaleDateString()) : 'n/a'}</strong> for testing purposes. This unlocks the Minecraft server and the member-only pages of the site.
       </p>`
+      : isOneTime
+      ? `
+      <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
+        Your membership expires on <strong>${periodEnd ? escapeHtml(periodEnd.toLocaleDateString()) : 'n/a'}</strong>. It does not renew automatically — buy it again in the shop when it ends. This unlocks the Minecraft server and the member-only pages of the site.
+      </p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a class="btn btn-outline" href="shop.html" style="text-decoration:none;display:inline-block;">Manage in Shop</a>
+      </div>`
       : `
       <p style="font-size:13.5px;color:var(--mid);line-height:1.6;margin-bottom:1rem;">
         ${periodEnd ? `Your membership renews on <strong>${escapeHtml(periodEnd.toLocaleDateString())}</strong> at $12/year. ` : ''}This unlocks the Minecraft server and the member-only pages of the site.

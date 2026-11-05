@@ -119,52 +119,21 @@ function corsHeadersFor(req: Request): Record<string, string> {
 
 const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
-// Maps the shop's admin-configurable billing_cycle to a Stripe recurring
-// interval + count. Only 'yearly' is used by the membership product today,
-// but every cycle the admin panel can select is handled correctly.
-function recurringFor(cycle: string | null): { interval: 'day' | 'week' | 'month' | 'year'; interval_count: number } {
-  switch (cycle) {
-    case 'weekly': return { interval: 'week', interval_count: 1 };
-    case 'biweekly': return { interval: 'week', interval_count: 2 };
-    case 'monthly': return { interval: 'month', interval_count: 1 };
-    case 'quarterly': return { interval: 'month', interval_count: 3 };
-    case 'semiannual': return { interval: 'month', interval_count: 6 };
-    case 'yearly': return { interval: 'year', interval_count: 1 };
-    default: return { interval: 'month', interval_count: 1 };
-  }
-}
-
-// The admin product editor offers a "fixed" billing anchor (bill everyone on
-// the same date) alongside "from purchase date", and stores it in
-// products.billing_anchor / billing_anchor_date. Checkout used to ignore
-// both, so a fixed anchor silently billed from the purchase date instead.
-// Returns the next occurrence of that anchor date, as a unix timestamp, or
-// null when the product bills from the purchase date (Stripe's default).
-function billingCycleAnchor(
-  anchor: string | null,
-  anchorDate: string | null,
-  cycle: string | null,
-): number | null {
-  if (anchor !== 'fixed' || !anchorDate) return null;
-  const parsed = new Date(`${anchorDate}T00:00:00Z`);
-  if (Number.isNaN(parsed.getTime())) return null;
-
+// Membership age at purchase, in full years, from a YYYY-MM-DD date of
+// birth (UTC). Returns null for a missing, malformed, impossible, or
+// future date — the caller treats null as "age cannot be determined"
+// and fails closed.
+function ageAtPurchase(dob: string | null): number | null {
+  if (!dob) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dob);
+  if (!m) return null;
+  const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null;
   const now = new Date();
-  const { interval, interval_count } = recurringFor(cycle);
-  const next = new Date(parsed.getTime());
-
-  // Walk the anchor forward one cycle at a time until it is in the future.
-  // Stripe requires the anchor to be no more than one billing period away,
-  // which is exactly where this stops.
-  let guard = 0;
-  while (next.getTime() <= now.getTime() && guard++ < 500) {
-    if (interval === 'day') next.setUTCDate(next.getUTCDate() + interval_count);
-    else if (interval === 'week') next.setUTCDate(next.getUTCDate() + 7 * interval_count);
-    else if (interval === 'month') next.setUTCMonth(next.getUTCMonth() + interval_count);
-    else next.setUTCFullYear(next.getUTCFullYear() + interval_count);
-  }
-  if (next.getTime() <= now.getTime()) return null;
-  return Math.floor(next.getTime() / 1000);
+  let age = now.getUTCFullYear() - y;
+  if (now.getUTCMonth() + 1 < mo || (now.getUTCMonth() + 1 === mo && now.getUTCDate() < d)) age--;
+  return age < 0 ? null : age;
 }
 
 Deno.serve(async (req: Request) => {
@@ -193,8 +162,9 @@ Deno.serve(async (req: Request) => {
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  // Checkout creates a real Stripe session (and, on success, a subscription)
-  // per call — 10/5min per account is generous for a human clicking a
+  // Checkout creates a real Stripe session per call — a membership
+  // session is a one-time payment, never a subscription — 10/5min per
+  // account is generous for a human clicking a
   // button and stops a compromised/scripted session from hammering Stripe.
   // Fail closed: an error checking the limit is treated as "not allowed"
   // rather than silently skipping the throttle.
@@ -235,10 +205,11 @@ Deno.serve(async (req: Request) => {
   if (productsError) return json({ error: 'Could not load products.' }, 500);
 
   const byId = new Map((products ?? []).map((p) => [p.id, p]));
+  // hasSubscription means "the cart contains the membership product".
+  // product_type 'subscription' is the membership marker in the products
+  // table; since 2026-11-04 it no longer creates a Stripe subscription.
   let hasSubscription = false;
   let hasGoods = false;
-  let subscriptionAnchor: number | null = null;
-  let subscriptionProduct: { billing_cycle: string | null } | null = null;
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
   // Same shape purchasedLines() in stripe-webhook builds from a real Stripe
   // session — kept in step here so a TEST_CHECKOUT_MODE order looks exactly
@@ -252,7 +223,7 @@ Deno.serve(async (req: Request) => {
       return json({ error: `One of the items in your cart is no longer available.` }, 400);
     }
     // A cart that lists the same product twice would otherwise become two
-    // Stripe line items and, on a subscription, two charges for one seat.
+    // Stripe line items and, for a membership, two charges for one seat.
     if (seen.has(product.id)) {
       return json({ error: `"${product.name}" is in your cart more than once — remove the duplicate and try again.` }, 400);
     }
@@ -305,11 +276,6 @@ Deno.serve(async (req: Request) => {
         metadata: { product_id: product.id },
       },
     };
-    if (isSubscription) {
-      priceData.recurring = recurringFor(product.billing_cycle);
-      subscriptionAnchor = billingCycleAnchor(product.billing_anchor, product.billing_anchor_date, product.billing_cycle);
-      subscriptionProduct = { billing_cycle: product.billing_cycle };
-    }
     lineItems.push({ price_data: priceData, quantity });
     mockLines.push({
       product_id: product.id,
@@ -322,12 +288,11 @@ Deno.serve(async (req: Request) => {
   if (hasSubscription && hasGoods) {
     return json({ error: 'Membership and shop items can’t be checked out together — please check out the membership by itself.' }, 400);
   }
-  // Stripe puts every line of a subscription session on one recurring
-  // schedule, so two different subscription products in one cart would be
-  // billed as a single mixed subscription. The shop only sells one
-  // subscription (membership) today; reject the rest rather than create it.
+  // A membership is a single seat: two membership products in one cart
+  // would charge twice for one seat. The shop only sells one membership
+  // product today; reject the rest rather than create it.
   if (hasSubscription && lineItems.length > 1) {
-    return json({ error: 'Only one subscription can be checked out at a time.' }, 400);
+    return json({ error: 'Only one membership can be checked out at a time.' }, 400);
   }
   // Club decision (2026-11-02): max order total $500. mockLines mirrors
   // the Stripe line items exactly, so this is the order total.
@@ -336,18 +301,17 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'Orders are limited to $500 total.' }, 400);
   }
 
-  // A membership subscription is a single global seat on the profile
+  // A membership is a single global seat on the profile
   // (profiles.membership_status), not a per-product purchase — someone
   // who already has an active membership (paid or admin-comped) must be
-  // stopped here, server-side, before a second Stripe subscription is
-  // ever created. The shop UI already disables the Subscribe button for
-  // active members, but that's just UX: this endpoint is the only thing
-  // actually enforcing it, since it can be called directly. Without this
-  // check a duplicate subscription would auto-renew forever — nothing
-  // downstream ever detects or cancels an extra one.
+  // stopped here, server-side, before a second purchase is ever created.
+  // The shop UI already disables the buy button for active members, but
+  // that's just UX: this endpoint is the only thing actually enforcing
+  // it, since it can be called directly. Without this check a second
+  // purchase would silently overwrite the membership year.
   const { data: profile, error: profileError } = await admin
     .from('profiles')
-    .select('membership_status, membership_current_period_end, stripe_customer_id')
+    .select('membership_status, membership_current_period_end, stripe_customer_id, date_of_birth, age_band')
     .eq('id', user.id)
     .single();
   if (profileError) return json({ error: 'Could not verify your membership status.' }, 500);
@@ -356,7 +320,33 @@ Deno.serve(async (req: Request) => {
     const periodEnd = profile?.membership_current_period_end ? new Date(profile.membership_current_period_end) : null;
     const isActiveMember = profile?.membership_status === 'active' && !!periodEnd && periodEnd.getTime() > Date.now();
     if (isActiveMember) {
-      return json({ error: "You're already a member — no need to subscribe again." }, 400);
+      return json({ error: "You're already a member — no need to buy it again." }, 400);
+    }
+  }
+
+  // Membership age cap (club decision 2026-11-04): membership may only be
+  // bought at age 19 or under, judged at purchase time only. This is
+  // server-side and authoritative — any client check is UX only, never
+  // enforcement. profiles.date_of_birth is the authoritative source
+  // (readable here via the service role; it is deliberately not
+  // client-readable). It is retained for members 13 and up and cleared
+  // for under-13 accounts once their band is recorded, so a missing DOB
+  // falls back to age_band: 'under_13' and '13_17' both prove
+  // 19-or-under. Anything else with no DOB fails closed: the member
+  // must complete age verification first. Existing memberships are
+  // never touched by this — no re-check, no expiry on birthdays.
+  if (hasSubscription) {
+    const dob = typeof profile?.date_of_birth === 'string' ? profile.date_of_birth : null;
+    const band = typeof profile?.age_band === 'string' ? profile.age_band : null;
+    const age = ageAtPurchase(dob);
+    if (age !== null) {
+      if (age > 19) {
+        return json({ error: 'Membership is only available to members aged 19 or under at purchase.' }, 400);
+      }
+    } else if (band === 'under_13' || band === '13_17') {
+      // Band proves 19-or-under without a DOB on file; allow.
+    } else {
+      return json({ error: 'We could not verify your age from your profile. Please complete age verification on your account page first, then try again.' }, 400);
     }
   }
 
@@ -380,9 +370,9 @@ Deno.serve(async (req: Request) => {
   // TEST_CHECKOUT_MODE: everything above this line (auth, rate limit, cart
   // validation, stock, duplicate-membership check) has already run exactly
   // as it would for a real purchase. From here, instead of talking to
-  // Stripe, do directly what stripe-webhook's handleCompletedSession() /
-  // syncSubscription() would do once Stripe told it the payment succeeded —
-  // record the order and (for a subscription) flip the profile to an active
+  // Stripe, do directly what stripe-webhook's handleCompletedSession()
+  // would do once Stripe told it the payment succeeded —
+  // record the order and (for a membership) flip the profile to an active
   // member — then send the browser straight to the same success URL Stripe
   // would have redirected to. This is what lets the whole shop → checkout →
   // membership flow, and anything downstream that reads membership_status
@@ -419,12 +409,9 @@ Deno.serve(async (req: Request) => {
         if (stockError) console.error('TEST_CHECKOUT_MODE: failed to decrement inventory:', stockError.message);
       }
     } else {
-      const { interval, interval_count } = recurringFor(subscriptionProduct?.billing_cycle ?? null);
+      // One-time membership: exactly one year from today, no renewal.
       const periodEnd = new Date();
-      if (interval === 'day') periodEnd.setUTCDate(periodEnd.getUTCDate() + interval_count);
-      else if (interval === 'week') periodEnd.setUTCDate(periodEnd.getUTCDate() + 7 * interval_count);
-      else if (interval === 'month') periodEnd.setUTCMonth(periodEnd.getUTCMonth() + interval_count);
-      else periodEnd.setUTCFullYear(periodEnd.getUTCFullYear() + interval_count);
+      periodEnd.setUTCFullYear(periodEnd.getUTCFullYear() + 1);
 
       const { error: membershipError } = await admin.from('profiles').update({
         membership_status: 'active',
@@ -440,8 +427,8 @@ Deno.serve(async (req: Request) => {
     return json({ url: `${origin}/shop.html?checkout=success` });
   }
 
-  // Reuse the Stripe customer this account already has, so a renewing or
-  // returning member keeps one customer record (and one saved card, and one
+  // Reuse the Stripe customer this account already has, so a returning
+  // member keeps one customer record (and one saved card, and one
   // billing-portal history) instead of a new one per checkout. `customer`
   // and `customer_email` are mutually exclusive in the API.
   const existingCustomer = typeof profile?.stripe_customer_id === 'string' && profile.stripe_customer_id
@@ -449,10 +436,15 @@ Deno.serve(async (req: Request) => {
     : null;
 
   try {
+    // Membership checkout is a one-time payment, never a subscription:
+    // there is no Stripe subscription object to renew, so nothing here
+    // sets recurring pricing or subscription_data. The webhook tells a
+    // membership session apart from a goods session by the metadata flag
+    // below (session.mode is 'payment' for both now).
     const params: Stripe.Checkout.SessionCreateParams = {
-      mode: hasSubscription ? 'subscription' : 'payment',
+      mode: 'payment',
       client_reference_id: user.id,
-      metadata: { user_id: user.id },
+      metadata: hasSubscription ? { user_id: user.id, membership: 'true' } : { user_id: user.id },
       line_items: lineItems,
       success_url: `${origin}/shop.html?checkout=success`,
       cancel_url: `${origin}/shop.html?checkout=cancel`,
@@ -460,10 +452,7 @@ Deno.serve(async (req: Request) => {
     if (existingCustomer) params.customer = existingCustomer;
     else params.customer_email = user.email ?? undefined;
 
-    if (hasSubscription) {
-      params.subscription_data = { metadata: { user_id: user.id } };
-      if (subscriptionAnchor) params.subscription_data.billing_cycle_anchor = subscriptionAnchor;
-    } else {
+    if (!hasSubscription) {
       // Physical goods have to be posted somewhere. Without this the order
       // arrives with nothing but an email address on it.
       params.shipping_address_collection = { allowed_countries: ['US'] };

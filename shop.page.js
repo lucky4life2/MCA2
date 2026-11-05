@@ -52,7 +52,7 @@ document.addEventListener('keydown', (e) => {
   let _products = [];
   // Membership state for the signed-in user, or null when signed out /
   // not yet loaded. The storefront needs it to stop an existing member
-  // from starting a second subscription: the checkout function rejects
+  // from starting a second membership: the checkout function rejects
   // that server-side, but only after the member has clicked through to a
   // checkout that was never going to work.
   let _membership = null;
@@ -87,40 +87,31 @@ document.addEventListener('keydown', (e) => {
     ]);
   }
 
-  // ── Subscription billing periods
-  // The admin product editor has offered six cycles ever since billing_cycle
-  // was added, but the storefront rendered every subscription as "/mo". A
-  // yearly plan therefore advertised itself at a twelfth of its real cadence.
-  // Everything below reads the product's actual cycle instead.
-  const BILLING_PERIODS = {
-    weekly:     { short: '/wk',  label: 'Billed weekly' },
-    biweekly:   { short: '/2wk', label: 'Billed every 2 weeks' },
-    monthly:    { short: '/mo',  label: 'Billed monthly' },
-    quarterly:  { short: '/qtr', label: 'Billed every 3 months' },
-    semiannual: { short: '/6mo', label: 'Billed every 6 months' },
-    yearly:     { short: '/yr',  label: 'Billed yearly' },
-  };
-  // Products created before billing_cycle existed, and cart entries saved
-  // before the cycle was stored, both arrive with no cycle. Monthly was the
-  // effective behaviour then, so keep it as the fallback rather than showing
-  // a bare price with no cadence at all.
-  function billingPeriod(cycle) { return BILLING_PERIODS[cycle] || BILLING_PERIODS.monthly; }
+  // Membership is a one-time payment since 2026-11-04, so there is no
+  // billing period to render: no "/yr" suffix, no "Billed yearly" line.
+  // product_type 'subscription' is still the membership marker in the
+  // products table; it no longer creates a Stripe subscription.
   function isSubscription(x) { return !!x && x.product_type === 'subscription'; }
-  // A subscription is one seat: Stripe is sent quantity 1 no matter what
-  // the cart says, so letting the cart show 2 only misprices the subtotal.
+  // A membership is one seat: quantity 1 no matter what the cart says,
+  // so letting the cart show 2 only misprices the subtotal.
   function maxQty(x) { return isSubscription(x) ? 1 : 10; }
   function priceLabel(x) {
-    const amount = '$' + Number(x.price).toFixed(2);
-    return isSubscription(x) ? amount + billingPeriod(x.billing_cycle).short : amount;
+    return '$' + Number(x.price).toFixed(2);
   }
 
-  // How a subscription product should present itself to the signed-in
+  // How a membership product should present itself to the signed-in
   // viewer. An existing member cannot buy a second seat (the checkout
   // function refuses it), and someone whose payment failed needs the
-  // billing portal, not a fresh subscription.
+  // billing portal, not a fresh membership. A one-time member ('onetime')
+  // has no subscription behind them, so they get neither the portal
+  // button nor the cancellation path — just a disabled "active" button.
   function subscriptionState() {
     if (!_membership) return 'none';
-    if (_membership.isActive) return _membership.source === 'admin_grant' ? 'comped' : 'active';
+    if (_membership.isActive) {
+      if (_membership.source === 'admin_grant') return 'comped';
+      if (_membership.source === 'stripe_onetime') return 'onetime';
+      return 'active';
+    }
     if (_membership.status === 'past_due') return 'past_due';
     return 'none';
   }
@@ -154,7 +145,7 @@ document.addEventListener('keydown', (e) => {
     if (!Array.isArray(items)) return [];
     // Normalise on read so a cart saved before the one-seat rule (or hand
     // edited in localStorage) can't show a subtotal the checkout won't
-    // charge — Stripe is sent quantity 1 for a subscription regardless.
+    // charge — quantity 1 for a membership regardless.
     return items.map(i => ({ ...i, qty: Math.min(maxQty(i), Math.max(1, Math.floor(Number(i.qty) || 1))) }));
   }
   function saveCart(items) {
@@ -167,12 +158,12 @@ document.addEventListener('keydown', (e) => {
     updateFloatCart();
     if (window._mcaUpdateCartBadge) window._mcaUpdateCartBadge();
   }
-  // A subscription is a single recurring entitlement — quantity is meaningless
-  // for it, and letting it climb meant a second "Subscribe" click checked out
-  // as qty 2, i.e. double the recurring charge for one membership.
+  // A membership is a single seat — quantity is meaningless
+  // for it, and letting it climb meant a second "Buy Membership" click
+  // checked out as qty 2, i.e. double the charge for one membership.
   function addToCart(product) {
     const items = getCart();
-    // Stripe bills one Checkout Session as either a subscription or a
+    // Stripe bills one Checkout Session as either a membership or a
     // one-off payment, never both, and the checkout function rejects a
     // mixed cart. Catch it at the point of the click instead of at the
     // end of checkout, where the cart is already full.
@@ -181,12 +172,12 @@ document.addEventListener('keydown', (e) => {
       : items.some(i => isSubscription(i));
     if (mixing) {
       alert(isSubscription(product)
-        ? 'Membership has to be checked out on its own. Empty your cart (or check out first), then subscribe.'
+        ? 'Membership has to be checked out on its own. Empty your cart (or check out first), then buy it.'
         : 'Your cart has a membership in it, and membership is checked out on its own. Check out the membership first, then add shop items.');
       return;
     }
     if (isSubscription(product) && items.some(i => isSubscription(i))) {
-      alert('Only one subscription can be checked out at a time.');
+      alert('Only one membership can be checked out at a time.');
       return;
     }
     const ex = items.find(i => i.id === product.id);
@@ -236,9 +227,9 @@ document.addEventListener('keydown', (e) => {
     const items = getCart();
     if (!items.length) return;
     // Defense in depth against a cart that went stale while this tab sat
-    // open (e.g. a membership was added, then granted/renewed elsewhere
-    // before checkout): never send a subscription line at qty > 1, and
-    // never let an already-active member check out another subscription.
+    // open (e.g. a membership was added, then granted elsewhere
+    // before checkout): never send a membership line at qty > 1, and
+    // never let an already-active member check out another membership.
     if (_membership?.isActive && items.some(isSubscription)) {
       alert("You're already a member — remove the membership from your cart to continue.");
       return;
@@ -281,11 +272,11 @@ document.addEventListener('keydown', (e) => {
         </div>
       </div>`).join('');
     elCartSubtotal.textContent = '$' + sub.toFixed(2);
-    // The subtotal adds recurring and one-off items together, so say plainly
-    // which part of it renews rather than letting it read as a single charge.
+    // The subtotal adds one-time and one-off items together, so say
+    // plainly that the membership part is a single payment, not a renewal.
     const subs = items.filter(isSubscription);
     elCartSubtotalNote.innerHTML = subs.length
-      ? subs.map(i => `${esc(i.name)} renews at ${esc(priceLabel(i))} (${esc(billingPeriod(i.billing_cycle).label.toLowerCase())}) until you cancel.`).join('<br>')
+      ? subs.map(i => `${esc(i.name)} is a one-time payment of ${esc(priceLabel(i))} for one year — it does not renew automatically.`).join('<br>')
       : '';
     elCartSubtotalNote.style.display = subs.length ? '' : 'none';
     elCartFooter.style.display = '';
@@ -316,10 +307,12 @@ document.addEventListener('keydown', (e) => {
           cartBtn = `<button class="btn-detail-cart" data-action="open-billing-portal">Manage Membership</button>`;
         } else if (subState === 'comped') {
           cartBtn = `<button class="btn-detail-cart" disabled>Membership Included</button>`;
+        } else if (subState === 'onetime') {
+          cartBtn = `<button class="btn-detail-cart" disabled>Membership Active</button>`;
         } else if (subState === 'past_due') {
           cartBtn = `<button class="btn-detail-cart" data-action="open-billing-portal">Update Payment</button>`;
         } else {
-          const detailLabel = isSubDetail ? 'Subscribe' : (isOOSDetail ? 'Out of Stock' : 'Add to Cart');
+          const detailLabel = isSubDetail ? 'Buy Membership' : (isOOSDetail ? 'Out of Stock' : 'Add to Cart');
           cartBtn = `<button class="btn-detail-cart" ${isOOSDetail?'disabled':''} data-action="shop-add-to-cart-detail" data-prod="${prod}">${detailLabel}</button>`;
         }
       } else {
@@ -354,7 +347,7 @@ document.addEventListener('keydown', (e) => {
           <button class="detail-modal-close" type="button" aria-label="Close product details" data-action="close-detail">✕</button>
         </div>
         <div class="detail-modal-price">${priceLabel(p)}</div>
-        ${p.product_type === 'subscription' ? `<div class="detail-modal-stock" style="color:var(--green-text);font-weight:600;">${billingPeriod(p.billing_cycle).label}</div>` : `<div class="detail-modal-stock ${p.inventory===0?'out':p.inventory<5?'low':''}">` + (p.inventory===0 ? 'Out of stock' : p.inventory+' in stock') + '</div>'}
+        ${p.product_type === 'subscription' ? `<div class="detail-modal-stock" style="color:var(--green-text);font-weight:600;">One-year membership</div>` : `<div class="detail-modal-stock ${p.inventory===0?'out':p.inventory<5?'low':''}">` + (p.inventory===0 ? 'Out of stock' : p.inventory+' in stock') + '</div>'}
         ${p.description ? `<div class="detail-modal-desc">${esc(p.description)}</div>` : ''}
         ${specs.length ? `
           <div class="detail-modal-specs">
@@ -496,10 +489,12 @@ document.addEventListener('keydown', (e) => {
             cartBtn = `<button class="btn-add-to-cart" data-action="open-billing-portal">Manage Membership</button>`;
           } else if (subState === 'comped') {
             cartBtn = `<button class="btn-add-to-cart" disabled >Membership Included</button>`;
+          } else if (subState === 'onetime') {
+            cartBtn = `<button class="btn-add-to-cart" disabled>Membership Active</button>`;
           } else if (subState === 'past_due') {
             cartBtn = `<button class="btn-add-to-cart" data-action="open-billing-portal">Update Payment</button>`;
           } else {
-            const btnLabel = isSub ? 'Subscribe' : (isOutOfStock ? 'Out of Stock' : 'Add to Cart');
+            const btnLabel = isSub ? 'Buy Membership' : (isOutOfStock ? 'Out of Stock' : 'Add to Cart');
             cartBtn = `<button class="btn-add-to-cart" ${isOutOfStock?'disabled':''} data-action="shop-add-to-cart" data-prod="${prod}">${btnLabel}</button>`;
           }
         } else {
@@ -515,7 +510,7 @@ document.addEventListener('keydown', (e) => {
           <div class="product-card-footer">
             <div class="product-card-price">${priceLabel(p)}</div>
             ${p.product_type === 'subscription'
-              ? `<div class="product-card-stock" style="color:var(--green-text);font-weight:600;">${billingPeriod(p.billing_cycle).label}</div>`
+              ? `<div class="product-card-stock" style="color:var(--green-text);font-weight:600;">One-year membership</div>`
               : `<div class="product-card-stock ${p.inventory===0?'out':p.inventory<5?'low':''}">${p.inventory===0?'Out of stock':`${p.inventory} in stock`}</div>`}
           </div>
           ${cartBtn}

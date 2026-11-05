@@ -69,6 +69,7 @@ Applied as three migrations; the full text is in
 | 20260910034308 | `shop_membership_hardening` | grants `authenticated` SELECT on `membership_status` / `membership_source` / `membership_current_period_end` (plus `age_band`, `public_listing_opt_in`), which were never added to the column allowlist, so every read that named them 403'd; `private.profiles_guard_columns()` now rejects client writes to the membership + Stripe columns; `can_manage_shop` can actually insert/update/delete `products`; staff can read `orders`; `orders` gains `customer_email` + `shipping`; adds the service-role-only `shop_consume_inventory()` |
 | 20260910034406 | `profiles_column_level_update_grants` | replaces the table-wide UPDATE grant on `profiles` with an explicit column list, so the server-only columns are refused at the privilege layer and not just by the trigger. Same trap as `profiles_column_select_allowlist_fix`: a column-level REVOKE cannot narrow a table-level GRANT |
 | 20260910034632 | `orders_stripe_invoice_id` | `orders.stripe_invoice_id` + unique index, so subscription renewals (which have no Checkout Session) get an order row of their own |
+| 20261104 | `membership_one_time` | widens `profiles_membership_source_valid` to allow `'stripe_onetime'` for one-time membership payments (no subscription object); apply at deploy time BEFORE the new webhook code serves traffic, or one-time fulfilment fails the CHECK |
 
 The Stripe Edge Functions those changes go with are in
 `supabase/functions/` — see the README there for what to set before switching
