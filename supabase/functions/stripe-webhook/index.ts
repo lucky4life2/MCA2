@@ -131,7 +131,10 @@ async function setMembership(userId: string, fields: Record<string, unknown>) {
   if (error) console.error('Failed to update profile membership fields:', error.message);
 }
 
-// Writes the given subscription's CURRENT state (re-fetched from Stripe,
+// LEGACY, defensive only: new memberships are one-time payments granted
+// inline in handleCompletedSession above (no subscription object exists
+// live — Stripe was never set up). Writes the given subscription's
+// CURRENT state (re-fetched from Stripe,
 // not the possibly-stale snapshot embedded in whatever event triggered
 // this) onto the linked profile. Stripe does not guarantee webhook
 // delivery order, so a customer.subscription.updated and a later
@@ -214,12 +217,19 @@ async function handleCompletedSession(session: Stripe.Checkout.Session) {
     ?? (session as unknown as { collected_information?: { shipping_details?: unknown } }).collected_information?.shipping_details
     ?? null;
 
+  // Membership sessions are one-time payments since 2026-11-04, so
+  // mode alone no longer identifies them: create-checkout-session
+  // stamps metadata.membership === 'true' on membership carts, and
+  // legacy subscription sessions still have mode 'subscription'.
+  // Stock decrement applies to goods only, so this flag gates it.
+  const isMembership = session.mode === 'subscription' || session.metadata?.membership === 'true';
+
   // insert(), not upsert(): Stripe retries a delivery it didn't get a 2xx
   // for, and the duplicate-key rejection is what tells us this event was
   // already fulfilled — so the stock below comes off exactly once.
   const { error: orderError } = await admin.from('orders').insert({
     user_id: userId,
-    kind: session.mode === 'subscription' ? 'membership' : 'goods',
+    kind: isMembership ? 'membership' : 'goods',
     stripe_checkout_session_id: session.id,
     stripe_payment_intent_id: typeof session.payment_intent === 'string' ? session.payment_intent : null,
     stripe_subscription_id: typeof session.subscription === 'string' ? session.subscription : null,
@@ -234,7 +244,7 @@ async function handleCompletedSession(session: Stripe.Checkout.Session) {
   const alreadyRecorded = !!orderError && (orderError as { code?: string }).code === '23505';
   if (orderError && !alreadyRecorded) console.error('Failed to record order:', orderError.message);
 
-  if (!orderError && session.mode === 'payment') {
+  if (!orderError && !isMembership) {
     const stockItems = lines
       .filter((l) => l.product_id)
       .map((l) => ({ id: l.product_id, qty: l.quantity }));
@@ -244,11 +254,40 @@ async function handleCompletedSession(session: Stripe.Checkout.Session) {
     }
   }
 
-  if (session.mode === 'subscription' && typeof session.subscription === 'string') {
-    await syncSubscription(session.subscription, {
-      fallbackUserId: userId,
-      extraFields: { stripe_customer_id: typeof session.customer === 'string' ? session.customer : null },
-    });
+  if (isMembership) {
+    if (session.mode === 'subscription' && typeof session.subscription === 'string') {
+      // Legacy subscription session: syncSubscription is the authority
+      // here — the subscription id lives on Stripe, and the profiles row
+      // must agree with what Stripe says the subscription is, not what
+      // the session alone says. No such sessions exist live (Stripe was
+      // never set up); this path is defensive only.
+      await syncSubscription(session.subscription, {
+        fallbackUserId: userId,
+        extraFields: { stripe_customer_id: typeof session.customer === 'string' ? session.customer : null },
+      });
+    } else {
+      // One-time membership payment: exactly one year from the session's
+      // creation (the paid date, within minutes), no subscription object,
+      // no subscription id stored. Anchoring on session.created instead
+      // of fulfillment time makes the grant idempotent: a retried
+      // delivery computes the same period end, so it can never extend
+      // the year a second time, and a grant that threw on the first
+      // attempt heals itself on retry.
+      const paidAt = new Date((session.created ?? Math.floor(Date.now() / 1000)) * 1000);
+      const periodEnd = new Date(paidAt.getTime());
+      periodEnd.setUTCFullYear(periodEnd.getUTCFullYear() + 1);
+      const grant: Record<string, unknown> = {
+        membership_status: 'active',
+        membership_source: 'stripe_onetime',
+        membership_current_period_end: periodEnd.toISOString(),
+      };
+      if (typeof session.customer === 'string') grant.stripe_customer_id = session.customer;
+      const { error: grantError } = await admin
+        .from('profiles')
+        .update(grant)
+        .eq('id', userId);
+      if (grantError) throw new Error(`membership grant failed: ${grantError.message}`);
+    }
   }
 }
 
