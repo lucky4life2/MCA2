@@ -43,7 +43,7 @@ const _configReady = new Promise(r => { _configResolve = r; });
 
 (async function loadConfig() {
   const SUPABASE_URL_CFG  = 'https://hjaywokvgdzhvsoygctc.supabase.co';
-  const SUPABASE_ANON_CFG = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNzA2NTQsImV4cCI6MjA5NTg0NjY1NH0.nFqlc20iUDwE1sXLRi2Pev181v2RJKx_S6UcTkGgPWU';
+  const SUPABASE_ANON_CFG = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
   try {
     const res = await fetch(
       `${SUPABASE_URL_CFG}/rest/v1/settings?key=eq.site_config&select=value`,
@@ -270,7 +270,7 @@ if (window._mcaVisibilityFailsafe) clearTimeout(window._mcaVisibilityFailsafe);
 
 const _systemLockdownCheck = (async function checkSystemLockdown() {
   const SUPABASE_URL  = 'https://hjaywokvgdzhvsoygctc.supabase.co';
-  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNzA2NTQsImV4cCI6MjA5NTg0NjY1NH0.nFqlc20iUDwE1sXLRi2Pev181v2RJKx_S6UcTkGgPWU';
+  const SUPABASE_ANON = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
   try {
     const res = await _fetchWithTimeout(
       `${SUPABASE_URL}/rest/v1/system_lockdown?select=locked,message&id=eq.1`,
@@ -299,7 +299,7 @@ const _systemLockdownCheck = (async function checkSystemLockdown() {
 
 
 const SUPABASE_URL    = 'https://hjaywokvgdzhvsoygctc.supabase.co';
-const SUPABASE_ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNzA2NTQsImV4cCI6MjA5NTg0NjY1NH0.nFqlc20iUDwE1sXLRi2Pev181v2RJKx_S6UcTkGgPWU';
+const SUPABASE_ANON   = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
 
 // Kicked off immediately, in parallel with _systemLockdownCheck above, rather
 // than only starting after that check resolves. The page stays
@@ -588,7 +588,7 @@ function showLockScreen(cfg) {
       // serves whatever the newest 2.x release is for an unpinned "@2" tag,
       // which is unreviewed supply-chain drift on every page load.
       const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.112.4');
-      const _sb = createClient(SUPABASE_URL, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqYXl3b2t2Z2R6aHZzb3lnY3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNzA2NTQsImV4cCI6MjA5NTg0NjY1NH0.nFqlc20iUDwE1sXLRi2Pev181v2RJKx_S6UcTkGgPWU');
+      const _sb = createClient(SUPABASE_URL, 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T');
       const { error: sessionErr } = await _sb.auth.setSession({
         access_token: json.access_token,
         refresh_token: json.refresh_token,
