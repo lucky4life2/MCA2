@@ -329,7 +329,7 @@
       <div class="onboard-card-header">
         <img src="images/logo.png" width="500" height="500" alt="MCA" class="onboard-card-logo">
         <div class="onboard-card-eyebrow">Join MCA</div>
-        <h1 class="onboard-card-title" id="onboard-title">How do you play?</h1>
+        <h1 class="onboard-card-title" id="onboard-title" tabindex="-1">How do you play?</h1>
         <p class="onboard-card-subtitle" id="onboard-subtitle">Pick the version of Minecraft you play — we'll tailor the rest of setup around it.</p>
       </div>
 
@@ -339,7 +339,7 @@
         <div class="onboard-progress" id="onboard-progress">
           <div class="onboard-progress-step current" data-step="path">
             <span class="onboard-progress-dot">1</span>
-            <span class="onboard-progress-label">Your path</span>
+            <span class="onboard-progress-label">How you play</span>
           </div>
           <div class="onboard-progress-step" data-step="account">
             <span class="onboard-progress-dot">2</span>
@@ -378,7 +378,8 @@
             </button>
           </div>
           <div class="onboard-error" id="path-error">Pick one to continue — you can change it later on your account page.</div>
-          <button class="onboard-btn-primary" id="btn-path-continue">Continue</button>
+          <button class="onboard-btn-primary" id="btn-path-continue" disabled>Continue</button>
+          <button type="button" class="onboard-back-link" id="back-to-signin">← Back to sign in</button>
         </div>
 
         <!-- Step 2: Create your account -->
