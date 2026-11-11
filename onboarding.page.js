@@ -50,17 +50,23 @@ function showStep(name) {
   });
   try { sessionStorage.setItem(STEP_KEY, name); } catch (e) {}
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  titleEl.focus({ preventScroll: true });
 }
 
 // ── Step 1: Pick your path ──────────────────────────────────────
 const pathCards = document.querySelectorAll('.onboard-path-card');
+const pathContinueBtn = document.getElementById('btn-path-continue');
 function selectPath(p) {
   _path = p;
   pathCards.forEach(c => c.classList.toggle('selected', c.dataset.path === p));
   document.getElementById('path-error').style.display = 'none';
+  pathContinueBtn.disabled = false;
   try { sessionStorage.setItem(PATH_KEY, p); } catch (e) {}
 }
 pathCards.forEach(c => c.addEventListener('click', () => selectPath(c.dataset.path)));
+document.getElementById('back-to-signin').addEventListener('click', () => {
+  window.location.href = 'login.html';
+});
 document.getElementById('btn-path-continue').addEventListener('click', () => {
   if (!_path) {
     const err = document.getElementById('path-error');
@@ -494,8 +500,10 @@ document.getElementById('btn-mc-continue').addEventListener('click', () => showS
 document.getElementById('back-from-account').addEventListener('click', () => showStep('path'));
 document.getElementById('back-from-verify').addEventListener('click', () => showStep('account'));
 document.getElementById('back-from-minecraft').addEventListener('click', () => {
-  // If the account was just created, going back lands on the verify step
-  // only when there's a pending email code; otherwise back to account.
+  // Signed-in users (e.g. came in via Discord/Google) never saw the
+  // email form, so "back" takes them to the path picker, not the
+  // account step. Email signups with a pending code go back to verify.
+  if (_user) { showStep('path'); return; }
   if (_pendingSignupUserId) showStep('verify');
   else showStep('account');
 });
