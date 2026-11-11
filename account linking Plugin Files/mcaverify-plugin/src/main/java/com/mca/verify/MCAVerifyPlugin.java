@@ -62,7 +62,10 @@ public class MCAVerifyPlugin extends JavaPlugin {
                 cfg.getString("columns.verify_code", "mc_verify_code"),
                 cfg.getString("columns.verify_expires", "mc_verify_expires"),
                 cfg.getString("columns.membership_status", "membership_status"),
-                cfg.getString("columns.membership_period_end", "membership_current_period_end")
+                cfg.getString("columns.membership_period_end", "membership_current_period_end"),
+                cfg.getString("columns.minecraft_bedrock_username", "minecraft_bedrock_username"),
+                cfg.getString("columns.minecraft_bedrock_verified", "minecraft_bedrock_verified"),
+                cfg.getString("columns.minecraft_bedrock_uuid", "minecraft_bedrock_uuid")
         );
 
         supabase = new SupabaseClient(url, key, table, columns, getLogger());

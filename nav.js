@@ -910,7 +910,7 @@ async function initNavAuth(_authReadyResolve) {
           <a class="nav-account-dropdown-item" href="help.html">Help</a>
           <div class="nav-account-dropdown-divider"></div>
           <a class="nav-account-dropdown-item" href="login.html?return=${returnPage}">Sign In</a>
-          <a class="nav-account-dropdown-item" href="login.html?tab=signup">Create Account</a>
+          <a class="nav-account-dropdown-item" href="onboarding.html">Create Account</a>
         </div>
       </div>`;
 

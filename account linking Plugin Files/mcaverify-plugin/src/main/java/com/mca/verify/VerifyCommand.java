@@ -44,7 +44,7 @@ public class VerifyCommand implements CommandExecutor {
                     player.sendMessage(plugin.msg("invalid_or_expired"));
                     return;
                 }
-                if (match.verified) {
+                if (match.verifiedFor(playerName)) {
                     player.sendMessage(plugin.msg("already_verified"));
                     return;
                 }
@@ -52,17 +52,25 @@ public class VerifyCommand implements CommandExecutor {
                     player.sendMessage(plugin.msg("invalid_or_expired"));
                     return;
                 }
-                if (match.minecraftUsername == null || !match.minecraftUsername.equalsIgnoreCase(playerName)) {
+                // Bedrock players show up in-game with the Floodgate "."
+                // prefix, so their name matches minecraft_bedrock_username;
+                // Java players match minecraft_username. Either one proves
+                // this player owns the website account that holds the code.
+                if (!match.nameMatches(playerName)) {
                     String websiteUsername = match.minecraftUsername == null ? "(none)" : match.minecraftUsername;
+                    if (match.minecraftBedrockUsername != null) {
+                        websiteUsername += " / " + match.minecraftBedrockUsername;
+                    }
                     player.sendMessage(plugin.msg("username_mismatch",
                             "%website_username%", websiteUsername,
                             "%player_name%", playerName));
                     return;
                 }
 
+                boolean bedrock = playerName.startsWith(".");
                 plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
                     String uuidToStore = plugin.uuidTrackingEnabled() ? playerUuid : null;
-                    boolean ok = supabase.markVerified(match.id, uuidToStore);
+                    boolean ok = supabase.markVerified(match.id, uuidToStore, bedrock);
 
                     plugin.getServer().getScheduler().runTask(plugin, () -> {
                         if (!player.isOnline()) return;

@@ -101,11 +101,16 @@
     });
   }
 
-  tabs.forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)));
-  footerSwitchLink.addEventListener('click', e => { e.preventDefault(); switchTab('signup'); });
+  // "Create Account" now lives on the onboarding wizard
+  // (onboarding.html) — the signup tab here just sends people there.
+  tabs.forEach(t => t.addEventListener('click', () => {
+    if (t.dataset.tab === 'signup') { window.location.href = 'onboarding.html'; return; }
+    switchTab(t.dataset.tab);
+  }));
+  footerSwitchLink.addEventListener('click', e => { e.preventDefault(); window.location.href = 'onboarding.html'; });
 
-  // Handle ?tab=signup in URL (e.g. from "Create account" link elsewhere)
-  if (params.get('tab') === 'signup') switchTab('signup');
+  // Handle ?tab=signup in URL (e.g. from an old "Create account" link)
+  if (params.get('tab') === 'signup') window.location.href = 'onboarding.html';
 
   // ── Terms/Privacy consent (Create Account tab only) ─────────────
   const signupConsent      = document.getElementById('signup-consent');

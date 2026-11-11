@@ -434,7 +434,9 @@ function showRecoveryBanner() {
 const PROFILE_COLUMNS = [
   'id', 'display_name', 'username', 'email', 'role', 'account_status',
   'age_band', 'deletion_scheduled_at', 'discord_id', 'google_id',
-  'minecraft_username', 'minecraft_verified', 'news_email_opt_in',
+  'minecraft_username', 'minecraft_verified',
+  'minecraft_bedrock_username', 'minecraft_bedrock_verified',
+  'news_email_opt_in',
   'task_email_opt_in', 'public_listing_opt_in',
   'membership_status', 'membership_source', 'membership_current_period_end',
 ].join(', ');
@@ -1256,7 +1258,11 @@ function renderMinecraft() {
   const badge = document.getElementById('mc-badge');
   const body  = document.getElementById('mc-body');
 
-  if (_profile.minecraft_verified && _profile.minecraft_username) {
+  const javaVerified = _profile.minecraft_verified && _profile.minecraft_username;
+  const bedrockLinked = !!_profile.minecraft_bedrock_username;
+  const bedrockVerified = bedrockLinked && _profile.minecraft_bedrock_verified;
+
+  if (javaVerified && (!bedrockLinked || bedrockVerified)) {
     badge.textContent = 'Verified';
     badge.className = 'account-section-badge badge-verified';
     body.innerHTML = `
@@ -1266,19 +1272,39 @@ function renderMinecraft() {
         </div>
         <div class="mc-username-display">${escapeHtml(_profile.minecraft_username)}</div>
       </div>
+      ${bedrockLinked ? `<div class="mc-status-row" style="margin-top:6px;">
+        <div class="connected-provider-icon icon-minecraft" style="width:32px;height:32px;border-radius:6px;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+        </div>
+        <div class="mc-username-display">${escapeHtml(_profile.minecraft_bedrock_username)}</div>
+      </div>` : ''}
       <p class="form-hint">Your Minecraft account is verified.</p>
       <button class="btn btn-danger" id="btn-remove-mc" style="margin-top:8px;">Remove Verification</button>
       <div class="form-error" id="mc-remove-error" style="margin-top:8px;"></div>`;
     document.getElementById('btn-remove-mc').addEventListener('click', async () => {
       if (!confirm('Remove your Minecraft verification? You will need to re-verify in-game.')) return;
       const errEl = document.getElementById('mc-remove-error');
-      const { error } = await supabase.from('profiles').update({ minecraft_username: null, minecraft_verified: false }).eq('id', _user.id);
+      const { error } = await supabase.from('profiles').update({ minecraft_username: null, minecraft_verified: false, minecraft_bedrock_username: null, minecraft_bedrock_verified: false }).eq('id', _user.id);
       if (error) { errEl.textContent = 'Error: ' + error.message; errEl.style.display = 'block'; return; }
       _profile.minecraft_username = null;
       _profile.minecraft_verified = false;
+      _profile.minecraft_bedrock_username = null;
+      _profile.minecraft_bedrock_verified = false;
       _verifyCode = null;
       renderMinecraft();
     });
+    return;
+  }
+
+  // Java is verified but Bedrock is linked and still pending: the member
+  // can already play on Java, and needs a code to finish Bedrock in-game.
+  if (javaVerified && bedrockLinked && !bedrockVerified) {
+    badge.textContent = 'Pending';
+    badge.className = 'account-section-badge badge-pending';
+    body.innerHTML = `
+      <p class="mc-unverified-note">Java <strong>${escapeHtml(_profile.minecraft_username)}</strong> is verified. Bedrock <strong>${escapeHtml(_profile.minecraft_bedrock_username)}</strong> is pending verification.</p>
+      ${renderVerifyCodeSection()}`;
+    bindCodeButtons(body);
     return;
   }
 
@@ -1299,33 +1325,96 @@ function renderMinecraft() {
     <div class="form-group">
       <label class="form-label" for="field-mc-username">Minecraft Username</label>
       <input type="text" id="field-mc-username" class="form-input" placeholder="YourMinecraftName">
-      <div class="form-hint">This field is case-sensitive. Bedrock players: add a <strong>.</strong> before your username (e.g. <code>.legobuddyboy22</code>).</div>
+      <div class="form-hint">This field is case-sensitive.</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Which version do you play?</label>
+      <label style="display:block;font-weight:400;margin:6px 0;"><input type="checkbox" id="field-mc-java"> Java Edition</label>
+      <label style="display:block;font-weight:400;margin:6px 0;"><input type="checkbox" id="field-mc-bedrock"> Bedrock Edition <span style="color:#666">(Console, Mobile, PC)</span></label>
+    </div>
+    <div class="form-group" id="mc-bedrock-name-row" style="display:none;">
+      <label class="form-label" for="field-mc-bedrock-username">Bedrock Username</label>
+      <input type="text" id="field-mc-bedrock-username" class="form-input" placeholder="YourMinecraftName">
+      <div class="form-hint">Same as your Java name? Just leave it as is. Different? Type your Bedrock name here. We add the <strong>.</strong> for you.</div>
     </div>
     <div class="form-error" id="mc-error"></div>
     <button class="btn btn-primary" id="btn-submit-mc">Continue to Verification</button>`;
 
+  // Keep the Bedrock box in sync with the Java name until the user edits
+  // it themselves (meaning it's a different name).
+  let mcBedrockEdited = false;
+  const mcUsernameEl = document.getElementById('field-mc-username');
+  const mcJavaEl = document.getElementById('field-mc-java');
+  const mcBedrockEl = document.getElementById('field-mc-bedrock');
+  const mcBedrockRow = document.getElementById('mc-bedrock-name-row');
+  const mcBedrockNameEl = document.getElementById('field-mc-bedrock-username');
+  const mcSyncBedrock = () => {
+    const both = mcJavaEl.checked && mcBedrockEl.checked;
+    mcBedrockRow.style.display = both ? '' : 'none';
+    if (!both) { mcBedrockEdited = false; mcBedrockNameEl.value = ''; return; }
+    if (!mcBedrockEdited) mcBedrockNameEl.value = mcUsernameEl.value.trim();
+  };
+  mcBedrockNameEl.addEventListener('input', () => { mcBedrockEdited = true; });
+  [mcUsernameEl, mcJavaEl, mcBedrockEl].forEach(el => {
+    el.addEventListener('input', mcSyncBedrock);
+    el.addEventListener('change', mcSyncBedrock);
+  });
+
   document.getElementById('btn-submit-mc').addEventListener('click', async () => {
-    const username = document.getElementById('field-mc-username').value.trim();
+    const username = mcUsernameEl.value.trim();
+    const javaChecked = mcJavaEl.checked;
+    const bedrockChecked = mcBedrockEl.checked;
     const errEl = document.getElementById('mc-error');
     errEl.style.display = 'none';
     if (!username) { errEl.textContent = 'Enter your Minecraft username.'; errEl.style.display = 'block'; return; }
+    if (!javaChecked && !bedrockChecked) { errEl.textContent = 'Pick at least one version (Java and/or Bedrock).'; errEl.style.display = 'block'; return; }
 
-    // Check if this username is already linked to another account
+    // Primary username stored on the profile: the Java name when Java is
+    // picked, otherwise the Bedrock name with the Floodgate dot prefix
+    // added automatically (Bedrock players show up in-game as ".Name").
+    // When both are picked, the Bedrock name is stored separately.
+    const bedrockName = bedrockChecked
+      ? (javaChecked ? mcBedrockNameEl.value.trim() : username)
+      : '';
+    if (bedrockChecked && !bedrockName) { errEl.textContent = 'Enter your Bedrock username.'; errEl.style.display = 'block'; return; }
+    const primaryUsername = javaChecked ? username : '.' + bedrockName;
+    const bedrockUsername = bedrockChecked ? '.' + bedrockName : null;
+
+    // Check if either username is already linked to another account.
+    // (Client-side convenience only — the database unique indexes are the
+    // real enforcement, so a direct API call can't bypass this.)
     const { data: existing } = await supabase
       .from('profiles')
       .select('id')
-      .ilike('minecraft_username', likeEscape(username))
+      .ilike('minecraft_username', likeEscape(primaryUsername))
       .neq('id', _user.id)
       .maybeSingle();
     if (existing) {
-      errEl.textContent = `"${username}" is already linked to another account. If this is your username, contact an admin.`;
+      errEl.textContent = `"${primaryUsername}" is already linked to another account. If this is your username, contact an admin.`;
       errEl.style.display = 'block';
       return;
     }
+    if (bedrockUsername) {
+      const { data: existingBedrock } = await supabase
+        .from('profiles')
+        .select('id')
+        .ilike('minecraft_bedrock_username', likeEscape(bedrockUsername))
+        .neq('id', _user.id)
+        .maybeSingle();
+      if (existingBedrock) {
+        errEl.textContent = `"${bedrockUsername}" is already linked to another account. If this is your username, contact an admin.`;
+        errEl.style.display = 'block';
+        return;
+      }
+    }
 
-    const { error } = await supabase.from('profiles').update({ minecraft_username: username }).eq('id', _user.id);
+    const { error } = await supabase.from('profiles').update({
+      minecraft_username: primaryUsername,
+      minecraft_bedrock_username: bedrockUsername,
+    }).eq('id', _user.id);
     if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
-    _profile.minecraft_username = username;
+    _profile.minecraft_username = primaryUsername;
+    _profile.minecraft_bedrock_username = bedrockUsername;
     renderMinecraft();
   });
 }
@@ -1377,9 +1466,11 @@ function bindCodeButtons(body) {
   });
   body.querySelector('#btn-unlink-mc')?.addEventListener('click', async () => {
     if (!confirm('Remove your Minecraft username? You will need to re-verify.')) return;
-    await supabase.from('profiles').update({ minecraft_username: null, minecraft_verified: false }).eq('id', _user.id);
+    await supabase.from('profiles').update({ minecraft_username: null, minecraft_verified: false, minecraft_bedrock_username: null, minecraft_bedrock_verified: false }).eq('id', _user.id);
     _profile.minecraft_username = null;
     _profile.minecraft_verified = false;
+    _profile.minecraft_bedrock_username = null;
+    _profile.minecraft_bedrock_verified = false;
     _verifyCode = null;
     renderMinecraft();
   });
