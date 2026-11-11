@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <script src="early-hide.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Join MCA — Minecraft Club of America</title>
+  <meta name="description" content="Create your Minecraft Club of America account — pick how you play, set up your account, and link your Minecraft name.">
+  <link rel="canonical" href="https://minecraftclubofamerica.me/onboarding.html">
+  <meta property="og:title" content="Join MCA — Minecraft Club of America">
+  <meta property="og:description" content="Create your Minecraft Club of America account — pick how you play, set up your account, and link your Minecraft name.">
+  <meta property="og:image" content="https://minecraftclubofamerica.me/images/mca-social-card-1200x630.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:url" content="https://minecraftclubofamerica.me/onboarding.html">
+  <meta property="og:type" content="website">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/x-icon" href="images/icon.ico">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#18489e">
+  <link rel="apple-touch-icon" href="/images/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="MCA">
+  <!-- Cloudflare Turnstile widget script (renders the challenge on the
+       Create Account step below). Client-side only — see the widget markup
+       and the signup submit handler for the server-verification TODO. -->
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <style>
+    .onboard-wrap {
+      min-height: calc(100vh - 58px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 3rem 1.5rem;
+    }
+    .onboard-card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      width: 100%; max-width: 560px;
+      box-shadow: 0 8px 32px rgba(24,68,158,0.08);
+      overflow: hidden;
+    }
+    .onboard-card-header {
+      padding: 2rem 2rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      text-align: center;
+    }
+    .onboard-card-logo {
+      width: 48px; height: 48px; object-fit: contain;
+      margin: 0 auto 1rem; display: block;
+    }
+    .onboard-card-eyebrow {
+      font-size: 10px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--green-text); margin-bottom: 6px;
+    }
+    .onboard-card-title {
+      font-family: 'Times New Roman', serif;
+      font-size: 1.6rem; color: var(--blue);
+      font-weight: normal; line-height: 1.2;
+    }
+    .onboard-card-subtitle {
+      font-size: 13px; color: var(--muted); line-height: 1.6;
+      margin-top: 0.5rem;
+    }
+    .onboard-card-body { padding: 1.75rem 2rem 2rem; }
+
+    /* Progress steps */
+    .onboard-progress {
+      display: flex; align-items: flex-start;
+      margin: 0 0 1.75rem; padding: 0 0.25rem;
+    }
+    .onboard-progress-step {
+      flex: 1; text-align: center; position: relative;
+    }
+    .onboard-progress-step::before {
+      content: ''; position: absolute; top: 11px; left: -50%;
+      width: 100%; height: 2px; background: var(--border);
+    }
+    .onboard-progress-step:first-child::before { display: none; }
+    .onboard-progress-step.done::before { background: var(--green-text); }
+    .onboard-progress-dot {
+      width: 24px; height: 24px; border-radius: 50%;
+      border: 2px solid var(--border); background: var(--white);
+      color: var(--muted); font-size: 11px; font-weight: 700;
+      display: inline-flex; align-items: center; justify-content: center;
+      position: relative; z-index: 1;
+    }
+    .onboard-progress-step.current .onboard-progress-dot {
+      border-color: var(--blue); background: var(--blue); color: #fff;
+    }
+    .onboard-progress-step.done .onboard-progress-dot {
+      border-color: var(--green-text); background: var(--green-text); color: #fff;
+    }
+    .onboard-progress-label {
+      display: block; font-size: 10px; font-weight: 600;
+      letter-spacing: 0.5px; text-transform: uppercase;
+      color: var(--muted); margin-top: 6px;
+    }
+    .onboard-progress-step.current .onboard-progress-label { color: var(--blue); }
+    .onboard-progress-step.done .onboard-progress-label { color: var(--green-text); }
+
+    /* Step panels */
+    .onboard-step { display: none; }
+    .onboard-step.active { display: block; }
+
+    /* Path picker cards */
+    .onboard-paths {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 12px; margin-bottom: 1.25rem;
+    }
+    @media (max-width: 560px) {
+      .onboard-paths { grid-template-columns: 1fr; }
+    }
+    .onboard-path-card {
+      border: 2px solid var(--border); border-radius: 8px;
+      background: var(--white); padding: 1.25rem 1rem 1rem;
+      text-align: center; cursor: pointer;
+      transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+      font-family: 'Open Sans', sans-serif;
+    }
+    .onboard-path-card:hover { border-color: var(--blue); box-shadow: 0 2px 12px rgba(24,68,158,0.10); }
+    .onboard-path-card.selected {
+      border-color: var(--blue); background: #eef3fc;
+      box-shadow: 0 2px 12px rgba(24,68,158,0.12);
+    }
+    .onboard-path-icon {
+      width: 40px; height: 40px; margin: 0 auto 0.75rem;
+      color: var(--blue); display: block;
+    }
+    .onboard-path-name {
+      font-family: 'Times New Roman', serif;
+      font-size: 1.1rem; color: var(--blue); line-height: 1.2;
+      margin-bottom: 0.35rem;
+    }
+    .onboard-path-desc {
+      font-size: 12px; color: var(--muted); line-height: 1.5;
+    }
+    .onboard-path-check {
+      display: none; margin-top: 0.6rem;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+      text-transform: uppercase; color: var(--blue);
+    }
+    .onboard-path-card.selected .onboard-path-check { display: block; }
+
+    /* Shared form bits (same language as login.html) */
+    .onboard-divider {
+      display: flex; align-items: center; gap: 12px;
+      margin: 1.25rem 0;
+    }
+    .onboard-divider::before, .onboard-divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+    .onboard-divider-text {
+      font-size: 11px; color: var(--muted);
+      letter-spacing: 1px; text-transform: uppercase;
+    }
+    .onboard-form-group { margin-bottom: 14px; }
+    .onboard-form-label {
+      display: block; font-size: 11px; font-weight: 600;
+      letter-spacing: 0.5px; text-transform: uppercase;
+      color: var(--mid); margin-bottom: 5px;
+    }
+    .onboard-form-input {
+      width: 100%; padding: 10px 12px;
+      border: 1px solid var(--border); border-radius: 4px;
+      font-family: 'Open Sans', sans-serif; font-size: 14px;
+      background: var(--white); color: var(--black);
+      transition: border-color 0.15s;
+    }
+    .onboard-form-input:focus { outline: none; border-color: var(--blue); }
+    .onboard-btn-discord {
+      width: 100%; background: #5865F2; color: #fff;
+      font-size: 13px; font-weight: 600;
+      padding: 11px 0; border: none; border-radius: 4px;
+      cursor: pointer; transition: background 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      margin-bottom: 4px;
+    }
+    .onboard-btn-discord:hover { background: #4752c4; }
+    .onboard-btn-google {
+      width: 100%; background: #fff; color: #3c4043;
+      font-size: 13px; font-weight: 600;
+      padding: 11px 0; border: 1px solid var(--border); border-radius: 4px;
+      cursor: pointer; transition: background 0.15s, border-color 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      margin-bottom: 4px;
+    }
+    .onboard-btn-google:hover { background: #f7f8f8; border-color: #c9ccd1; }
+    .onboard-btn-primary {
+      width: 100%; background: var(--blue); color: #fff;
+      font-size: 13px; font-weight: 600;
+      padding: 11px 0; border: none; border-radius: 4px;
+      cursor: pointer; transition: background 0.15s; margin-top: 4px;
+    }
+    .onboard-btn-primary:hover { background: var(--blue-dark); }
+    .onboard-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .onboard-btn-outline {
+      width: 100%; background: var(--white); color: var(--blue);
+      font-size: 13px; font-weight: 600;
+      padding: 11px 0; border: 1px solid var(--blue); border-radius: 4px;
+      cursor: pointer; transition: background 0.15s; margin-top: 8px;
+    }
+    .onboard-btn-outline:hover { background: #eef3fc; }
+    .onboard-error {
+      font-size: 12px; color: #c0392b;
+      margin-top: 8px; display: none;
+    }
+    .onboard-success {
+      font-size: 12px; color: var(--green-text);
+      margin-top: 8px; display: none;
+    }
+    .onboard-back-link {
+      display: block; text-align: center;
+      font-size: 12px; color: var(--muted);
+      margin-top: 1.25rem; text-decoration: none;
+      transition: color 0.15s; cursor: pointer;
+      background: none; border: none; width: 100%;
+      font-family: 'Open Sans', sans-serif;
+    }
+    .onboard-back-link:hover { color: var(--blue); }
+    .onboard-hint {
+      font-size: 11px; color: var(--muted);
+      margin-top: 4px; line-height: 1.5;
+    }
+    .onboard-consent {
+      display: flex; align-items: flex-start; gap: 8px;
+      margin: 2px 0 14px;
+    }
+    .onboard-consent input[type="checkbox"] {
+      margin-top: 2px; flex-shrink: 0; width: 15px; height: 15px;
+      accent-color: var(--blue); cursor: pointer;
+    }
+    .onboard-consent label {
+      font-size: 12px; color: var(--muted); line-height: 1.5; cursor: pointer;
+    }
+    .onboard-consent a { color: var(--blue); text-decoration: none; }
+    .onboard-consent a:hover { text-decoration: underline; }
+    .onboard-oauth-note {
+      font-size: 11px; color: var(--muted); line-height: 1.5;
+      text-align: center; margin: 10px 0 2px;
+    }
+    .onboard-oauth-note a { color: var(--blue); text-decoration: none; }
+    .onboard-oauth-note a:hover { text-decoration: underline; }
+
+    /* Minecraft step */
+    .onboard-mc-path-note {
+      font-size: 13px; color: var(--muted); line-height: 1.6;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 12px 14px; margin-bottom: 1.25rem;
+    }
+    .onboard-mc-path-note strong { color: var(--blue); }
+    .onboard-code-box {
+      display: flex; gap: 8px; align-items: stretch;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 10px 12px; margin: 0.75rem 0;
+    }
+    .onboard-code-command {
+      flex: 1; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+      font-size: 14px; color: var(--black);
+      display: flex; align-items: center; overflow-x: auto; white-space: nowrap;
+    }
+    .onboard-btn-copy {
+      flex-shrink: 0; background: var(--blue); color: #fff;
+      font-size: 12px; font-weight: 600; padding: 6px 12px;
+      border: none; border-radius: 4px; cursor: pointer;
+    }
+    .onboard-btn-copy.copied { background: var(--green-text); }
+
+    /* Done step */
+    .onboard-done-icon {
+      font-size: 2.5rem; text-align: center; margin-bottom: 0.75rem;
+    }
+    .onboard-done-title {
+      font-family: 'Times New Roman', serif;
+      font-size: 1.4rem; color: var(--blue); text-align: center;
+      margin-bottom: 0.5rem;
+    }
+    .onboard-done-text {
+      font-size: 13px; color: var(--muted); line-height: 1.6;
+      text-align: center; margin-bottom: 1.25rem;
+    }
+    .onboard-next-steps {
+      text-align: left; margin: 0 0 1.25rem;
+      border: 1px solid var(--border); border-radius: 6px;
+      overflow: hidden;
+    }
+    .onboard-next-step {
+      display: flex; gap: 12px; align-items: flex-start;
+      padding: 12px 14px; border-bottom: 1px solid var(--border);
+      font-size: 13px; line-height: 1.5; color: var(--mid);
+    }
+    .onboard-next-step:last-child { border-bottom: none; }
+    .onboard-next-step-num {
+      flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+      background: var(--blue); color: #fff;
+      font-size: 11px; font-weight: 700;
+      display: inline-flex; align-items: center; justify-content: center;
+      margin-top: 1px;
+    }
+    .onboard-next-step strong { color: var(--black); }
+    .onboard-next-step a { color: var(--blue); text-decoration: none; }
+    .onboard-next-step a:hover { text-decoration: underline; }
+
+    .onboard-card-footer {
+      padding: 1rem 2rem;
+      border-top: 1px solid var(--border);
+      text-align: center;
+    }
+    .onboard-card-footer-text {
+      font-size: 12px; color: var(--muted);
+    }
+    .onboard-card-footer-text a {
+      color: var(--blue); text-decoration: none; font-weight: 600;
+    }
+    .onboard-card-footer-text a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+<script type="module" src="nav.js"></script>
+<script type="module" src="news.js"></script>
+
+<div class="page-wrap">
+  <div class="onboard-wrap">
+    <div class="onboard-card">
+
+      <div class="onboard-card-header">
+        <img src="images/logo.png" width="500" height="500" alt="MCA" class="onboard-card-logo">
+        <div class="onboard-card-eyebrow">Join MCA</div>
+        <h1 class="onboard-card-title" id="onboard-title">How do you play?</h1>
+        <p class="onboard-card-subtitle" id="onboard-subtitle">Pick the version of Minecraft you play — we'll tailor the rest of setup around it.</p>
+      </div>
+
+      <div class="onboard-card-body">
+
+        <!-- Progress -->
+        <div class="onboard-progress" id="onboard-progress">
+          <div class="onboard-progress-step current" data-step="path">
+            <span class="onboard-progress-dot">1</span>
+            <span class="onboard-progress-label">Your path</span>
+          </div>
+          <div class="onboard-progress-step" data-step="account">
+            <span class="onboard-progress-dot">2</span>
+            <span class="onboard-progress-label">Account</span>
+          </div>
+          <div class="onboard-progress-step" data-step="minecraft">
+            <span class="onboard-progress-dot">3</span>
+            <span class="onboard-progress-label">Minecraft</span>
+          </div>
+          <div class="onboard-progress-step" data-step="done">
+            <span class="onboard-progress-dot">4</span>
+            <span class="onboard-progress-label">Done</span>
+          </div>
+        </div>
+
+        <!-- Step 1: Pick your path -->
+        <div class="onboard-step active" id="step-path">
+          <div class="onboard-paths" id="onboard-paths">
+            <button type="button" class="onboard-path-card" data-path="java">
+              <svg class="onboard-path-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              <div class="onboard-path-name">Java Edition</div>
+              <div class="onboard-path-desc">The original Minecraft on Windows, Mac, or Linux.</div>
+              <div class="onboard-path-check">✓ Selected</div>
+            </button>
+            <button type="button" class="onboard-path-card" data-path="bedrock">
+              <svg class="onboard-path-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12h4"/><path d="M8 10v4"/><path d="M15 13h.01"/><path d="M18 11h.01"/><path d="M17.32 5H6.68a4 4 0 0 0-3.98 3.59L2 15a3 3 0 0 0 5.12 2.12L9 15h6l1.88 2.12A3 3 0 0 0 22 15l-.7-6.41A4 4 0 0 0 17.32 5z"/></svg>
+              <div class="onboard-path-name">Bedrock Edition</div>
+              <div class="onboard-path-desc">Console, mobile, or Windows — Xbox, PlayStation, Switch, phone, or tablet.</div>
+              <div class="onboard-path-check">✓ Selected</div>
+            </button>
+            <button type="button" class="onboard-path-card" data-path="both">
+              <svg class="onboard-path-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="13" height="12" rx="2"/><rect x="9" y="9" width="13" height="12" rx="2"/><path d="M5 8h7"/><path d="M12 13h7"/></svg>
+              <div class="onboard-path-name">Both</div>
+              <div class="onboard-path-desc">You play on more than one device. We'll link both of your names.</div>
+              <div class="onboard-path-check">✓ Selected</div>
+            </button>
+          </div>
+          <div class="onboard-error" id="path-error">Pick one to continue — you can change it later on your account page.</div>
+          <button class="onboard-btn-primary" id="btn-path-continue">Continue</button>
+        </div>
+
+        <!-- Step 2: Create your account -->
+        <div class="onboard-step" id="step-account">
+          <button class="onboard-btn-discord" id="btn-discord-signup">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.002.022.015.043.03.057a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
+            Sign up with Discord
+          </button>
+          <button class="onboard-btn-google" id="btn-google-signup">
+            <svg width="16" height="16" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.47c-.28 1.5-1.13 2.78-2.4 3.63v3.02h3.88c2.27-2.09 3.57-5.17 3.57-8.84z"/><path fill="#34A853" d="M12 24c3.24 0 5.96-1.08 7.95-2.9l-3.88-3.02c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.12A11.998 11.998 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.27 14.27a7.2 7.2 0 0 1-.38-2.27c0-.79.14-1.56.38-2.27V6.61H1.27A11.998 11.998 0 0 0 0 12c0 1.94.46 3.77 1.27 5.39l4-3.12z"/><path fill="#EA4335" d="M12 4.77c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.69 1.27 6.61l4 3.12C6.22 6.88 8.87 4.77 12 4.77z"/></svg>
+            Sign up with Google
+          </button>
+          <div class="onboard-oauth-note">Signing up with Discord or Google shares your name, email address, and profile photo with us to create your account.</div>
+          <div class="onboard-divider"><span class="onboard-divider-text">or</span></div>
+          <div class="onboard-form-group">
+            <label class="onboard-form-label" for="signup-email">Email</label>
+            <input type="email" id="signup-email" class="onboard-form-input" placeholder="you@example.com" autocomplete="email">
+          </div>
+          <div class="onboard-form-group">
+            <label class="onboard-form-label" for="signup-password">Password</label>
+            <input type="password" id="signup-password" class="onboard-form-input" placeholder="8+ characters" autocomplete="new-password">
+            <div class="onboard-hint">Must be 8+ characters with at least one uppercase and one lowercase letter.</div>
+          </div>
+          <div class="onboard-form-group">
+            <label class="onboard-form-label">Date of Birth</label>
+            <div style="display:flex;gap:8px;">
+              <select id="signup-dob-month" class="onboard-form-input" autocomplete="bday-month">
+                <option value="">Month</option>
+                <option value="01">January</option><option value="02">February</option><option value="03">March</option>
+                <option value="04">April</option><option value="05">May</option><option value="06">June</option>
+                <option value="07">July</option><option value="08">August</option><option value="09">September</option>
+                <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+              </select>
+              <select id="signup-dob-day" class="onboard-form-input" autocomplete="bday-day" style="flex:0 0 90px;">
+                <option value="">Day</option>
+              </select>
+              <select id="signup-dob-year" class="onboard-form-input" autocomplete="bday-year" style="flex:0 0 100px;">
+                <option value="">Year</option>
+              </select>
+            </div>
+          </div>
+          <div class="onboard-form-group">
+            <label class="onboard-form-label" for="signup-club">Your Club</label>
+            <select id="signup-club" class="onboard-form-input">
+              <option value="">I'm not in a club yet</option>
+            </select>
+          </div>
+          <div class="onboard-error" id="signup-error"></div>
+          <p class="onboard-oauth-note" style="margin-bottom:10px;">We collect your email address, date of birth, and optional club choice to create and protect your account. Date of birth is used only to apply age-appropriate protections — see the <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>
+          <div class="onboard-consent">
+            <input type="checkbox" id="signup-consent">
+            <label for="signup-consent">I agree to the <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</label>
+          </div>
+          <div class="onboard-error" id="signup-consent-error">Please accept the Terms of Service and Privacy Policy to continue.</div>
+          <div class="cf-turnstile" data-sitekey="0x4AAAAAAEkQfLOaNciyMxZ5" data-theme="light" style="margin-bottom: 14px;"></div>
+          <button class="onboard-btn-primary" id="btn-email-signup">Create Account</button>
+          <button type="button" class="onboard-back-link" id="back-from-account">← Back to your path</button>
+        </div>
+
+        <!-- Step 2b: Verify email -->
+        <div class="onboard-step" id="step-verify">
+          <div style="text-align:center;padding:0.5rem 0 1rem;">
+            <div style="font-size:2rem;margin-bottom:0.5rem;">✉️</div>
+            <div style="font-family:'Times New Roman',serif;font-size:1.2rem;color:var(--blue);">Check your email</div>
+            <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-top:0.5rem;">We sent a 6-digit code to <strong id="verify-email-display" style="color:var(--black);"></strong>. Enter it below to activate your account.</p>
+          </div>
+          <div class="onboard-form-group">
+            <label class="onboard-form-label" for="signup-code">Verification Code</label>
+            <input type="text" id="signup-code" class="onboard-form-input" placeholder="123456" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+          </div>
+          <div class="onboard-error" id="confirm-error"></div>
+          <button class="onboard-btn-primary" id="btn-verify-signup">Verify &amp; Continue</button>
+          <button type="button" class="onboard-back-link" id="confirm-resend">Didn't get a code? Resend</button>
+          <button type="button" class="onboard-back-link" id="back-from-verify">← Back to account details</button>
+        </div>
+
+        <!-- Step 3: Minecraft -->
+        <div class="onboard-step" id="step-minecraft">
+          <div class="onboard-mc-path-note" id="mc-path-note"></div>
+          <div id="mc-form">
+            <div class="onboard-form-group" id="mc-java-row">
+              <label class="onboard-form-label" for="field-mc-username">Java Username</label>
+              <input type="text" id="field-mc-username" class="onboard-form-input" placeholder="YourMinecraftName">
+              <div class="onboard-hint">This field is case-sensitive.</div>
+            </div>
+            <div class="onboard-form-group" id="mc-bedrock-row" style="display:none;">
+              <label class="onboard-form-label" for="field-mc-bedrock-username">Bedrock Username</label>
+              <input type="text" id="field-mc-bedrock-username" class="onboard-form-input" placeholder="YourMinecraftName">
+              <div class="onboard-hint">Same as your Java name? Just leave it as is. Different? Type your Bedrock name here. We add the <strong>.</strong> for you.</div>
+            </div>
+            <div class="onboard-error" id="mc-error"></div>
+            <button class="onboard-btn-primary" id="btn-submit-mc">Save &amp; Get My Code</button>
+          </div>
+          <div id="mc-verify" style="display:none;">
+            <p style="font-size:13px;color:var(--muted);line-height:1.6;">Run this command in-game on the MCA server to verify your account:</p>
+            <div class="onboard-code-box">
+              <code class="onboard-code-command" id="mc-code-command" style="margin:0;flex:1;"></code>
+              <button class="onboard-btn-copy" id="btn-copy-code">Copy</button>
+            </div>
+            <p class="onboard-hint">The code expires after 10 minutes. If it expires, generate a new one from your account page.</p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:1rem;">
+              <button class="onboard-btn-primary" id="btn-check-mc" style="flex:1;">Check Verification Status</button>
+            </div>
+            <div class="onboard-error" id="mc-verify-error" style="margin-top:8px;"></div>
+            <div class="onboard-success" id="mc-verify-success" style="margin-top:8px;"></div>
+            <button class="onboard-btn-outline" id="btn-mc-continue">Continue Anyway</button>
+          </div>
+          <button type="button" class="onboard-back-link" id="back-from-minecraft">← Back to account</button>
+        </div>
+
+        <!-- Step 4: Done -->
+        <div class="onboard-step" id="step-done">
+          <div class="onboard-done-icon">🎉</div>
+          <div class="onboard-done-title">Welcome to MCA!</div>
+          <p class="onboard-done-text" id="done-text">Your account is set up. Here's what's next:</p>
+          <div class="onboard-next-steps">
+            <div class="onboard-next-step">
+              <span class="onboard-next-step-num">1</span>
+              <span><strong>Verify in-game</strong> — if you haven't yet, run your <strong>/mcaverify</strong> code on the MCA server. You can always get a fresh code from <a href="account.html">your account page</a>.</span>
+            </div>
+            <div class="onboard-next-step">
+              <span class="onboard-next-step-num">2</span>
+              <span><strong>Get your membership</strong> — membership is a one-time $12 for a full year, and it's what unlocks the server. <a href="shop.html">Get it in the shop</a>.</span>
+            </div>
+            <div class="onboard-next-step">
+              <span class="onboard-next-step-num">3</span>
+              <span><strong>Join the server</strong> — once you're a member and verified, hop on and start building. Your nation is waiting.</span>
+            </div>
+          </div>
+          <button class="onboard-btn-primary" id="btn-done-account">Go to My Account</button>
+        </div>
+
+      </div>
+
+      <div class="onboard-card-footer">
+        <p class="onboard-card-footer-text">
+          Already have an account? <a href="login.html">Sign in</a>
+        </p>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script type="module" src="onboarding.page.js"></script>
+
+</body>
+</html>

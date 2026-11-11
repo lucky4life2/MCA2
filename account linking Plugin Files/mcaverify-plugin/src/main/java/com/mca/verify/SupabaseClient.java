@@ -56,7 +56,9 @@ public class SupabaseClient {
 
     /** Looks up a profile row by its mc_verify_code. Returns null if not found or on error. */
     public ProfileMatch findByVerifyCode(String code) {
-        String select = String.join(",", "id", columns.minecraftUsername, columns.minecraftVerified, columns.verifyExpires, columns.verifyCode);
+        String select = String.join(",", "id", columns.minecraftUsername, columns.minecraftVerified,
+                columns.minecraftBedrockUsername, columns.minecraftBedrockVerified,
+                columns.verifyExpires, columns.verifyCode);
         String url = baseUrl + "/rest/v1/" + urlEncodePath(table)
                 + "?" + urlEncode(columns.verifyCode) + "=eq." + urlEncode(code)
                 + "&select=" + urlEncode(select);
@@ -78,6 +80,10 @@ public class SupabaseClient {
             boolean verified = row.has(columns.minecraftVerified)
                     && !row.get(columns.minecraftVerified).isJsonNull()
                     && row.get(columns.minecraftVerified).getAsBoolean();
+            String mcBedrockUsername = getString(row, columns.minecraftBedrockUsername);
+            boolean bedrockVerified = row.has(columns.minecraftBedrockVerified)
+                    && !row.get(columns.minecraftBedrockVerified).isJsonNull()
+                    && row.get(columns.minecraftBedrockVerified).getAsBoolean();
 
             Instant expires = null;
             String expiresStr = getString(row, columns.verifyExpires);
@@ -88,7 +94,7 @@ public class SupabaseClient {
                     // leave expires null if it doesn't parse
                 }
             }
-            return new ProfileMatch(id, mcUsername, verified, expires);
+            return new ProfileMatch(id, mcUsername, verified, mcBedrockUsername, bedrockVerified, expires);
         } catch (Exception e) {
             logger.log(Level.WARNING, "Error contacting Supabase", e);
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
@@ -208,11 +214,16 @@ public class SupabaseClient {
         }
     }
 
-    /** Looks up a profile row by its linked Minecraft username. Returns null if not found or on error. */
+    /** Looks up a profile row by its linked Minecraft username (Java or Bedrock). Returns null if not found or on error. */
     public ProfileMatch findByMinecraftUsername(String username) {
-        String select = String.join(",", "id", columns.minecraftUsername, columns.minecraftVerified);
+        String select = String.join(",", "id", columns.minecraftUsername, columns.minecraftVerified,
+                columns.minecraftBedrockUsername, columns.minecraftBedrockVerified);
+        // Bedrock names carry the Floodgate "." prefix, so a "." name only
+        // ever matches the Bedrock column; a plain name only the Java one.
+        boolean bedrock = username != null && username.startsWith(".");
+        String nameColumn = bedrock ? columns.minecraftBedrockUsername : columns.minecraftUsername;
         String url = baseUrl + "/rest/v1/" + urlEncodePath(table)
-                + "?" + urlEncode(columns.minecraftUsername) + "=eq." + urlEncode(username)
+                + "?" + urlEncode(nameColumn) + "=eq." + urlEncode(username)
                 + "&select=" + urlEncode(select);
         try {
             HttpRequest request = baseRequest(url).GET().build();
@@ -232,8 +243,12 @@ public class SupabaseClient {
             boolean verified = row.has(columns.minecraftVerified)
                     && !row.get(columns.minecraftVerified).isJsonNull()
                     && row.get(columns.minecraftVerified).getAsBoolean();
+            String mcBedrockUsername = getString(row, columns.minecraftBedrockUsername);
+            boolean bedrockVerified = row.has(columns.minecraftBedrockVerified)
+                    && !row.get(columns.minecraftBedrockVerified).isJsonNull()
+                    && row.get(columns.minecraftBedrockVerified).getAsBoolean();
 
-            return new ProfileMatch(id, mcUsername, verified, null);
+            return new ProfileMatch(id, mcUsername, verified, mcBedrockUsername, bedrockVerified, null);
         } catch (Exception e) {
             logger.log(Level.WARNING, "Error contacting Supabase", e);
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
@@ -241,16 +256,34 @@ public class SupabaseClient {
         }
     }
 
-    /** Marks the given profile as verified, clearing the one-time code. */
+    /** Marks the given profile as verified (Java edition), clearing the one-time code. */
     public boolean markVerified(String profileId, String minecraftUuid) {
+        return markVerified(profileId, minecraftUuid, false);
+    }
+
+    /**
+     * Marks the given profile as verified, clearing the one-time code.
+     * When {@code bedrock} is true, the Bedrock (Floodgate) UUID + verified
+     * flag are written instead of the Java ones, so a member who plays both
+     * editions keeps both links. The code is cleared either way — verifying
+     * the other edition needs a fresh code from the website.
+     */
+    public boolean markVerified(String profileId, String minecraftUuid, boolean bedrock) {
         String url = baseUrl + "/rest/v1/" + urlEncodePath(table) + "?id=eq." + urlEncode(profileId);
         JsonObject body = new JsonObject();
-        body.addProperty(columns.minecraftVerified, Boolean.TRUE);
+        if (bedrock) {
+            body.addProperty(columns.minecraftBedrockVerified, Boolean.TRUE);
+            if (minecraftUuid != null && !columns.minecraftBedrockUuid.isEmpty()) {
+                body.addProperty(columns.minecraftBedrockUuid, minecraftUuid);
+            }
+        } else {
+            body.addProperty(columns.minecraftVerified, Boolean.TRUE);
+            if (minecraftUuid != null && !columns.minecraftUuid.isEmpty()) {
+                body.addProperty(columns.minecraftUuid, minecraftUuid);
+            }
+        }
         body.add(columns.verifyCode, JsonNull.INSTANCE);
         body.add(columns.verifyExpires, JsonNull.INSTANCE);
-        if (minecraftUuid != null && !columns.minecraftUuid.isEmpty()) {
-            body.addProperty(columns.minecraftUuid, minecraftUuid);
-        }
         try {
             HttpRequest request = baseRequest(url)
                     .header("Content-Type", "application/json")
@@ -270,15 +303,19 @@ public class SupabaseClient {
         }
     }
 
-    /** Force-clears verification on a profile (used by /mcaunverify). */
+    /** Force-clears verification on a profile (used by /mcaunverify) — both Java and Bedrock links. */
     public boolean clearVerification(String profileId) {
         String url = baseUrl + "/rest/v1/" + urlEncodePath(table) + "?id=eq." + urlEncode(profileId);
         JsonObject body = new JsonObject();
         body.addProperty(columns.minecraftVerified, Boolean.FALSE);
-        // Also clear the stored UUID: the join gate looks players up by UUID,
-        // so leaving it set would let an unverified player keep joining.
+        body.addProperty(columns.minecraftBedrockVerified, Boolean.FALSE);
+        // Also clear the stored UUIDs: the join gate looks players up by UUID,
+        // so leaving one set would let an unverified player keep joining.
         if (columns.minecraftUuid != null && !columns.minecraftUuid.isBlank()) {
             body.add(columns.minecraftUuid, JsonNull.INSTANCE);
+        }
+        if (columns.minecraftBedrockUuid != null && !columns.minecraftBedrockUuid.isBlank()) {
+            body.add(columns.minecraftBedrockUuid, JsonNull.INSTANCE);
         }
         try {
             HttpRequest request = baseRequest(url)
@@ -366,6 +403,9 @@ public class SupabaseClient {
         public final String minecraftUsername;
         public final String minecraftVerified;
         public final String minecraftUuid;
+        public final String minecraftBedrockUsername;
+        public final String minecraftBedrockVerified;
+        public final String minecraftBedrockUuid;
         public final String verifyCode;
         public final String verifyExpires;
         public final String membershipStatus;
@@ -377,9 +417,20 @@ public class SupabaseClient {
 
         public ColumnNames(String minecraftUsername, String minecraftVerified, String minecraftUuid, String verifyCode, String verifyExpires,
                             String membershipStatus, String membershipPeriodEnd) {
+            this(minecraftUsername, minecraftVerified, minecraftUuid, verifyCode, verifyExpires,
+                    membershipStatus, membershipPeriodEnd,
+                    "minecraft_bedrock_username", "minecraft_bedrock_verified", "minecraft_bedrock_uuid");
+        }
+
+        public ColumnNames(String minecraftUsername, String minecraftVerified, String minecraftUuid, String verifyCode, String verifyExpires,
+                            String membershipStatus, String membershipPeriodEnd,
+                            String minecraftBedrockUsername, String minecraftBedrockVerified, String minecraftBedrockUuid) {
             this.minecraftUsername = minecraftUsername;
             this.minecraftVerified = minecraftVerified;
             this.minecraftUuid = minecraftUuid == null ? "" : minecraftUuid;
+            this.minecraftBedrockUsername = minecraftBedrockUsername;
+            this.minecraftBedrockVerified = minecraftBedrockVerified;
+            this.minecraftBedrockUuid = minecraftBedrockUuid == null ? "" : minecraftBedrockUuid;
             this.verifyCode = verifyCode;
             this.verifyExpires = verifyExpires;
             this.membershipStatus = membershipStatus;
@@ -445,13 +496,42 @@ public class SupabaseClient {
         public final String id;
         public final String minecraftUsername;
         public final boolean verified;
+        /** Bedrock (Floodgate) name, with the "." prefix, or null if not linked. */
+        public final String minecraftBedrockUsername;
+        public final boolean bedrockVerified;
         public final Instant verifyExpires;
 
         public ProfileMatch(String id, String minecraftUsername, boolean verified, Instant verifyExpires) {
+            this(id, minecraftUsername, verified, null, false, verifyExpires);
+        }
+
+        public ProfileMatch(String id, String minecraftUsername, boolean verified,
+                            String minecraftBedrockUsername, boolean bedrockVerified, Instant verifyExpires) {
             this.id = id;
             this.minecraftUsername = minecraftUsername;
             this.verified = verified;
+            this.minecraftBedrockUsername = minecraftBedrockUsername;
+            this.bedrockVerified = bedrockVerified;
             this.verifyExpires = verifyExpires;
+        }
+
+        /** True when this edition's name matches the in-game name and that edition is already verified. */
+        public boolean verifiedFor(String playerName) {
+            if (playerName != null && playerName.startsWith(".")) {
+                return bedrockVerified && minecraftBedrockUsername != null
+                        && minecraftBedrockUsername.equalsIgnoreCase(playerName);
+            }
+            return verified && minecraftUsername != null
+                    && minecraftUsername.equalsIgnoreCase(playerName);
+        }
+
+        /** True when the in-game name matches either linked name (Java or Bedrock). */
+        public boolean nameMatches(String playerName) {
+            if (playerName == null) return false;
+            if (playerName.startsWith(".")) {
+                return minecraftBedrockUsername != null && minecraftBedrockUsername.equalsIgnoreCase(playerName);
+            }
+            return minecraftUsername != null && minecraftUsername.equalsIgnoreCase(playerName);
         }
     }
 }

@@ -42,11 +42,17 @@ public class AdminCommands implements CommandExecutor {
             }
 
             if (label.equalsIgnoreCase("mcalookup")) {
-                plugin.getServer().getScheduler().runTask(plugin, () ->
-                        sender.sendMessage(plugin.msg("lookup_found",
-                                "%player_name%", targetName,
-                                "%website_username%", String.valueOf(match.minecraftUsername),
-                                "%verified%", String.valueOf(match.verified))));
+                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                    sender.sendMessage(plugin.msg("lookup_found",
+                            "%player_name%", targetName,
+                            "%website_username%", String.valueOf(match.minecraftUsername),
+                            "%verified%", String.valueOf(match.verified)));
+                    if (match.minecraftBedrockUsername != null) {
+                        sender.sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&',
+                                "&aBedrock: &f" + match.minecraftBedrockUsername
+                                + " &a(verified: &f" + match.bedrockVerified + "&a)"));
+                    }
+                });
                 return;
             }
 
