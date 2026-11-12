@@ -1,7 +1,7 @@
 import { supabase } from './supabase.js';
 import {
   fmtMarks, fmtDate, escapeHtml, showError, showSuccess, clearMessages,
-  confirmAction, loadMyAccounts, likeEscape
+  confirmAction, loadMyAccounts, likeEscape, newToken
 } from './economy.js';
 
 // member-gate.js shows the right message when this visitor may not use the page;
@@ -266,8 +266,12 @@ async function sendMarks() {
 
   const btn = document.getElementById('btn-pay');
   btn.disabled = true;
+  // Audit fix (economy:economy_transfer:no-client-token): the token is
+  // minted once per user intent, in this submit flow's scope, so a genuine
+  // retry reuses it and the server dedupe can match it.
+  const clientToken = newToken();
   const { error } = await supabase.rpc('economy_transfer', {
-    p_from: fromId, p_to: toAccountId, p_amount: amount, p_memo: memo
+    p_from: fromId, p_to: toAccountId, p_amount: amount, p_memo: memo, p_client_token: clientToken
   });
   btn.disabled = false;
 

@@ -169,7 +169,7 @@ async function loadNations() {
 async function loadDashboardExtras() {
   const nowIso = new Date().toISOString();
   const [{ data: events }, { data: notes }, { data: pendingCerts }] = await Promise.all([
-    supabase.from('court_calendar_events').select('*').eq('is_cancelled', false).order('starts_at'),
+    supabase.from('court_calendar_events').select('id, event_type, title, location, starts_at, ends_at, is_cancelled, case_id').eq('is_cancelled', false).order('starts_at'),
     supabase.from('court_notifications').select('*').eq('user_id', _me.id).eq('is_read', false).order('created_at', { ascending: false }).limit(10),
     (_access.manage || _access.certify)
       ? supabase.from('court_roll_calls').select('id, question, closes_at, case_id, court_cases(number, title)').eq('status', 'closed').order('closes_at', { ascending: false })
@@ -187,7 +187,7 @@ async function dismissNotification(id) {
 }
 
 async function loadCalendarAll() {
-  const { data } = await supabase.from('court_calendar_events').select('*').order('starts_at', { ascending: false }).limit(30);
+  const { data } = await supabase.from('court_calendar_events').select('id, event_type, title, location, starts_at, ends_at, is_cancelled, case_id').order('starts_at', { ascending: false }).limit(30);
   _calendarAllEvents = data || [];
 }
 
@@ -445,10 +445,20 @@ function renderArchive() {
   _archiveFiltered = list;
 }
 
+// CSV formula injection (audit congress-court/csv-formula-injection): a cell
+// starting with =, +, - or @ is evaluated as a formula when the CSV is opened
+// in a spreadsheet, even inside double quotes. Prefixing a single quote forces
+// the spreadsheet to treat it as text. Apply to every exported column.
+function csvCell(v) {
+  const s = String(v ?? '').trim();
+  const t = /^[=+\-@]/.test(s) ? "'" + s : s;
+  return '"' + t.replace(/"/g, '""') + '"';
+}
+
 function exportArchiveCsv() {
   const rows = [['Number', 'Title', 'Type', 'Result', 'Last Updated']];
   (_archiveFiltered || []).forEach(c => rows.push([c.number || 'Undocketed', c.title, typeLabel(c.type_key), c.final_result || statusLabel(c.status_key), c.updated_at]));
-  const csv = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+  const csv = rows.map(r => r.map(csvCell).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = 'mca-court-archive.csv'; a.click();
@@ -483,6 +493,12 @@ async function openCase(id) {
   const iAmRecused = (recusals || []).some(r => r.user_id === _me.id);
   const canFile = _access.manage || isParty || _access.isJustice;
   const canArgue = canFile;
+  // Sealed filings are gated server-side (court_filings.p_read) to case
+  // parties, active justices for the case, and court managers. As defence in
+  // depth, never render a sealed body to anyone else even if the row reaches
+  // this page (e.g. policy not yet applied live). _access.isJustice is an
+  // active justice (status = 'active'); a recused justice sees no body.
+  const canSeeSealed = _access.manage || isParty || (_access.isJustice && !iAmRecused);
   const isCaseOpen = !['decided', 'dismissed', 'withdrawn'].includes(kase.status_key);
 
   document.getElementById('ct-modal-title').textContent = `${kase.number || 'Undocketed'} — ${kase.title}`;
@@ -539,7 +555,7 @@ async function openCase(id) {
             <span class="cg-pos-tag">${esc(FILING_TYPE_LABEL[f.filing_type] || f.filing_type)}</span>
             <span>${fmtDate(f.created_at)}</span>${f.is_sealed ? '<span>(sealed)</span>' : ''}</div>
           <div style="font-weight:600;margin-bottom:4px;">${esc(f.title)}</div>
-          <div class="cg-fulltext">${esc(f.body)}</div>
+          ${f.is_sealed && !canSeeSealed ? '<div class="cg-fulltext"><em>Sealed filing — content available to case parties, justices, and court managers only.</em></div>' : `<div class="cg-fulltext">${esc(f.body)}</div>`}
         </div>`).join('') : '<div class="cg-empty-state">No filings yet.</div>'}
     </div>
     ${canFile && isCaseOpen ? `
