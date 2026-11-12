@@ -590,6 +590,22 @@ async function renderClubManage(clubId) {
   };
 }
 
+// Membership gate for the Minecraft section. Same rule as
+// renderMembership() above and the server's private.membership_state():
+// any non-'none' membership whose period end is still in the future
+// counts as paid — active, trialing, past-due, and cancelled-with-time-
+// remaining all keep server access (that's also what the MCAVerify join
+// gate allows). A never-paid or expired membership does not. The
+// Minecraft name entry and verify-code generation only exist behind
+// this gate; before payment the section shows a locked message with a
+// link to the shop instead.
+function hasPaidMembership() {
+  const status = _profile.membership_status || 'none';
+  const rawPeriodEnd = _profile.membership_current_period_end ? new Date(_profile.membership_current_period_end) : null;
+  const periodEnd = rawPeriodEnd && !isNaN(rawPeriodEnd.getTime()) ? rawPeriodEnd : null;
+  return status !== 'none' && !!periodEnd && periodEnd.getTime() > Date.now();
+}
+
 function renderMembership() {
   const badge = document.getElementById('membership-badge');
   const body = document.getElementById('membership-body');
@@ -1258,6 +1274,24 @@ function renderMinecraft() {
   const badge = document.getElementById('mc-badge');
   const body  = document.getElementById('mc-body');
 
+  // Minecraft verification only exists after payment. Before that the
+  // server is locked and there is nothing to link yet, so the section
+  // shows the locked message (with a link to the shop) instead of the
+  // name entry or the verify code. A member whose membership lapsed
+  // keeps their linked name on the profile, but the section stays locked
+  // until they renew — the join gate blocks them either way.
+  if (!hasPaidMembership()) {
+    const linked = !!(_profile.minecraft_username || _profile.minecraft_bedrock_username);
+    badge.textContent = 'Locked';
+    badge.className = 'account-section-badge badge-unlinked';
+    body.innerHTML = linked
+      ? `<p class="mc-unverified-note">Your Minecraft account is linked, but your membership has expired. Renew your membership to keep playing on the server.</p>
+         <a class="btn btn-primary" href="shop.html" style="text-decoration:none;display:inline-block;">Renew membership — $12/yr</a>`
+      : `<p class="mc-unverified-note">Minecraft verification unlocks after you join. Membership is $12 for a full year — once you've paid, come back here to link your Minecraft name and get your in-game verify code.</p>
+         <a class="btn btn-primary" href="shop.html" style="text-decoration:none;display:inline-block;">Join Now — $12/yr</a>`;
+    return;
+  }
+
   const javaVerified = _profile.minecraft_verified && _profile.minecraft_username;
   const bedrockLinked = !!_profile.minecraft_bedrock_username;
   const bedrockVerified = bedrockLinked && _profile.minecraft_bedrock_verified;
@@ -1359,6 +1393,16 @@ function renderMinecraft() {
     el.addEventListener('input', mcSyncBedrock);
     el.addEventListener('change', mcSyncBedrock);
   });
+
+  // Pre-check the versions from the How-you-play path picked during
+  // onboarding (same tab — sessionStorage), if there is one. The member
+  // can still change the boxes here; this just saves them re-picking.
+  // No path saved means both start unchecked and the member picks.
+  let savedPath = null;
+  try { savedPath = sessionStorage.getItem('mca_onboard_path'); } catch (e) {}
+  if (savedPath === 'java' || savedPath === 'both') mcJavaEl.checked = true;
+  if (savedPath === 'bedrock' || savedPath === 'both') mcBedrockEl.checked = true;
+  mcSyncBedrock();
 
   document.getElementById('btn-submit-mc').addEventListener('click', async () => {
     const username = mcUsernameEl.value.trim();
