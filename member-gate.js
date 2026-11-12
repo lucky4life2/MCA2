@@ -86,13 +86,18 @@
       const s = Array.isArray(data) ? data[0] : data;
       if (error || !s) return allow(); // lookup failed: RLS still protects the data
 
-      if (s.bypass) return allow();
-
+      // Account status is checked BEFORE the staff bypass (VER-M6): a
+      // frozen, terminated, or deactivated account stays blocked even if
+      // it holds can_bypass_membership. The bypass only applies to an
+      // account in good standing. Mirrors the MCAVerify 1.0.3 join gate,
+      // which checks accountOk() before the bypass.
       if (!['active', 'pending_deletion'].includes(s.account_status)) {
         const [title, text] = ACCOUNT_MESSAGES[s.account_status]
           || ['Account unavailable', 'Your account cannot use member features right now. Visit your account page for details.'];
         return block(panel(title, text, [['Go to my account', 'account.html', true]]));
       }
+
+      if (s.bypass) return allow();
 
       switch (s.state) {
         case 'active':
