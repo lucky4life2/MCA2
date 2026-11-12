@@ -458,13 +458,13 @@ document.addEventListener('keydown', (e) => {
   // Store products in memory for detail modal
   window.openProductDetail = async (id) => {
     let p = _products.find(x => x.id === id);
-    if (!p) { const { data } = await supabase.from('products').select('*').eq('id', id).single(); p = data; }
+    if (!p) { const { data } = await supabase.from('products').select('id, name, description, price, inventory, image_url, image_url2, images, active, product_type, billing_cycle, category, cart_enabled, weight, dimensions, material, sizes, colors, sku, created_at').eq('id', id).single(); p = data; }
     if (p) openDetail(p);
   };
   async function loadProducts() {
     let data, error;
     try {
-      ({ data, error } = await withTimeout(supabase.from('products').select('*').order('created_at', { ascending: false }), 8000));
+      ({ data, error } = await withTimeout(supabase.from('products').select('id, name, description, price, inventory, image_url, image_url2, images, active, product_type, billing_cycle, category, cart_enabled, weight, dimensions, material, sizes, colors, sku, created_at').order('created_at', { ascending: false }), 8000));
     } catch(e) {
       elGrid.innerHTML = `<div class="product-empty"><div class="product-empty-icon">⚠️</div><p>${esc(e.message || 'Failed to load products.')}</p><button class="btn-add-to-cart" style="margin-top:12px;max-width:160px;" data-action="load-products">Retry</button></div>`;
       return;

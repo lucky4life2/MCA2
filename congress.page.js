@@ -252,7 +252,7 @@ function bindCommitteeModal() {
 async function loadDashboardExtras() {
   const nowIso = new Date().toISOString();
   const [{ data: events }, { data: members }, { data: notes }, { data: pendingCerts }] = await Promise.all([
-    supabase.from('congress_calendar_events').select('*').eq('is_cancelled', false).order('starts_at'),
+    supabase.from('congress_calendar_events').select('id, event_type, title, location, starts_at, ends_at, is_cancelled').eq('is_cancelled', false).order('starts_at'),
     supabase.from('congress_members').select('*'),
     supabase.from('congress_notifications').select('*').eq('user_id', _me.id).eq('is_read', false).order('created_at', { ascending: false }).limit(10),
     (_access.manage || _access.certify)
@@ -278,7 +278,7 @@ async function loadReturns() {
 }
 
 async function loadCalendarAll() {
-  const { data } = await supabase.from('congress_calendar_events').select('*').order('starts_at', { ascending: false }).limit(30);
+  const { data } = await supabase.from('congress_calendar_events').select('id, event_type, title, location, starts_at, ends_at, is_cancelled').order('starts_at', { ascending: false }).limit(30);
   _calendarAllEvents = data || [];
 }
 
@@ -577,10 +577,20 @@ function renderArchive() {
   _archiveFiltered = list;
 }
 
+// CSV formula injection (audit congress-court/csv-formula-injection): a cell
+// starting with =, +, - or @ is evaluated as a formula when the CSV is opened
+// in a spreadsheet, even inside double quotes. Prefixing a single quote forces
+// the spreadsheet to treat it as text. Apply to every exported column.
+function csvCell(v) {
+  const s = String(v ?? '').trim();
+  const t = /^[=+\-@]/.test(s) ? "'" + s : s;
+  return '"' + t.replace(/"/g, '""') + '"';
+}
+
 function exportArchiveCsv() {
   const rows = [['Number', 'Title', 'Type', 'Chamber', 'Result', 'Last Updated']];
   (_archiveFiltered || []).forEach(m => rows.push([m.number || 'Draft', m.title, typeLabel(m.type_key), chamberLabel(m.chamber_id), statusLabel(m.status_key), m.updated_at]));
-  const csv = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+  const csv = rows.map(r => r.map(csvCell).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = 'mca-congress-archive.csv'; a.click();

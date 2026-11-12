@@ -195,14 +195,15 @@ export async function loadOrderBook(companyId, depth) {
 }
 
 export async function loadRecentTrades(companyId, limit) {
-  const { data, error } = await supabase
-    .from('economy_trades')
-    .select('quantity,price,total,created_at')
-    .eq('company_id', companyId)
-    .order('created_at', { ascending: false })
-    .limit(limit || 25);
+  // Audit fix (stocks:trades:counterparty-account-exposure): the raw
+  // economy_trades table is no longer directly readable by client roles
+  // (its buyer/seller account and order ids were exposed by SELECT *).
+  // The tape RPC returns only the rendered columns and enforces the
+  // membership gate itself. Limit is applied here — the RPC has no limit
+  // parameter by design, so the tape shape stays fixed.
+  const { data, error } = await supabase.rpc('economy_trade_tape', { p_company_id: companyId });
   if (error) { reportQueryFailure('loadRecentTrades', error); return []; }
-  return data || [];
+  return (data || []).slice(0, limit || 25);
 }
 
 export async function loadMyOrders(accountIds) {

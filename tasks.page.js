@@ -998,10 +998,12 @@ document.getElementById('tk-comments').addEventListener('click', async (e) => {
 
   if (btn.dataset.action === 'delete') {
     if (!confirm('Delete this comment? It will be replaced with "This message was deleted."')) return;
-    const { error } = await supabase.from('task_comments')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', id);
-    if (error) { alert(error.message || 'Could not delete comment.'); return; }
+    // Soft-delete goes through the RPC, not a direct UPDATE: the SELECT
+    // policies exclude deleted rows, and Postgres checks the SELECT policy
+    // against the new row too, so a direct update setting deleted_at
+    // always fails with 42501 (see 20261112_task_comments_policies.sql).
+    const { data: deleted, error } = await supabase.rpc('delete_task_comment', { p_comment_id: id });
+    if (error || !deleted) { alert(error?.message || 'Could not delete comment.'); return; }
     comment.deleted_at = new Date().toISOString();
     renderComments();
     return;

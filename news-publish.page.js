@@ -1,4 +1,4 @@
-import { supabase, getMyRolePreview, requireAal2, optimizeImageFile } from './supabase.js';
+import { supabase, getMyRolePreview, requireAal2, optimizeImageFile, signedUrlForPublished, resolvePrivateBucketImagesInMarkdown } from './supabase.js';
 
 // ── Delegated actions (strict CSP) ────────────────────────────────
 // Inline handler attributes are blocked by the strict script-src policy,
@@ -467,9 +467,10 @@ window.loadIntoEditor = async (id) => {
 };
 
 // ── Photo uploads (hero image + inline body images) ────────────
-// Shares the same public news-images bucket for both. Files are grouped
+// Shares the same private news-images bucket for both. Files are grouped
 // under the article's id once it has one, or a per-session draft folder
-// before the first save.
+// before the first save. Uploads store the storage PATH; render sites
+// mint a signed URL from it (signedUrlForPublished in supabase.js).
 let _uploadFolder = `draft-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
 function uploadFolder() { return _editingId || _uploadFolder; }
 
@@ -480,14 +481,28 @@ async function uploadNewsImage(file) {
   const path = `${uploadFolder()}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
   const { error } = await supabase.storage.from('news-images').upload(path, file);
   if (error) throw error;
-  const { data } = supabase.storage.from('news-images').getPublicUrl(path);
-  return data.publicUrl;
+  // The bucket is private: store the storage PATH, not a public URL.
+  // Render sites mint a short-lived signed URL from the path
+  // (signedUrlForPublished in supabase.js); a public URL would 404
+  // once the bucket is private.
+  return path;
 }
 
-function setHeroImage(url) {
+async function setHeroImage(url) {
+  // The np-image input keeps the STORED value (a storage path, a legacy
+  // public URL, or a hand-pasted external URL). The preview <img> needs
+  // a renderable URL: news-images is a private bucket, so mint a signed
+  // URL. The viewer here is the author/coauthor/approver previewing
+  // their own article, so the publication gate is bypassed for preview.
   document.getElementById('np-image').value = url || '';
-  document.getElementById('np-image-preview').src = url || '';
-  document.getElementById('np-image-preview-wrap').style.display = url ? '' : 'none';
+  const previewUrl = url ? await signedUrlForPublished('news-images', url, { isAuthorOrApprover: true }) : null;
+  // The input may have changed while the signed URL was minting (a
+  // second upload, a manual-URL edit); only show the preview that
+  // belongs to the value currently in the input.
+  const current = document.getElementById('np-image').value;
+  const showUrl = (current === (url || '')) ? previewUrl : null;
+  document.getElementById('np-image-preview').src = showUrl || '';
+  document.getElementById('np-image-preview-wrap').style.display = showUrl ? '' : 'none';
   document.getElementById('np-image-dropzone-label').textContent = url ? 'Click to replace' : 'Drag & drop a photo here, or click to browse';
 }
 
@@ -582,7 +597,26 @@ async function notifySubscribers(articleId) {
   }
 }
 
+// Double-clicking Publish on a new article used to run the insert twice —
+// two published articles, and notifySubscribers() firing a second email blast
+// to every subscriber. The generated slug carries a timestamp, so there was no
+// unique constraint to fall back on. Same guard as the admin page
+// (admin.page.js saveArticle); audit publishing:news-publish-double-submit-duplicates.
+let _saving = false;
+
 async function saveArticle(forcedStatus) {
+  if (_saving) return;
+  _saving = true;
+  const saveBtns = ['btn-save-draft', 'btn-publish'].map(x => document.getElementById(x)).filter(Boolean);
+  saveBtns.forEach(b => { b.disabled = true; });
+  try { await saveArticleInner(forcedStatus); }
+  finally {
+    _saving = false;
+    saveBtns.forEach(b => { b.disabled = false; });
+  }
+}
+
+async function saveArticleInner(forcedStatus) {
   const id      = document.getElementById('np-editing-id').value;
   const title   = document.getElementById('np-title').value.trim();
   const body    = document.getElementById('np-body').value.trim();
@@ -664,10 +698,32 @@ window.quickUnpublish = async (id) => {
   toast('Moved back to drafts');
   await loadArticles();
 };
+// Audit fix publishing:delete-leaves-storage-objects: resolve a stored hero
+// image value to its news-images bucket path so deleting the article retracts
+// the object too. Stored values are either a bare storage path (new uploads)
+// or a legacy full public/signed URL; anything else is not our object.
+function newsImageStoragePath(stored) {
+  const raw = String(stored ?? '').trim();
+  if (!raw) return null;
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(raw) && !raw.startsWith('//')) return raw.replace(/^\/+/, '');
+  const marker = '/storage/v1/object/public/news-images/';
+  const signed = '/storage/v1/object/sign/news-images/';
+  const i = raw.indexOf(marker) >= 0 ? raw.indexOf(marker) + marker.length : raw.indexOf(signed) >= 0 ? raw.indexOf(signed) + signed.length : -1;
+  if (i < 0) return null;
+  const path = raw.slice(i).split('?')[0];
+  try { return decodeURIComponent(path); } catch { return path; }
+}
+
 window.deleteArticle = async (id) => {
   if (!(await mcaConfirm({ title: 'Delete article?', message: 'Delete this article? This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
+  const { data: article } = await supabase.from('news_articles').select('image_url').eq('id', id).maybeSingle();
   const { error } = await supabase.from('news_articles').delete().eq('id', id);
   if (error) { toast('Error: '+error.message, true); return; }
+  const path = newsImageStoragePath(article?.image_url);
+  if (path) {
+    const { error: rmErr } = await supabase.storage.from('news-images').remove([path]);
+    if (rmErr) console.warn('Could not remove deleted article image:', rmErr.message);
+  }
   if (_editingId === id) clearEditor();
   toast('Article deleted');
   await loadArticles();
@@ -713,9 +769,19 @@ function setEditorMode(mode) {
 document.getElementById('tab-write').addEventListener('click',   () => setEditorMode('write'));
 document.getElementById('tab-preview').addEventListener('click', () => setEditorMode('preview'));
 
-function updatePreview() {
+// Only the newest keystroke's preview may paint: minting signed URLs
+// for inline body photos is async, and a slow mint from an older body
+// must not overwrite the preview of the current text.
+let _previewToken = 0;
+async function updatePreview() {
+  const token = ++_previewToken;
   const body = document.getElementById('np-body').value;
-  document.getElementById('np-preview').innerHTML = renderMarkdown(body);
+  // Body markdown may embed news-images photos as storage paths; resolve
+  // them to signed URLs for the author's preview (publication gate
+  // bypassed — this is the author's own draft).
+  const resolved = await resolvePrivateBucketImagesInMarkdown('news-images', body, { isAuthorOrApprover: true });
+  if (token !== _previewToken) return;
+  document.getElementById('np-preview').innerHTML = renderMarkdown(resolved);
 }
 
 // ── Character counters ────────────────────────────────────────

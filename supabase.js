@@ -233,6 +233,13 @@ export async function signInWithGoogle() {
 /** Sign in with email + password */
 /** Sign out */
 export async function signOut() {
+  // End any active role preview BEFORE the session (and its access token)
+  // is destroyed: end_role_preview is a plain DELETE (no error when no
+  // preview exists), but once sign-out runs the token the preview row
+  // needs is gone, so the preview would otherwise survive sign-out and
+  // keep substituting permissions on the next sign-in
+  // (auth:role-preview:no-expiry-retention, client half).
+  await endRolePreview();
   await supabase.auth.signOut();
 }
 
@@ -390,4 +397,112 @@ export async function optimizeImageFile(file, maxEdge = 2048) {
   }
   const base = file.name.replace(/\.[^.]+$/, '') || 'image';
   return new File([blob], `${base}.${ext}`, { type: blob.type });
+}
+
+// ── Private-bucket signed URLs ─────────────────────────────────────
+// storage:unpublished-public-bucket-objects (MEDIUM): archive-files and
+// news-images are PRIVATE buckets (migration
+// 20261112_storage_private_buckets.sql), so a stored public URL no longer
+// serves anything. Rows store the STORAGE PATH (e.g.
+// "<uid>/1234-file.pdf"), and render sites mint a short-lived signed URL
+// from it at render time — only while the row is published, or while its
+// author/approver is previewing it. Legacy rows still store the old full
+// public URL; the parser below accepts both shapes. Values that are not
+// objects in the requested bucket (an external image URL pasted by hand, a
+// shop-images URL) pass through unchanged — they are not governed by this
+// bucket's privacy.
+//
+// Why the client mints the URL instead of the server: createSignedUrl
+// requires a storage.objects SELECT policy for the caller, and the
+// migration adds publication-gated SELECT policies for both buckets
+// (published row referencing the object, or author/approver/manager),
+// so anonymous visitors can mint a signed URL for a published object
+// while draft objects stay unreadable. A signed URL is a bearer token
+// valid for SIGNED_URL_TTL_SECONDS — short, so an unpublish takes
+// effect for new renders within the hour; already-issued URLs keep
+// serving until they expire (residual risk, see the migration header).
+export const SIGNED_URL_TTL_SECONDS = 3600; // 1 hour
+
+// Classifies a stored value for one bucket:
+//   { kind: 'path', path }  — a bare storage path, or a stored Supabase
+//                             storage URL (public or signed) for this bucket
+//   { kind: 'external' }    — anything else (external URL, another bucket's
+//                             object, a non-storage URL on our own host)
+//   { kind: 'empty' }       — blank / missing
+function parseStoredStorageValue(bucket, stored) {
+  const raw = String(stored ?? '').trim();
+  if (!raw) return { kind: 'empty' };
+  // No scheme and no protocol-relative prefix: the bare-path shape new
+  // uploads store. (A stored value of just a path never contains '://'.)
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(raw) && !raw.startsWith('//')) {
+    return { kind: 'path', path: raw.replace(/^\/+/, '') };
+  }
+  let url;
+  try {
+    url = new URL(raw, typeof window !== 'undefined' ? window.location.href : undefined);
+  } catch {
+    return { kind: 'path', path: raw.replace(/^\/+/, '') };
+  }
+  let supabaseHost = null;
+  try { supabaseHost = new URL(SUPABASE_URL).hostname; } catch { /* unreachable: constant */ }
+  if (url.hostname !== supabaseHost) return { kind: 'external' };
+  // /storage/v1/object/public/<bucket>/<path> or /object/sign/<bucket>/<path>
+  const m = url.pathname.match(/^\/storage\/v1\/object\/(?:public|sign|authenticated)\/([^/]+)\/(.+)$/);
+  if (!m) return { kind: 'external' };
+  if (m[1] !== bucket) return { kind: 'external' };
+  let path = m[2];
+  try { path = decodeURIComponent(path); } catch { /* keep the raw path */ }
+  return { kind: 'path', path };
+}
+
+/**
+ * Returns a renderable URL for a value stored in a private bucket, or
+ * null when it must not be shown.
+ *   bucket: 'archive-files' | 'news-images'
+ *   storedUrl: the stored storage path, or a legacy stored public URL
+ *   opts.status: the owning row's status — a signed URL is minted only
+ *     when it is 'published', unless opts.isAuthorOrApprover is true
+ *     (author/coauthor/approver previewing their own row).
+ * External URLs and other buckets' objects pass through unchanged.
+ * On any minting failure (object deleted, policy denied, offline) this
+ * returns null — callers render "no file/image", never the raw stored
+ * value, so a private-bucket path can never leak into an href/src.
+ */
+export async function signedUrlForPublished(bucket, storedUrl, { status, isAuthorOrApprover } = {}) {
+  if (!storedUrl) return null;
+  if (status !== 'published' && !isAuthorOrApprover) return null;
+  const parsed = parseStoredStorageValue(bucket, storedUrl);
+  if (parsed.kind === 'empty') return null;
+  if (parsed.kind === 'external') return String(storedUrl).trim();
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(parsed.path, SIGNED_URL_TTL_SECONDS);
+  if (error || !data?.signedUrl) {
+    console.error(`signedUrlForPublished(${bucket}) error:`, error?.message || 'no signed URL returned');
+    return null;
+  }
+  return data.signedUrl;
+}
+
+/**
+ * Rewrites markdown image URLs that point at objects in a private bucket
+ * to render-time signed URLs (see signedUrlForPublished). News body
+ * markdown embeds inline photos as `![alt](<stored path or URL>)`, so
+ * the hero image_url alone is not the whole render surface.
+ * External image URLs pass through untouched; an image whose signed URL
+ * cannot be minted is left as-is (it 404s rather than vanishing the
+ * surrounding text — the owning row is already gated to published-or-
+ * author-preview by the caller, so this is a transient failure, not a
+ * publication bypass).
+ */
+export async function resolvePrivateBucketImagesInMarkdown(bucket, md, opts = {}) {
+  if (!md || typeof md !== 'string') return md || '';
+  const matches = [...md.matchAll(/!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)];
+  if (!matches.length) return md;
+  const resolved = new Map();
+  await Promise.all(matches.map(async (m) => {
+    if (!resolved.has(m[1])) resolved.set(m[1], await signedUrlForPublished(bucket, m[1], opts));
+  }));
+  return md.replace(/!\[([^\]]*)\]\(([^)\s]+)((?:\s+"[^"]*")?)\)/g, (m, alt, url, title) => {
+    const next = resolved.get(url);
+    return next ? `![${alt}](${next}${title})` : m;
+  });
 }
