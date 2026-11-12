@@ -735,11 +735,15 @@ document.getElementById('rm-save').addEventListener('click', async () => {
   const payload = { label, color, level, permissions };
   if (!id) payload.name = name;
 
+  // Role definitions are written through SECURITY DEFINER RPCs, not
+  // directly — the RPCs enforce the level cap and the held-permission
+  // cap server-side (audit: admin:role-permission-self-escalation).
+  // Direct roles writes are denied by RLS, so this is the only path.
   let error;
   if (id) {
-    ({ error } = await supabase.from('roles').update(payload).eq('id', id));
+    ({ error } = await supabase.rpc('update_role_definition', { p_role_id: id, ...payload }));
   } else {
-    ({ error } = await supabase.from('roles').insert({ ...payload, name }));
+    ({ error } = await supabase.rpc('create_role_definition', { p_name: name, ...payload }));
   }
   if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
   closeRoleModal();
@@ -749,7 +753,10 @@ document.getElementById('rm-save').addEventListener('click', async () => {
 
 window.deleteRole = async (id) => {
   if (!(await mcaConfirm({ title: 'Delete role?', message: 'Delete this role? Users with this role will lose it. This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
-  const { error } = await supabase.from('roles').delete().eq('id', id);
+  // Server-side delete via RPC (audit: admin:role-permission-self-escalation):
+  // enforces the level cap and refuses system roles. Direct roles
+  // deletes are denied by RLS.
+  const { error } = await supabase.rpc('delete_role_definition', { p_role_id: id });
   if (error) { alert(error.message); return; }
   await loadAllRoles();
   await loadAll();
