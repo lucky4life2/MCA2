@@ -1,10 +1,12 @@
 import { supabase } from './supabase.js';
 
 // ── Onboarding wizard ───────────────────────────────────────────
-// Step-by-step account creation with a "pick your path" first step.
-// Reuses the same server calls as login.html (signup-with-email,
-// verify-signup-code, resend-signup-code) and account.html (profiles
-// Minecraft link + set_mc_verify_code), so the wizard is a new front
+// Step-by-step account creation: account first, then "how you play",
+// then done. Minecraft verification is NOT part of this wizard — it
+// unlocks on the account page only after the member has paid, and the
+// MCAVerify plugin's join gate is what keeps the server locked until
+// then. Reuses the same server calls as login.html (signup-with-email,
+// verify-signup-code, resend-signup-code), so the wizard is a new front
 // door, not a second auth system.
 
 const params = new URLSearchParams(window.location.search);
@@ -12,19 +14,21 @@ const params = new URLSearchParams(window.location.search);
 const PATH_KEY = 'mca_onboard_path';
 const STEP_KEY = 'mca_onboard_step';
 
-const STEPS = ['path', 'account', 'minecraft', 'done'];
+// The path is kept in sessionStorage only — there is no profiles column
+// for it, so the account page reads it back from here (same tab) to
+// pre-fill the Java/Bedrock choice when the member links Minecraft after
+// paying. Nothing else in the wizard writes to the profile.
+const STEPS = ['account', 'path', 'done'];
 const STEP_META = {
-  path:      { title: 'How do you play?', subtitle: "Pick the version of Minecraft you play — we'll tailor the rest of setup around it." },
   account:   { title: 'Create your account', subtitle: 'This is your MCA login. One account works for the website, the shop, and the server.' },
   verify:    { title: 'Almost there', subtitle: 'Just confirming your email so we know it\'s really you.' },
-  minecraft: { title: 'Link your Minecraft name', subtitle: 'This is what lets the server know it\'s you. One quick command in-game and you\'re verified.' },
+  path:      { title: 'How do you play?', subtitle: "Pick the version of Minecraft you play — we'll tailor the rest of setup around it." },
   done:      { title: 'Welcome to MCA!', subtitle: "You're all set up. Here's what's next." },
 };
 
 let _path = null;          // 'java' | 'bedrock' | 'both'
 let _pendingSignupEmail = null;
 let _pendingSignupUserId = null;
-let _verifyCode = null;
 let _user = null;
 
 // ── Step navigation ─────────────────────────────────────────────
@@ -53,7 +57,7 @@ function showStep(name) {
   titleEl.focus({ preventScroll: true });
 }
 
-// ── Step 1: Pick your path ──────────────────────────────────────
+// ── Step 2: Pick your path ──────────────────────────────────────
 const pathCards = document.querySelectorAll('.onboard-path-card');
 const pathContinueBtn = document.getElementById('btn-path-continue');
 function selectPath(p) {
@@ -64,8 +68,13 @@ function selectPath(p) {
   try { sessionStorage.setItem(PATH_KEY, p); } catch (e) {}
 }
 pathCards.forEach(c => c.addEventListener('click', () => selectPath(c.dataset.path)));
+// "Back to sign in" lives on the account step now (step 1); the path
+// step's way back is the account step.
 document.getElementById('back-to-signin').addEventListener('click', () => {
   window.location.href = 'login.html';
+});
+document.getElementById('back-from-path').addEventListener('click', () => {
+  showStep('account');
 });
 document.getElementById('btn-path-continue').addEventListener('click', () => {
   if (!_path) {
@@ -73,34 +82,28 @@ document.getElementById('btn-path-continue').addEventListener('click', () => {
     err.style.display = 'block';
     return;
   }
-  showStep('account');
+  showStep('done');
 });
 
-// ── DOB selects (same neutral age screen as login.html) ─────────
+// ── DOB selects: month + year only (option 3). The signup edge function
+// still expects a full DOB date, so we send the first of the month
+// (YYYY-MM-01) — age validation and the age band still compute from it.
+// Year range covers the school-club age band (13–19): a 19-year-old can
+// have been born in thisYear-20 (e.g. December), and a 13-year-old in
+// thisYear-13.
 const dobMonthEl = document.getElementById('signup-dob-month');
-const dobDayEl = document.getElementById('signup-dob-day');
 const dobYearEl = document.getElementById('signup-dob-year');
-if (dobDayEl) {
-  for (let d = 1; d <= 31; d++) {
-    const v = String(d).padStart(2, '0');
-    dobDayEl.insertAdjacentHTML('beforeend', `<option value="${v}">${d}</option>`);
-  }
-}
 if (dobYearEl) {
   const thisYear = new Date().getFullYear();
-  for (let y = thisYear; y >= thisYear - 100; y--) {
+  for (let y = thisYear - 13; y >= thisYear - 20; y--) {
     dobYearEl.insertAdjacentHTML('beforeend', `<option value="${y}">${y}</option>`);
   }
 }
 function buildDob() {
   const m = dobMonthEl ? dobMonthEl.value : '';
-  const d = dobDayEl ? dobDayEl.value : '';
   const y = dobYearEl ? dobYearEl.value : '';
-  if (!m || !d || !y) return '';
-  const iso = `${y}-${m}-${d}`;
-  const dt = new Date(`${iso}T00:00:00Z`);
-  if (dt.getUTCFullYear() !== Number(y) || dt.getUTCMonth() + 1 !== Number(m) || dt.getUTCDate() !== Number(d)) return '';
-  return iso;
+  if (!m || !y) return '';
+  return `${y}-${m}-01`;
 }
 const todayIso = new Date().toISOString().slice(0, 10);
 
@@ -129,13 +132,51 @@ signupConsent.addEventListener('change', () => {
   if (signupConsent.checked) signupConsentError.style.display = 'none';
 });
 
+// ── Email form toggle + Turnstile ────────────────────────────────
+// The account step shows the sign-up choices first; the email form (and
+// its Turnstile challenge) only appears when the member picks email. The
+// challenge is rendered explicitly the first time the form opens —
+// rendering it into a hidden container is unreliable, and loading it up
+// front would show a challenge to members who never pick email.
+const TURNSTILE_SITEKEY = '0x4AAAAAAEkQfLOaNciyMxZ5';
+let turnstileWidgetId = null;
+function ensureTurnstile() {
+  if (turnstileWidgetId !== null) return;
+  if (!window.turnstile) {
+    // The Turnstile script loads async — render as soon as it arrives.
+    const script = document.querySelector('script[src*="challenges.cloudflare.com/turnstile"]');
+    if (script) script.addEventListener('load', ensureTurnstile, { once: true });
+    return;
+  }
+  turnstileWidgetId = window.turnstile.render('#turnstile-container', {
+    sitekey: TURNSTILE_SITEKEY,
+    theme: 'light',
+  });
+}
+function showEmailForm() {
+  document.getElementById('onboard-auth-choice').style.display = 'none';
+  document.getElementById('onboard-email-form').style.display = '';
+  ensureTurnstile();
+}
+function showAuthChoice() {
+  document.getElementById('onboard-email-form').style.display = 'none';
+  document.getElementById('onboard-auth-choice').style.display = '';
+}
+document.getElementById('btn-show-email-form').addEventListener('click', showEmailForm);
+document.getElementById('back-to-auth-choice').addEventListener('click', showAuthChoice);
+
 function showAccountError(message) {
+  // The error lives in the email form, so make sure that form is showing —
+  // otherwise an OAuth failure that sent the user back here with ?error=…
+  // would write into a hidden panel and the member would never see it.
+  showEmailForm();
   const errEl = document.getElementById('signup-error');
   errEl.textContent = message;
   errEl.style.display = 'block';
 }
 
-// ── OAuth (redirects back here, then resumes at Minecraft) ──────
+// ── OAuth (redirects back here, then resumes at Done — or the path
+// picker if the member was mid-wizard) ────────────────────────────
 const oauthRedirect = window.location.origin + '/onboarding.html';
 async function oauthLogin(provider) {
   const { error } = await supabase.auth.signInWithOAuth({
@@ -194,8 +235,8 @@ document.getElementById('btn-email-signup').addEventListener('click', async () =
     errEl.textContent = 'Password must contain at least one lowercase letter.';
     errEl.style.display = 'block'; return;
   }
-  const turnstileToken = (window.turnstile && document.querySelector('.cf-turnstile'))
-    ? window.turnstile.getResponse()
+  const turnstileToken = (window.turnstile && turnstileWidgetId !== null)
+    ? window.turnstile.getResponse(turnstileWidgetId)
     : '';
   if (!turnstileToken) {
     errEl.textContent = 'Please complete the verification challenge.';
@@ -215,13 +256,13 @@ document.getElementById('btn-email-signup').addEventListener('click', async () =
     json = await res.json();
   } catch (e) {
     btn.textContent = 'Create Account'; btn.disabled = false;
-    if (window.turnstile) window.turnstile.reset();
+    if (window.turnstile && turnstileWidgetId !== null) window.turnstile.reset(turnstileWidgetId);
     errEl.textContent = 'Could not reach the server. Please try again.';
     errEl.style.display = 'block'; return;
   }
   btn.textContent = 'Create Account'; btn.disabled = false;
   if (!res.ok || json.error) {
-    if (window.turnstile) window.turnstile.reset();
+    if (window.turnstile && turnstileWidgetId !== null) window.turnstile.reset(turnstileWidgetId);
     errEl.textContent = json.error || 'Sign up failed.';
     errEl.style.display = 'block'; return;
   }
@@ -270,7 +311,7 @@ document.getElementById('btn-verify-signup').addEventListener('click', async () 
     const { data: { user } } = await supabase.auth.getUser();
     _user = user;
     btn.textContent = 'Verify & Continue'; btn.disabled = false;
-    enterMinecraftStep();
+    showStep('path');
   } catch (e) {
     errEl.textContent = 'Could not reach the server. Please try again.';
     errEl.style.display = 'block';
@@ -336,177 +377,9 @@ async function backfillUsername() {
   } catch (e) { /* non-fatal */ }
 }
 
-// ── Step 3: Minecraft (adapts to the chosen path) ───────────────
-const mcUsernameEl = document.getElementById('field-mc-username');
-const mcBedrockRow = document.getElementById('mc-bedrock-row');
-const mcBedrockNameEl = document.getElementById('field-mc-bedrock-username');
-const mcJavaRow = document.getElementById('mc-java-row');
-let mcBedrockEdited = false;
-
-function pathLabel(p) {
-  return p === 'java' ? 'Java Edition' : p === 'bedrock' ? 'Bedrock Edition' : 'Java + Bedrock';
-}
-
-function enterMinecraftStep() {
-  const note = document.getElementById('mc-path-note');
-  if (_path === 'java') {
-    note.innerHTML = `You picked <strong>Java Edition</strong> — enter the username you play Minecraft: Java Edition with on PC.`;
-    mcJavaRow.style.display = '';
-    mcBedrockRow.style.display = 'none';
-  } else if (_path === 'bedrock') {
-    note.innerHTML = `You picked <strong>Bedrock Edition</strong> — enter the username you play with on console, mobile, or Windows. We add the <strong>.</strong> for you.`;
-    mcJavaRow.style.display = '';
-    mcBedrockRow.style.display = 'none';
-    mcUsernameEl.placeholder = 'Your Bedrock name';
-    document.querySelector('label[for="field-mc-username"]').textContent = 'Bedrock Username';
-  } else {
-    note.innerHTML = `You picked <strong>both</strong> — enter your Java name, and your Bedrock name too if it's different. Same name? Just leave the Bedrock box as is.`;
-    mcJavaRow.style.display = '';
-    mcBedrockRow.style.display = '';
-  }
-  document.getElementById('mc-form').style.display = '';
-  document.getElementById('mc-verify').style.display = 'none';
-  showStep('minecraft');
-}
-
-// Keep the Bedrock box in sync with the Java name until the user edits
-// it themselves (same as account.html).
-const mcSyncBedrock = () => {
-  if (_path !== 'both') return;
-  if (!mcBedrockEdited) mcBedrockNameEl.value = mcUsernameEl.value.trim();
-};
-mcBedrockNameEl.addEventListener('input', () => { mcBedrockEdited = true; });
-mcUsernameEl.addEventListener('input', mcSyncBedrock);
-
-function likeEscape(s) {
-  return s.replace(/[\\%_]/g, m => '\\' + m);
-}
-
-document.getElementById('btn-submit-mc').addEventListener('click', async () => {
-  if (!_user) {
-    const { data: { user } } = await supabase.auth.getUser();
-    _user = user;
-  }
-  if (!_user) {
-    const errEl = document.getElementById('mc-error');
-    errEl.textContent = 'You need to be signed in. Go back and create your account first.';
-    errEl.style.display = 'block'; return;
-  }
-  const username = mcUsernameEl.value.trim();
-  const errEl = document.getElementById('mc-error');
-  errEl.style.display = 'none';
-  if (!username) { errEl.textContent = 'Enter your Minecraft username.'; errEl.style.display = 'block'; return; }
-
-  const javaChecked = _path === 'java' || _path === 'both';
-  const bedrockChecked = _path === 'bedrock' || _path === 'both';
-  // Primary username stored on the profile: the Java name when Java is
-  // picked, otherwise the Bedrock name with the Floodgate dot prefix
-  // added automatically (Bedrock players show up in-game as ".Name").
-  // When both are picked, the Bedrock name is stored separately.
-  const bedrockName = bedrockChecked
-    ? (javaChecked ? mcBedrockNameEl.value.trim() : username)
-    : '';
-  if (bedrockChecked && !bedrockName) { errEl.textContent = 'Enter your Bedrock username.'; errEl.style.display = 'block'; return; }
-  const primaryUsername = javaChecked ? username : '.' + bedrockName;
-  const bedrockUsername = bedrockChecked ? '.' + bedrockName : null;
-
-  // Uniqueness checks (client-side convenience only — the database unique
-  // indexes are the real enforcement).
-  const { data: existing } = await supabase
-    .from('profiles')
-    .select('id')
-    .ilike('minecraft_username', likeEscape(primaryUsername))
-    .neq('id', _user.id)
-    .maybeSingle();
-  if (existing) {
-    errEl.textContent = `"${primaryUsername}" is already linked to another account. If this is your username, contact an admin.`;
-    errEl.style.display = 'block';
-    return;
-  }
-  if (bedrockUsername) {
-    const { data: existingBedrock } = await supabase
-      .from('profiles')
-      .select('id')
-      .ilike('minecraft_bedrock_username', likeEscape(bedrockUsername))
-      .neq('id', _user.id)
-      .maybeSingle();
-    if (existingBedrock) {
-      errEl.textContent = `"${bedrockUsername}" is already linked to another account. If this is your username, contact an admin.`;
-      errEl.style.display = 'block';
-      return;
-    }
-  }
-
-  const btn = document.getElementById('btn-submit-mc');
-  btn.textContent = 'Saving…'; btn.disabled = true;
-  const { error } = await supabase.from('profiles').update({
-    minecraft_username: primaryUsername,
-    minecraft_bedrock_username: bedrockUsername,
-  }).eq('id', _user.id);
-  btn.textContent = 'Save & Get My Code'; btn.disabled = false;
-  if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
-
-  // Show the in-game verify code.
-  _verifyCode = generateCode();
-  document.getElementById('mc-code-command').textContent = '/mcaverify ' + _verifyCode;
-  document.getElementById('mc-form').style.display = 'none';
-  document.getElementById('mc-verify').style.display = '';
-  document.getElementById('mc-verify-error').style.display = 'none';
-  document.getElementById('mc-verify-success').style.display = 'none';
-});
-
-function generateCode() {
-  // CSPRNG 8-char code, stored through set_mc_verify_code() (server checks
-  // the format and uniqueness and sets the 10-minute expiry itself).
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const bytes = new Uint8Array(8);
-  crypto.getRandomValues(bytes);
-  let code = '';
-  for (let i = 0; i < 8; i++) code += chars[bytes[i] % chars.length];
-  supabase.rpc('set_mc_verify_code', { p_code: code }).then(({ error }) => {
-    if (error) console.warn('Could not store verify code:', error.message);
-  });
-  return code;
-}
-
-document.getElementById('btn-copy-code').addEventListener('click', function() {
-  navigator.clipboard.writeText('/mcaverify ' + _verifyCode).catch(() => {});
-  this.textContent = 'Copied!';
-  this.classList.add('copied');
-  setTimeout(() => { this.textContent = 'Copy'; this.classList.remove('copied'); }, 2000);
-});
-
-document.getElementById('btn-check-mc').addEventListener('click', async () => {
-  const successEl = document.getElementById('mc-verify-success');
-  const errorEl = document.getElementById('mc-verify-error');
-  successEl.style.display = 'none';
-  errorEl.style.display = 'none';
-  const { data: prof } = await supabase.from('profiles')
-    .select('minecraft_verified, minecraft_bedrock_verified')
-    .eq('id', _user.id).single();
-  if (prof && (prof.minecraft_verified || prof.minecraft_bedrock_verified)) {
-    successEl.textContent = 'Verified! You\'re all set — welcome to the server.';
-    successEl.style.display = 'block';
-    setTimeout(() => showStep('done'), 1200);
-    return;
-  }
-  errorEl.textContent = 'Not verified yet. Run the command in-game, then check again.';
-  errorEl.style.display = 'block';
-});
-
-document.getElementById('btn-mc-continue').addEventListener('click', () => showStep('done'));
 
 // ── Back links ──────────────────────────────────────────────────
-document.getElementById('back-from-account').addEventListener('click', () => showStep('path'));
 document.getElementById('back-from-verify').addEventListener('click', () => showStep('account'));
-document.getElementById('back-from-minecraft').addEventListener('click', () => {
-  // Signed-in users (e.g. came in via Discord/Google) never saw the
-  // email form, so "back" takes them to the path picker, not the
-  // account step. Email signups with a pending code go back to verify.
-  if (_user) { showStep('path'); return; }
-  if (_pendingSignupUserId) showStep('verify');
-  else showStep('account');
-});
 
 // ── Done ────────────────────────────────────────────────────────
 document.getElementById('btn-done-account').addEventListener('click', () => {
@@ -522,22 +395,22 @@ document.getElementById('btn-done-account').addEventListener('click', () => {
   if (session) {
     const { data: { user } } = await supabase.auth.getUser();
     _user = user;
-    // Already linked? Skip straight to Done.
-    const { data: prof } = await supabase.from('profiles')
-      .select('minecraft_username, minecraft_verified, minecraft_bedrock_username, minecraft_bedrock_verified')
-      .eq('id', user.id).single();
-    if (prof && (prof.minecraft_username || prof.minecraft_bedrock_username)) {
-      if (prof.minecraft_verified || prof.minecraft_bedrock_verified) { showStep('done'); return; }
-      // Linked but not verified — show the code again.
-      if (_path) { enterMinecraftStep(); return; }
-    }
-    if (_path) { enterMinecraftStep(); return; }
+    // Signed in means the account already exists, so the wizard is
+    // effectively done — except when they were mid-way through the path
+    // picker (e.g. they verified their email and then refreshed). Let
+    // them finish picking how they play, then Done.
+    let step = 'done';
+    try { step = sessionStorage.getItem(STEP_KEY) || 'done'; } catch (e) {}
+    if (step === 'path') { showStep('path'); return; }
+    showStep('done');
+    return;
   }
-  // Fresh visit (or returning from OAuth without a stored path): start
-  // at the path picker, or resume at the stored step if there is one.
-  let step = 'path';
-  try { step = sessionStorage.getItem(STEP_KEY) || 'path'; } catch (e) {}
-  if (step === 'done' || step === 'minecraft' || step === 'verify') step = 'path';
-  if (step === 'account' && !_path) step = 'path';
+  // Fresh visit: start at the account step. A stored step from an
+  // earlier visit only matters if it's the account step itself (the
+  // email form); anything else funnels back to account, since the
+  // account has to exist before the path picker means anything.
+  let step = 'account';
+  try { step = sessionStorage.getItem(STEP_KEY) || 'account'; } catch (e) {}
+  if (step !== 'account') step = 'account';
   showStep(step);
 })();

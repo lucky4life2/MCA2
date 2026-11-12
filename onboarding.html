@@ -5,10 +5,10 @@
   <script src="early-hide.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Join MCA — Minecraft Club of America</title>
-  <meta name="description" content="Create your Minecraft Club of America account — pick how you play, set up your account, and link your Minecraft name.">
+  <meta name="description" content="Create your Minecraft Club of America account — set up your account and pick how you play.">
   <link rel="canonical" href="https://minecraftclubofamerica.me/onboarding.html">
   <meta property="og:title" content="Join MCA — Minecraft Club of America">
-  <meta property="og:description" content="Create your Minecraft Club of America account — pick how you play, set up your account, and link your Minecraft name.">
+  <meta property="og:description" content="Create your Minecraft Club of America account — set up your account and pick how you play.">
   <meta property="og:image" content="https://minecraftclubofamerica.me/images/mca-social-card-1200x630.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -25,9 +25,10 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="MCA">
-  <!-- Cloudflare Turnstile widget script (renders the challenge on the
-       Create Account step below). Client-side only — see the widget markup
-       and the signup submit handler for the server-verification TODO. -->
+  <!-- Cloudflare Turnstile widget script. The challenge is rendered
+       explicitly (onboarding.page.js) into #turnstile-container the first
+       time the email sign-up form opens. Client-side only — see the signup
+       submit handler for the server-verification TODO. -->
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <style>
     .onboard-wrap {
@@ -245,30 +246,6 @@
     .onboard-oauth-note a { color: var(--blue); text-decoration: none; }
     .onboard-oauth-note a:hover { text-decoration: underline; }
 
-    /* Minecraft step */
-    .onboard-mc-path-note {
-      font-size: 13px; color: var(--muted); line-height: 1.6;
-      background: var(--bg); border: 1px solid var(--border);
-      border-radius: 6px; padding: 12px 14px; margin-bottom: 1.25rem;
-    }
-    .onboard-mc-path-note strong { color: var(--blue); }
-    .onboard-code-box {
-      display: flex; gap: 8px; align-items: stretch;
-      background: var(--bg); border: 1px solid var(--border);
-      border-radius: 6px; padding: 10px 12px; margin: 0.75rem 0;
-    }
-    .onboard-code-command {
-      flex: 1; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-      font-size: 14px; color: var(--black);
-      display: flex; align-items: center; overflow-x: auto; white-space: nowrap;
-    }
-    .onboard-btn-copy {
-      flex-shrink: 0; background: var(--blue); color: #fff;
-      font-size: 12px; font-weight: 600; padding: 6px 12px;
-      border: none; border-radius: 4px; cursor: pointer;
-    }
-    .onboard-btn-copy.copied { background: var(--green-text); }
-
     /* Done step */
     .onboard-done-icon {
       font-size: 2.5rem; text-align: center; margin-bottom: 0.75rem;
@@ -329,34 +306,30 @@
       <div class="onboard-card-header">
         <img src="images/logo.png" width="500" height="500" alt="MCA" class="onboard-card-logo">
         <div class="onboard-card-eyebrow">Join MCA</div>
-        <h1 class="onboard-card-title" id="onboard-title" tabindex="-1">How do you play?</h1>
-        <p class="onboard-card-subtitle" id="onboard-subtitle">Pick the version of Minecraft you play — we'll tailor the rest of setup around it.</p>
+        <h1 class="onboard-card-title" id="onboard-title" tabindex="-1">Create your account</h1>
+        <p class="onboard-card-subtitle" id="onboard-subtitle">This is your MCA login. One account works for the website, the shop, and the server.</p>
       </div>
 
       <div class="onboard-card-body">
 
         <!-- Progress -->
         <div class="onboard-progress" id="onboard-progress">
-          <div class="onboard-progress-step current" data-step="path">
+          <div class="onboard-progress-step current" data-step="account">
             <span class="onboard-progress-dot">1</span>
-            <span class="onboard-progress-label">How you play</span>
-          </div>
-          <div class="onboard-progress-step" data-step="account">
-            <span class="onboard-progress-dot">2</span>
             <span class="onboard-progress-label">Account</span>
           </div>
-          <div class="onboard-progress-step" data-step="minecraft">
-            <span class="onboard-progress-dot">3</span>
-            <span class="onboard-progress-label">Minecraft</span>
+          <div class="onboard-progress-step" data-step="path">
+            <span class="onboard-progress-dot">2</span>
+            <span class="onboard-progress-label">How you play</span>
           </div>
           <div class="onboard-progress-step" data-step="done">
-            <span class="onboard-progress-dot">4</span>
+            <span class="onboard-progress-dot">3</span>
             <span class="onboard-progress-label">Done</span>
           </div>
         </div>
 
-        <!-- Step 1: Pick your path -->
-        <div class="onboard-step active" id="step-path">
+        <!-- Step 2: Pick your path -->
+        <div class="onboard-step" id="step-path">
           <div class="onboard-paths" id="onboard-paths">
             <button type="button" class="onboard-path-card" data-path="java">
               <svg class="onboard-path-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
@@ -379,11 +352,16 @@
           </div>
           <div class="onboard-error" id="path-error">Pick one to continue — you can change it later on your account page.</div>
           <button class="onboard-btn-primary" id="btn-path-continue" disabled>Continue</button>
-          <button type="button" class="onboard-back-link" id="back-to-signin">← Back to sign in</button>
+          <button type="button" class="onboard-back-link" id="back-from-path">← Back to account</button>
         </div>
 
-        <!-- Step 2: Create your account -->
-        <div class="onboard-step" id="step-account">
+        <!-- Step 1: Create your account -->
+        <div class="onboard-step active" id="step-account">
+          <!-- Stage A: pick how to sign up. Only the sign-up choices and the
+               consent checkbox show here — the email form stays hidden until
+               the member asks for it, so the page reads as one short choice
+               instead of a wall of fields. -->
+          <div id="onboard-auth-choice">
           <button class="onboard-btn-discord" id="btn-discord-signup">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.002.022.015.043.03.057a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
             Sign up with Discord
@@ -394,6 +372,18 @@
           </button>
           <div class="onboard-oauth-note">Signing up with Discord or Google shares your name, email address, and profile photo with us to create your account.</div>
           <div class="onboard-divider"><span class="onboard-divider-text">or</span></div>
+          <div class="onboard-consent">
+            <input type="checkbox" id="signup-consent">
+            <label for="signup-consent">I agree to the <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</label>
+          </div>
+          <div class="onboard-error" id="signup-consent-error">Please accept the Terms of Service and Privacy Policy to continue.</div>
+          <button class="onboard-btn-primary" id="btn-show-email-form" style="margin-top:4px;">Continue with email</button>
+          <button type="button" class="onboard-back-link" id="back-to-signin">← Back to sign in</button>
+          </div>
+
+          <!-- Stage B: the email sign-up form. Hidden until the member picks
+               email, so the account step never shows everything at once. -->
+          <div id="onboard-email-form" style="display:none;">
           <div class="onboard-form-group">
             <label class="onboard-form-label" for="signup-email">Email</label>
             <input type="email" id="signup-email" class="onboard-form-input" placeholder="you@example.com" autocomplete="email">
@@ -413,13 +403,11 @@
                 <option value="07">July</option><option value="08">August</option><option value="09">September</option>
                 <option value="10">October</option><option value="11">November</option><option value="12">December</option>
               </select>
-              <select id="signup-dob-day" class="onboard-form-input" autocomplete="bday-day" style="flex:0 0 90px;">
-                <option value="">Day</option>
-              </select>
-              <select id="signup-dob-year" class="onboard-form-input" autocomplete="bday-year" style="flex:0 0 100px;">
+              <select id="signup-dob-year" class="onboard-form-input" autocomplete="bday-year" style="flex:0 0 120px;">
                 <option value="">Year</option>
               </select>
             </div>
+            <div class="onboard-hint">Month and year only — we use them to apply age-appropriate protections.</div>
           </div>
           <div class="onboard-form-group">
             <label class="onboard-form-label" for="signup-club">Your Club</label>
@@ -429,14 +417,13 @@
           </div>
           <div class="onboard-error" id="signup-error"></div>
           <p class="onboard-oauth-note" style="margin-bottom:10px;">We collect your email address, date of birth, and optional club choice to create and protect your account. Date of birth is used only to apply age-appropriate protections — see the <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>
-          <div class="onboard-consent">
-            <input type="checkbox" id="signup-consent">
-            <label for="signup-consent">I agree to the <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</label>
-          </div>
-          <div class="onboard-error" id="signup-consent-error">Please accept the Terms of Service and Privacy Policy to continue.</div>
-          <div class="cf-turnstile" data-sitekey="0x4AAAAAAEkQfLOaNciyMxZ5" data-theme="light" style="margin-bottom: 14px;"></div>
+          <!-- Turnstile renders explicitly (onboarding.page.js) the first time
+               this form opens, so the challenge only loads once the member
+               has actually picked email. -->
+          <div id="turnstile-container" style="margin-bottom: 14px;"></div>
           <button class="onboard-btn-primary" id="btn-email-signup">Create Account</button>
-          <button type="button" class="onboard-back-link" id="back-from-account">← Back to your path</button>
+          <button type="button" class="onboard-back-link" id="back-to-auth-choice">← Back to sign-up options</button>
+          </div>
         </div>
 
         <!-- Step 2b: Verify email -->
@@ -456,41 +443,7 @@
           <button type="button" class="onboard-back-link" id="back-from-verify">← Back to account details</button>
         </div>
 
-        <!-- Step 3: Minecraft -->
-        <div class="onboard-step" id="step-minecraft">
-          <div class="onboard-mc-path-note" id="mc-path-note"></div>
-          <div id="mc-form">
-            <div class="onboard-form-group" id="mc-java-row">
-              <label class="onboard-form-label" for="field-mc-username">Java Username</label>
-              <input type="text" id="field-mc-username" class="onboard-form-input" placeholder="YourMinecraftName">
-              <div class="onboard-hint">This field is case-sensitive.</div>
-            </div>
-            <div class="onboard-form-group" id="mc-bedrock-row" style="display:none;">
-              <label class="onboard-form-label" for="field-mc-bedrock-username">Bedrock Username</label>
-              <input type="text" id="field-mc-bedrock-username" class="onboard-form-input" placeholder="YourMinecraftName">
-              <div class="onboard-hint">Same as your Java name? Just leave it as is. Different? Type your Bedrock name here. We add the <strong>.</strong> for you.</div>
-            </div>
-            <div class="onboard-error" id="mc-error"></div>
-            <button class="onboard-btn-primary" id="btn-submit-mc">Save &amp; Get My Code</button>
-          </div>
-          <div id="mc-verify" style="display:none;">
-            <p style="font-size:13px;color:var(--muted);line-height:1.6;">Run this command in-game on the MCA server to verify your account:</p>
-            <div class="onboard-code-box">
-              <code class="onboard-code-command" id="mc-code-command" style="margin:0;flex:1;"></code>
-              <button class="onboard-btn-copy" id="btn-copy-code">Copy</button>
-            </div>
-            <p class="onboard-hint">The code expires after 10 minutes. If it expires, generate a new one from your account page.</p>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:1rem;">
-              <button class="onboard-btn-primary" id="btn-check-mc" style="flex:1;">Check Verification Status</button>
-            </div>
-            <div class="onboard-error" id="mc-verify-error" style="margin-top:8px;"></div>
-            <div class="onboard-success" id="mc-verify-success" style="margin-top:8px;"></div>
-            <button class="onboard-btn-outline" id="btn-mc-continue">Continue Anyway</button>
-          </div>
-          <button type="button" class="onboard-back-link" id="back-from-minecraft">← Back to account</button>
-        </div>
-
-        <!-- Step 4: Done -->
+        <!-- Step 3: Done -->
         <div class="onboard-step" id="step-done">
           <div class="onboard-done-icon">🎉</div>
           <div class="onboard-done-title">Welcome to MCA!</div>
@@ -498,7 +451,7 @@
           <div class="onboard-next-steps">
             <div class="onboard-next-step">
               <span class="onboard-next-step-num">1</span>
-              <span><strong>Verify in-game</strong> — if you haven't yet, run your <strong>/mcaverify</strong> code on the MCA server. You can always get a fresh code from <a href="account.html">your account page</a>.</span>
+              <span><strong>Go to My Account</strong> — your account is ready. Head there to manage your profile and club.</span>
             </div>
             <div class="onboard-next-step">
               <span class="onboard-next-step-num">2</span>
@@ -506,7 +459,7 @@
             </div>
             <div class="onboard-next-step">
               <span class="onboard-next-step-num">3</span>
-              <span><strong>Join the server</strong> — once you're a member and verified, hop on and start building. Your nation is waiting.</span>
+              <span><strong>Link your Minecraft name</strong> — once you're a member, enter your Minecraft name on <a href="account.html">your account page</a>, grab your code, and run <strong>/mcaverify</strong> in-game. The server stays locked until you've paid.</span>
             </div>
           </div>
           <button class="onboard-btn-primary" id="btn-done-account">Go to My Account</button>
