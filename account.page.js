@@ -1510,11 +1510,26 @@ function bindCodeButtons(body) {
   });
   body.querySelector('#btn-unlink-mc')?.addEventListener('click', async () => {
     if (!confirm('Remove your Minecraft username? You will need to re-verify.')) return;
-    await supabase.from('profiles').update({ minecraft_username: null, minecraft_verified: false, minecraft_bedrock_username: null, minecraft_bedrock_verified: false }).eq('id', _user.id);
+    const errorEl = document.getElementById('mc-verify-error');
+    // Unlink through the unlink_minecraft() RPC, not a direct profiles
+    // update: the UUID columns have no client UPDATE grant and
+    // profiles_guard_columns() rejects client-path UUID writes, so a
+    // direct update cannot clear them (VER-M3). The RPC nulls both
+    // usernames, both verified flags, both UUIDs, and the verify code.
+    const { error } = await supabase.rpc('unlink_minecraft');
+    if (error) {
+      if (errorEl) {
+        errorEl.textContent = 'Could not unlink: ' + error.message;
+        errorEl.style.display = 'block';
+      }
+      return;
+    }
     _profile.minecraft_username = null;
     _profile.minecraft_verified = false;
     _profile.minecraft_bedrock_username = null;
     _profile.minecraft_bedrock_verified = false;
+    _profile.minecraft_uuid = null;
+    _profile.minecraft_bedrock_uuid = null;
     _verifyCode = null;
     renderMinecraft();
   });
