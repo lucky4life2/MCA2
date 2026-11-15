@@ -1215,7 +1215,7 @@ async function renderConnectedAccounts(skipFetch = false) {
           if (!/[a-z]/.test(password)) { errEl.textContent = 'Password must contain at least one lowercase letter.'; errEl.style.display = 'block'; return; }
 
           saveBtn.disabled = true;
-          const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/add-email-to-account', {
+          const res = await fetch('https://ghyajcawrnrvnwhicfql.supabase.co/functions/v1/add-email-to-account', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
             body: JSON.stringify({ email }),
@@ -1251,7 +1251,7 @@ async function renderConnectedAccounts(skipFetch = false) {
         if (!/^\d{6}$/.test(code)) { errEl.textContent = 'Enter the 6-digit code from your email.'; errEl.style.display = 'block'; return; }
 
         saveBtn.disabled = true;
-        const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/verify-email-code', {
+        const res = await fetch('https://ghyajcawrnrvnwhicfql.supabase.co/functions/v1/verify-email-code', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
           body: JSON.stringify({ code, password: pendingPassword }),

@@ -1,6 +1,6 @@
 (async function loadHistoryServers() {
-  const SUPABASE_URL  = 'https://hjaywokvgdzhvsoygctc.supabase.co';
-  const SUPABASE_ANON = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
+  const SUPABASE_URL  = 'https://ghyajcawrnrvnwhicfql.supabase.co';
+  const SUPABASE_ANON = 'sb_publishable_XWEEEHkmW9jbipNoS7N7AQ_UhwPpECD';
   const tbody = document.getElementById('history-servers-tbody');
 
   // Server history rows are admin-editable and go straight into innerHTML.

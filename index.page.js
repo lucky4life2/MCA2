@@ -1,7 +1,7 @@
 /* ── CONFIG LOADER (stats + discord) ───────────────────────── */
 (async function loadConfig() {
-  const SUPABASE_URL_CFG  = 'https://hjaywokvgdzhvsoygctc.supabase.co';
-  const SUPABASE_ANON_CFG = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
+  const SUPABASE_URL_CFG  = 'https://ghyajcawrnrvnwhicfql.supabase.co';
+  const SUPABASE_ANON_CFG = 'sb_publishable_XWEEEHkmW9jbipNoS7N7AQ_UhwPpECD';
   // Reuses nav.js's site_config fetch when it already succeeded, so the
   // homepage doesn't fetch the same row twice. Falls back to its own fetch
   // when nav hasn't loaded or nav's fetch came back empty.

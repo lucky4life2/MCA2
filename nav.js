@@ -42,8 +42,8 @@ let _configResolve;
 const _configReady = new Promise(r => { _configResolve = r; });
 
 (async function loadConfig() {
-  const SUPABASE_URL_CFG  = 'https://hjaywokvgdzhvsoygctc.supabase.co';
-  const SUPABASE_ANON_CFG = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
+  const SUPABASE_URL_CFG  = 'https://ghyajcawrnrvnwhicfql.supabase.co';
+  const SUPABASE_ANON_CFG = 'sb_publishable_XWEEEHkmW9jbipNoS7N7AQ_UhwPpECD';
   try {
     const res = await fetch(
       `${SUPABASE_URL_CFG}/rest/v1/settings?key=eq.site_config&select=value`,
@@ -269,8 +269,8 @@ const _visibilityFailsafe = setTimeout(() => {
 if (window._mcaVisibilityFailsafe) clearTimeout(window._mcaVisibilityFailsafe);
 
 const _systemLockdownCheck = (async function checkSystemLockdown() {
-  const SUPABASE_URL  = 'https://hjaywokvgdzhvsoygctc.supabase.co';
-  const SUPABASE_ANON = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
+  const SUPABASE_URL  = 'https://ghyajcawrnrvnwhicfql.supabase.co';
+  const SUPABASE_ANON = 'sb_publishable_XWEEEHkmW9jbipNoS7N7AQ_UhwPpECD';
   try {
     const res = await _fetchWithTimeout(
       `${SUPABASE_URL}/rest/v1/system_lockdown?select=locked,message&id=eq.1`,
@@ -298,8 +298,8 @@ const _systemLockdownCheck = (async function checkSystemLockdown() {
 })();
 
 
-const SUPABASE_URL    = 'https://hjaywokvgdzhvsoygctc.supabase.co';
-const SUPABASE_ANON   = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
+const SUPABASE_URL    = 'https://ghyajcawrnrvnwhicfql.supabase.co';
+const SUPABASE_ANON   = 'sb_publishable_XWEEEHkmW9jbipNoS7N7AQ_UhwPpECD';
 
 // Kicked off immediately, in parallel with _systemLockdownCheck above, rather
 // than only starting after that check resolves. The page stays
@@ -576,7 +576,7 @@ function showLockScreen(cfg) {
     const btn = document.getElementById('lock-login-submit');
     btn.textContent = 'Signing in…'; btn.disabled = true;
     try {
-      const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/sign-in-with-email', {
+      const res = await fetch('https://ghyajcawrnrvnwhicfql.supabase.co/functions/v1/sign-in-with-email', {
         signal: AbortSignal.timeout(15000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -588,7 +588,7 @@ function showLockScreen(cfg) {
       // serves whatever the newest 2.x release is for an unpinned "@2" tag,
       // which is unreviewed supply-chain drift on every page load.
       const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.112.4');
-      const _sb = createClient(SUPABASE_URL, 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T');
+      const _sb = createClient(SUPABASE_URL, 'sb_publishable_XWEEEHkmW9jbipNoS7N7AQ_UhwPpECD');
       const { error: sessionErr } = await _sb.auth.setSession({
         access_token: json.access_token,
         refresh_token: json.refresh_token,

@@ -1,6 +1,6 @@
 (async function loadLeadership() {
-  const SUPABASE_URL  = 'https://hjaywokvgdzhvsoygctc.supabase.co';
-  const SUPABASE_ANON = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
+  const SUPABASE_URL  = 'https://ghyajcawrnrvnwhicfql.supabase.co';
+  const SUPABASE_ANON = 'sb_publishable_XWEEEHkmW9jbipNoS7N7AQ_UhwPpECD';
 
   // Leadership rows are editable from the admin panel and rendered straight
   // into innerHTML, so every interpolated field is escaped first.
