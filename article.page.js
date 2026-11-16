@@ -1,4 +1,4 @@
-import { supabase } from './supabase.js';
+import { supabase, signedUrlForPublished, resolvePrivateBucketImagesInMarkdown } from './supabase.js';
 
 // Article fields are author-supplied and go through innerHTML below, so
 // anything interpolated has to be escaped first.
@@ -164,7 +164,15 @@ if (!slug) {
       if (!byline && article.author_name) byline = `By ${article.author_name}`;
 
       // Strip leading # Title from body if it duplicates the article title
-      const bodyMd = (article.body || '').replace(/^#\s+.+\n?/, '').trim();
+      const bodyMdRaw = (article.body || '').replace(/^#\s+.+\n?/, '').trim();
+
+      // news-images is a private bucket: the stored image_url is a storage
+      // path (or a legacy public URL). Mint a signed URL for the hero
+      // image and for any inline photos embedded in the body markdown.
+      // This page only ever loads published rows, so the publication
+      // gate passes here; a failed mint renders no hero image.
+      const heroUrl = await signedUrlForPublished('news-images', article.image_url, { status: article.status });
+      const bodyMd = await resolvePrivateBucketImagesInMarkdown('news-images', bodyMdRaw, { status: article.status });
 
       bodyEl.innerHTML = `
         <div class="article-hero">
@@ -176,7 +184,7 @@ if (!slug) {
                 Share
               </button>
             </div>
-            ${safeUrl(article.image_url) ? `<div class="article-image" style="margin-bottom:2rem;"><img src="${esc(safeUrl(article.image_url))}" alt="${esc(article.title)}"></div>` : ''}
+            ${safeUrl(heroUrl) ? `<div class="article-image" style="margin-bottom:2rem;"><img src="${esc(safeUrl(heroUrl))}" alt="${esc(article.title)}"></div>` : ''}
             <div class="article-meta-top">
               <span class="news-card-category">${esc(cat)}</span>
               <span style="font-size:12px;color:var(--muted);">${esc(formatDate(article.published_at))}</span>

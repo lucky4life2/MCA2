@@ -4,7 +4,7 @@
 // managed by Congress members through archive-publish.html —
 // no more hand-editing markdown files on GitHub.
 // ─────────────────────────────────────────────────────────────
-import { supabase } from './supabase.js';
+import { supabase, signedUrlForPublished } from './supabase.js';
 
 /* ── ESCAPING ───────────────────────────────────────────────── */
 /* Everything on an archive_documents row is author-supplied and gets written
@@ -115,6 +115,16 @@ async function loadArchiveIndex() {
 
     if (error) throw error;
 
+    // archive-files is a private bucket: the stored file_url is a storage
+    // path (or a legacy public URL), so mint a signed URL per document
+    // before rendering. The index only ever lists published rows, so the
+    // publication gate below always passes for these rows; a failed mint
+    // renders no thumbnail rather than leaking the raw stored value.
+    const fileUrls = new Map();
+    await Promise.all((docs || []).map(async (doc) => {
+      fileUrls.set(doc.id, await signedUrlForPublished('archive-files', doc.file_url, { status: 'published' }));
+    }));
+
     if (!docs || docs.length === 0) {
       loadingEl.textContent = 'No documents in the archive yet.';
       return;
@@ -153,11 +163,12 @@ async function loadArchiveIndex() {
         <div class="archive-category-docs">
           ${catDocs.map(doc => {
             const isPDF = isArchivePdf(doc.file_url);
-            const thumb = !doc.file_url
+            const fileUrl = fileUrls.get(doc.id);
+            const thumb = !fileUrl
               ? `<div class="archive-card-thumb archive-card-thumb-placeholder">📄</div>`
               : isPDF
               ? `<div class="archive-card-thumb archive-card-thumb-placeholder archive-card-thumb-pdf">PDF</div>`
-              : `<img src="${esc(safeUrl(doc.file_url))}" alt="${esc(doc.title || '')}" class="archive-card-thumb">`;
+              : `<img src="${esc(safeUrl(fileUrl))}" alt="${esc(doc.title || '')}" class="archive-card-thumb">`;
             return `
               <a class="archive-card" href="document.html?slug=${encodeURIComponent(doc.slug)}">
                 ${thumb}
@@ -244,7 +255,11 @@ async function loadDocumentReader() {
 
     if (doc.title) document.title = `${doc.title} — MCA Archive`;
 
-    const hasFile = doc.file_url && doc.file_url.trim() !== '';
+    // archive-files is a private bucket: mint a signed URL for the
+    // stored path (or legacy public URL). The reader only ever loads
+    // published rows, so the publication gate passes here.
+    const fileUrl = await signedUrlForPublished('archive-files', doc.file_url, { status: 'published' });
+    const hasFile = !!fileUrl;
 
     bodyEl.innerHTML = `
       <div class="article-hero">
@@ -274,12 +289,12 @@ async function loadDocumentReader() {
                   <div class="document-pdf-wrap">
                     <div class="document-pdf-icon">📄</div>
                     <div class="document-pdf-name">${esc(assetName)}</div>
-                    <a href="${esc(safeUrl(doc.file_url))}" target="_blank" rel="noopener noreferrer" class="document-pdf-btn">View PDF →</a>
+                    <a href="${esc(safeUrl(fileUrl))}" target="_blank" rel="noopener noreferrer" class="document-pdf-btn">View PDF →</a>
                   </div>
                 </div>`
               : `<div class="document-scan">
                   <div class="document-scan-label">Original Document</div>
-                  <img src="${esc(safeUrl(doc.file_url))}" alt="Original ${esc(doc.title || 'document')}">
+                  <img src="${esc(safeUrl(fileUrl))}" alt="Original ${esc(doc.title || 'document')}">
                 </div>`;
           })() : ''}
 

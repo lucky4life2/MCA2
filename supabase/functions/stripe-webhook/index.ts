@@ -6,7 +6,8 @@
 // listening for: checkout.session.completed,
 // checkout.session.async_payment_succeeded, customer.subscription.updated,
 // customer.subscription.deleted, invoice.payment_failed,
-// invoice.payment_succeeded.
+// invoice.payment_succeeded, charge.refunded, charge.dispute.created,
+// charge.dispute.closed.
 //
 // STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET are placeholders until a real
 // Stripe account exists; set the real values with
@@ -131,6 +132,111 @@ async function setMembership(userId: string, fields: Record<string, unknown>) {
   if (error) console.error('Failed to update profile membership fields:', error.message);
 }
 
+// Audit fix auth:frozen-terminated-shop-checkout-no-status-gate: a
+// frozen or terminated profile must never be written back to an active
+// membership by a webhook, whatever Stripe says. Returns true when the
+// profile's account_status is frozen or terminated.
+async function isAccountFrozenOrTerminated(userId: string): Promise<boolean> {
+  const { data, error } = await admin.from('profiles').select('account_status').eq('id', userId).maybeSingle();
+  if (error) {
+    // Fail closed by throwing: the webhook's handler returns 500 and
+    // Stripe retries the delivery, instead of a transient read error
+    // being misreported as a frozen account and silently skipping a
+    // legitimate membership grant.
+    throw new Error(`could not read account_status: ${error.message}`);
+  }
+  return data?.account_status === 'frozen' || data?.account_status === 'terminated';
+}
+
+// Staff alert channel for this function. There is no dedicated staff
+// notification channel (email/Slack) wired to the Edge Functions yet,
+// so an alert is a structured console.error (visible in the Supabase
+// function logs) plus a Sentry report when a DSN is configured. Every
+// call site passes enough ids for staff to find the order/profile in
+// the admin panel and act — refund, reinstate, or revoke — by hand.
+function alertStaff(where: string, message: string, details: Record<string, unknown>): void {
+  console.error(`STAFF-ALERT [${where}]: ${message}`, details);
+  reportError(`stripe-webhook:${where}: ${message}`, new Error(JSON.stringify(details)));
+}
+
+// UTC-midnight boundary for the daily order cap (same definition as
+// create-checkout-session: orders recorded since UTC midnight today).
+function todayStartUtc(): string {
+  return new Date().toISOString().slice(0, 10) + 'T00:00:00Z';
+}
+
+async function countOrdersToday(userId: string): Promise<number | null> {
+  const { count, error } = await admin
+    .from('orders')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('created_at', todayStartUtc());
+  if (error) {
+    console.error('Could not count orders today:', error.message);
+    return null;
+  }
+  return count ?? 0;
+}
+
+// The most recent order paid with this payment intent, if any. Orders
+// record stripe_payment_intent_id at fulfilment; charges and disputes
+// carry the same id, which is what links a refund/dispute back to the
+// order it paid for.
+async function findOrderByPaymentIntent(paymentIntentId: string): Promise<{
+  id: string;
+  user_id: string;
+  kind: string;
+  status: string;
+  line_items: unknown;
+  stripe_checkout_session_id: string | null;
+} | null> {
+  const { data, error } = await admin
+    .from('orders')
+    .select('id, user_id, kind, status, line_items, stripe_checkout_session_id')
+    .eq('stripe_payment_intent_id', paymentIntentId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.error('Could not look up order by payment intent:', error.message);
+    return null;
+  }
+  return data ?? null;
+}
+
+// Put the goods on a refunded order back into stock. There is no
+// shipped flag on orders, so this assumes the goods have NOT shipped:
+// every call site alerts staff to verify the shipment and reverse the
+// restore if the goods already went out. Returns false when the restore
+// could not be completed, so the caller can alert staff to fix it by hand.
+async function restoreStockForOrder(order: { id: string; line_items: unknown }): Promise<boolean> {
+  const lines = Array.isArray(order.line_items) ? order.line_items : [];
+  let ok = true;
+  for (const line of lines) {
+    const item = line as { product_id?: string | null; quantity?: number };
+    if (!item.product_id || !(item.quantity && item.quantity > 0)) continue;
+    const { data: product, error: readError } = await admin
+      .from('products')
+      .select('inventory')
+      .eq('id', item.product_id)
+      .maybeSingle();
+    if (readError || !product || typeof product.inventory !== 'number') {
+      console.error('Could not read inventory for stock restore:', item.product_id, readError?.message);
+      ok = false;
+      continue;
+    }
+    const { error } = await admin
+      .from('products')
+      .update({ inventory: product.inventory + item.quantity })
+      .eq('id', item.product_id);
+    if (error) {
+      console.error('Failed to restore stock:', item.product_id, error.message);
+      ok = false;
+    }
+  }
+  return ok;
+}
+
 // LEGACY, defensive only: new memberships are one-time payments granted
 // inline in handleCompletedSession above (no subscription object exists
 // live — Stripe was never set up). Writes the given subscription's
@@ -161,9 +267,24 @@ async function syncSubscription(
   if (endIso) fields.membership_current_period_end = endIso;
   else if (status === 'canceled') fields.membership_current_period_end = new Date().toISOString();
 
+  // Audit fix auth:frozen-terminated-shop-checkout-no-status-gate:
+  // never write membership fields (not even Stripe's live state) onto
+  // a frozen or terminated profile. A legacy subscription renewal
+  // arriving after a freeze must not flip the member back to active.
+  // The subscription id is still Stripe's problem, not the profile's;
+  // staff can reinstate by hand if the account is unfrozen.
   if (userId) {
+    if (await isAccountFrozenOrTerminated(userId)) {
+      alertStaff('syncSubscription', 'Skipped membership sync for a frozen/terminated account; Stripe state NOT written to profile.', { userId, subscriptionId, stripeStatus: status });
+      return;
+    }
     await setMembership(userId, fields);
   } else {
+    const { data: target } = await admin.from('profiles').select('id, account_status').eq('stripe_subscription_id', subscriptionId).maybeSingle();
+    if (target && (target.account_status === 'frozen' || target.account_status === 'terminated')) {
+      alertStaff('syncSubscription', 'Skipped membership sync for a frozen/terminated account; Stripe state NOT written to profile.', { userId: target.id, subscriptionId, stripeStatus: status });
+      return;
+    }
     const { error } = await admin.from('profiles').update(fields).eq('stripe_subscription_id', subscriptionId);
     if (error) console.error('Failed to update profile by subscription id:', error.message);
   }
@@ -224,6 +345,61 @@ async function handleCompletedSession(session: Stripe.Checkout.Session) {
   // Stock decrement applies to goods only, so this flag gates it.
   const isMembership = session.mode === 'subscription' || session.metadata?.membership === 'true';
 
+  // Audit fix auth:frozen-terminated-shop-checkout-no-status-gate:
+  // a session created before the freeze can still be paid afterwards,
+  // so fulfilment re-checks the account here. A frozen/terminated
+  // profile still gets its paid order recorded below (the money trail),
+  // but the membership grant further down is skipped for it.
+  const accountBlocked = await isAccountFrozenOrTerminated(userId);
+  if (accountBlocked) {
+    alertStaff('handleCompletedSession', 'Paid checkout fulfilled for a frozen/terminated account; order recorded but no membership will be granted.', { userId, sessionId: session.id, isMembership });
+  }
+
+  // Audit fix shop:checkout:daily-order-cap-outstanding-sessions: the
+  // 3-orders-per-day cap is checked at session creation only, so
+  // several sessions created under the cap can all be paid. Recount
+  // recorded orders today BEFORE inserting. On breach, do NOT record a
+  // normal paid order — the payment has already been taken, so record
+  // the order as held (money trail preserved, no stock taken, no
+  // membership granted) and alert staff to refund or release it by
+  // hand. A retry of a session already recorded is not a breach: its
+  // own order is in the count, so an existing row for this session
+  // falls through to the normal (idempotent) path below.
+  // Best effort, not atomic: two webhooks landing in the same instant
+  // can both pass the recount. The unique session index still prevents
+  // the same session recording twice.
+  const ordersToday = await countOrdersToday(userId);
+  if (ordersToday === null) {
+    // Fail closed: without a reliable count the cap cannot be enforced.
+    console.error('Daily-cap recount failed; refusing to fulfil session', session.id);
+    throw new Error('daily order cap could not be verified');
+  }
+  if (ordersToday >= 3) {
+    const { data: existingOrder } = await admin
+      .from('orders')
+      .select('id')
+      .eq('stripe_checkout_session_id', session.id)
+      .maybeSingle();
+    if (!existingOrder) {
+      const { error: heldError } = await admin.from('orders').insert({
+        user_id: userId,
+        kind: isMembership ? 'membership' : 'goods',
+        stripe_checkout_session_id: session.id,
+        stripe_payment_intent_id: typeof session.payment_intent === 'string' ? session.payment_intent : null,
+        stripe_subscription_id: typeof session.subscription === 'string' ? session.subscription : null,
+        amount_total: (session.amount_total ?? 0) / 100,
+        currency: session.currency ?? 'usd',
+        status: 'held_daily_cap',
+        line_items: lines,
+        customer_email: session.customer_details?.email ?? session.customer_email ?? null,
+        shipping,
+      });
+      if (heldError) console.error('Failed to record held (daily-cap) order:', heldError.message);
+      alertStaff('handleCompletedSession', 'Daily order cap breached at fulfilment: paid order HELD, not recorded as paid. Refund or release by hand.', { userId, sessionId: session.id, ordersToday, amountTotal: (session.amount_total ?? 0) / 100 });
+      return;
+    }
+  }
+
   // insert(), not upsert(): Stripe retries a delivery it didn't get a 2xx
   // for, and the duplicate-key rejection is what tells us this event was
   // already fulfilled — so the stock below comes off exactly once.
@@ -250,8 +426,35 @@ async function handleCompletedSession(session: Stripe.Checkout.Session) {
       .map((l) => ({ id: l.product_id, qty: l.quantity }));
     if (stockItems.length) {
       const { error: stockError } = await admin.rpc('shop_consume_inventory', { p_items: stockItems });
-      if (stockError) console.error('Failed to decrement inventory:', stockError.message);
+      if (stockError) {
+        // Audit fix shop:checkout:inventory-oversell-unreserved
+        // (webhook half): once the SQL fix lands, shop_consume_inventory
+        // raises 'insufficient stock' instead of clamping at zero. An
+        // insufficient-stock error here means this paid order sold stock
+        // that does not exist — never a silent success. Hold the order
+        // (no membership/goods shipped on a 'paid' row) and alert staff
+        // to refund or fulfil by hand. Any other stock error keeps the
+        // old behaviour (logged; the order stays paid) because the stock
+        // state is unknown rather than proven oversold.
+        if (/insufficient stock/i.test(stockError.message ?? '')) {
+          const { error: holdError } = await admin
+            .from('orders')
+            .update({ status: 'held_oversell' })
+            .eq('stripe_checkout_session_id', session.id);
+          if (holdError) console.error('Failed to hold oversold order:', holdError.message);
+          alertStaff('handleCompletedSession', 'OVERSELL: paid order consumed stock that does not exist; order HELD, not fulfilled. Refund or fulfil by hand.', { userId, sessionId: session.id, stockError: stockError.message });
+        } else {
+          console.error('Failed to decrement inventory:', stockError.message);
+        }
+      }
     }
+  }
+
+  if (isMembership && accountBlocked) {
+    // Frozen/terminated: the order above is the money trail, but no
+    // membership is granted and no subscription sync runs. Staff decide
+    // what happens to the payment (see the alert above).
+    return;
   }
 
   if (isMembership) {
@@ -276,6 +479,50 @@ async function handleCompletedSession(session: Stripe.Checkout.Session) {
       const paidAt = new Date((session.created ?? Math.floor(Date.now() / 1000)) * 1000);
       const periodEnd = new Date(paidAt.getTime());
       periodEnd.setUTCFullYear(periodEnd.getUTCFullYear() + 1);
+
+      // Audit fix shop:checkout:duplicate-membership-outstanding-
+      // sessions: the duplicate block exists only at session creation,
+      // so two sessions created before either payment lands can both
+      // complete. Re-read the profile immediately before granting: if
+      // the member is already active with a period end at or beyond
+      // the end this grant would set, this payment buys nothing new —
+      // skip the overwrite, alert staff, and refund the duplicate
+      // payment in Stripe instead of silently keeping the second
+      // charge. (A shorter existing period is a genuine extension, so
+      // the grant proceeds.) The re-read must happen here, not at the
+      // top of this function, or the two webhooks can both read "not
+      // yet a member" before either grants.
+      const { data: freshProfile, error: freshProfileError } = await admin
+        .from('profiles')
+        .select('membership_status, membership_current_period_end')
+        .eq('id', userId)
+        .maybeSingle();
+      if (freshProfileError) {
+        console.error('Could not re-read profile before membership grant:', freshProfileError.message);
+        throw new Error('membership grant could not verify current membership');
+      }
+      const existingEnd = freshProfile?.membership_current_period_end
+        ? new Date(freshProfile.membership_current_period_end).getTime()
+        : NaN;
+      if (
+        freshProfile?.membership_status === 'active' &&
+        Number.isFinite(existingEnd) &&
+        existingEnd >= periodEnd.getTime()
+      ) {
+        alertStaff('handleCompletedSession', 'Duplicate membership payment: member already active through or beyond the new grant end. Grant skipped; duplicate payment queued for refund.', { userId, sessionId: session.id, existingPeriodEnd: freshProfile.membership_current_period_end, newPeriodEnd: periodEnd.toISOString() });
+        const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : null;
+        if (paymentIntentId) {
+          try {
+            await stripe.refunds.create({ payment_intent: paymentIntentId });
+          } catch (refundError) {
+            alertStaff('handleCompletedSession', 'Duplicate membership refund FAILED in Stripe; refund by hand in the Stripe dashboard.', { userId, sessionId: session.id, paymentIntentId, refundError: refundError instanceof Error ? refundError.message : String(refundError) });
+          }
+        } else {
+          alertStaff('handleCompletedSession', 'Duplicate membership payment has no payment_intent on the session; refund by hand in the Stripe dashboard.', { userId, sessionId: session.id });
+        }
+        return;
+      }
+
       const grant: Record<string, unknown> = {
         membership_status: 'active',
         membership_source: 'stripe_onetime',
@@ -289,6 +536,151 @@ async function handleCompletedSession(session: Stripe.Checkout.Session) {
       if (grantError) throw new Error(`membership grant failed: ${grantError.message}`);
     }
   }
+}
+
+// Audit fix supabase/functions/stripe-webhook/index.ts:
+// refund-dispute-events-unhandled. Until now charge.refunded and the
+// charge.dispute.* events fell through to the default branch and
+// returned 200 with no state change, so a refunded member kept paid
+// status and access, and refunded stock was never restored. Live
+// Stripe is not set up yet (placeholder key), so none of this can be
+// live-tested until Stripe is connected; the handlers below are
+// code-only until then.
+//
+// Membership revocation on refund is deliberately NOT automatic: the
+// audit notes the owner still has to decide whether a refunded
+// membership year is revoked immediately or runs to period end. What
+// these handlers do without that decision is update the order, restore
+// unshipped stock, and alert staff so the membership call is made and
+// recorded by a human. The membership_status value is never rewritten
+// to an invented hold state — the gate vocabulary (member-gate.js /
+// membership_state()) has no 'held' state, so inventing one would
+// change what the member sees in unpredictable ways.
+
+// A refund of a charge: full refund marks the order refunded and
+// restores unshipped goods stock; a partial refund marks it
+// partially_refunded and leaves stock alone (the refunded lines are
+// not identifiable from the charge alone). A refunded membership order
+// is flagged for staff review, not auto-revoked (see above). Replays
+// are safe: an order already in the target status is left alone, so a
+// second delivery cannot restore the same stock twice.
+async function handleRefund(charge: Stripe.Charge) {
+  const paymentIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : null;
+  if (!paymentIntentId) {
+    alertStaff('handleRefund', 'charge.refunded with no payment_intent; could not find the order. Investigate in Stripe.', { chargeId: charge.id });
+    return;
+  }
+  const order = await findOrderByPaymentIntent(paymentIntentId);
+  if (!order) {
+    alertStaff('handleRefund', 'charge.refunded but no order matches the payment intent; nothing updated.', { chargeId: charge.id, paymentIntentId });
+    return;
+  }
+  const amount = charge.amount ?? 0;
+  const refunded = charge.amount_refunded ?? 0;
+  const isFull = charge.refunded === true || (amount > 0 && refunded >= amount);
+  const targetStatus = isFull ? 'refunded' : 'partially_refunded';
+  if (order.status === targetStatus || (isFull && order.status === 'refunded')) {
+    console.error(`Refund event replay for order ${order.id}; already ${order.status}, no change.`);
+    return;
+  }
+  const wasPaid = order.status === 'paid';
+  const { error } = await admin.from('orders').update({ status: targetStatus }).eq('id', order.id);
+  if (error) {
+    console.error('Failed to update order status for refund:', error.message);
+    alertStaff('handleRefund', 'Failed to mark order refunded; update by hand in the admin panel.', { orderId: order.id, chargeId: charge.id });
+    return;
+  }
+  if (isFull && wasPaid && order.kind !== 'membership') {
+    const restored = await restoreStockForOrder(order);
+    alertStaff('handleRefund', `Order fully refunded; stock restore ${restored ? 'completed' : 'INCOMPLETE — check inventory by hand'}. Verify the goods have NOT shipped before trusting the restored counts; reverse the restore if they already went out.`, { orderId: order.id, userId: order.user_id, chargeId: charge.id });
+  } else if (isFull && wasPaid && order.kind === 'membership') {
+    alertStaff('handleRefund', 'Membership order fully refunded. Membership NOT auto-revoked (owner decision pending: revoke now vs run to period end). Decide and record the outcome by hand; a renewal must not flip this member back to active.', { orderId: order.id, userId: order.user_id, chargeId: charge.id });
+  } else {
+    alertStaff('handleRefund', `Order ${targetStatus} (partial refund of $${(refunded / 100).toFixed(2)} of $${(amount / 100).toFixed(2)}). No stock change; review by hand.`, { orderId: order.id, userId: order.user_id, chargeId: charge.id });
+  }
+}
+
+// A dispute opened against a charge: hold the order (status 'disputed')
+// so it is not treated as a clean paid order, and alert staff that the
+// membership behind it — if any — is on hold pending the outcome. The
+// membership_status value itself is left untouched until the dispute
+// closes (see the note above handleRefund): staff, not the webhook,
+// decide whether access stays, is suspended, or is revoked.
+async function handleDisputeOpened(dispute: Stripe.Dispute) {
+  let paymentIntentId = typeof dispute.payment_intent === 'string' ? dispute.payment_intent : null;
+  if (!paymentIntentId && typeof dispute.charge === 'string') {
+    try {
+      const charge = await stripe.charges.retrieve(dispute.charge);
+      paymentIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : null;
+    } catch (err) {
+      console.error('Could not retrieve charge for dispute:', err);
+    }
+  }
+  if (!paymentIntentId) {
+    alertStaff('handleDisputeOpened', 'charge.dispute.created with no payment intent resolvable; could not find the order. Investigate in Stripe.', { disputeId: dispute.id });
+    return;
+  }
+  const order = await findOrderByPaymentIntent(paymentIntentId);
+  if (!order) {
+    alertStaff('handleDisputeOpened', 'Dispute opened but no order matches the payment intent; nothing updated.', { disputeId: dispute.id, paymentIntentId });
+    return;
+  }
+  const { error } = await admin.from('orders').update({ status: 'disputed' }).eq('id', order.id);
+  if (error) {
+    console.error('Failed to mark order disputed:', error.message);
+    alertStaff('handleDisputeOpened', 'Failed to mark order disputed; update by hand in the admin panel.', { orderId: order.id, disputeId: dispute.id });
+    return;
+  }
+  alertStaff('handleDisputeOpened', `Dispute opened (${dispute.reason ?? 'no reason given'}). Order HELD as disputed${order.kind === 'membership' ? '; membership on hold pending the outcome — decide access by hand' : '; do not ship'} until the dispute closes.`, { orderId: order.id, userId: order.user_id, disputeId: dispute.id, amount: (dispute.amount ?? 0) / 100 });
+}
+
+// A dispute closed: won means the merchant kept the money, so the
+// order returns to paid and staff are told to release the hold; lost
+// means the money is gone, so the order is treated like a full refund
+// (refunded status, unshipped stock restored, membership flagged for
+// review). Any other outcome is logged and alerted for a human call.
+async function handleDisputeClosed(dispute: Stripe.Dispute) {
+  let paymentIntentId = typeof dispute.payment_intent === 'string' ? dispute.payment_intent : null;
+  if (!paymentIntentId && typeof dispute.charge === 'string') {
+    try {
+      const charge = await stripe.charges.retrieve(dispute.charge);
+      paymentIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : null;
+    } catch (err) {
+      console.error('Could not retrieve charge for dispute:', err);
+    }
+  }
+  if (!paymentIntentId) {
+    alertStaff('handleDisputeClosed', 'charge.dispute.closed with no payment intent resolvable; could not find the order. Investigate in Stripe.', { disputeId: dispute.id });
+    return;
+  }
+  const order = await findOrderByPaymentIntent(paymentIntentId);
+  if (!order) {
+    alertStaff('handleDisputeClosed', 'Dispute closed but no order matches the payment intent; nothing updated.', { disputeId: dispute.id, paymentIntentId });
+    return;
+  }
+  if (dispute.status === 'won') {
+    const { error } = await admin.from('orders').update({ status: 'paid' }).eq('id', order.id);
+    if (error) console.error('Failed to restore disputed order to paid:', error.message);
+    alertStaff('handleDisputeClosed', `Dispute WON: merchant kept the payment. Order restored to paid; release any membership hold${order.kind === 'membership' ? ' by hand' : ''}.`, { orderId: order.id, userId: order.user_id, disputeId: dispute.id });
+    return;
+  }
+  if (dispute.status === 'lost') {
+    const wasPaid = order.status === 'paid' || order.status === 'disputed';
+    const { error } = await admin.from('orders').update({ status: 'refunded' }).eq('id', order.id);
+    if (error) {
+      console.error('Failed to mark lost-dispute order refunded:', error.message);
+      alertStaff('handleDisputeClosed', 'Failed to mark lost-dispute order refunded; update by hand.', { orderId: order.id, disputeId: dispute.id });
+      return;
+    }
+    if (wasPaid && order.kind !== 'membership') {
+      const restored = await restoreStockForOrder(order);
+      alertStaff('handleDisputeClosed', `Dispute LOST: order refunded; stock restore ${restored ? 'completed' : 'INCOMPLETE — check inventory by hand'}. Verify the goods have NOT shipped; reverse the restore if they already went out.`, { orderId: order.id, userId: order.user_id, disputeId: dispute.id });
+    } else if (wasPaid && order.kind === 'membership') {
+      alertStaff('handleDisputeClosed', 'Dispute LOST on a membership order. Membership NOT auto-revoked (owner decision pending). Decide and record the outcome by hand.', { orderId: order.id, userId: order.user_id, disputeId: dispute.id });
+    }
+    return;
+  }
+  alertStaff('handleDisputeClosed', `Dispute closed with unexpected status '${dispute.status}'; order left as '${order.status}'. Decide by hand.`, { orderId: order.id, userId: order.user_id, disputeId: dispute.id });
 }
 
 // A renewal is billed straight off the subscription — there is no Checkout
@@ -383,6 +775,24 @@ Deno.serve(async (req: Request) => {
             await recordRenewalOrder(invoice, subscriptionId);
           }
         }
+        break;
+      }
+
+      // Audit fix supabase/functions/stripe-webhook/index.ts:
+      // refund-dispute-events-unhandled. These used to fall through to
+      // default and return 200 with no state change.
+      case 'charge.refunded': {
+        await handleRefund(event.data.object as Stripe.Charge);
+        break;
+      }
+
+      case 'charge.dispute.created': {
+        await handleDisputeOpened(event.data.object as Stripe.Dispute);
+        break;
+      }
+
+      case 'charge.dispute.closed': {
+        await handleDisputeClosed(event.data.object as Stripe.Dispute);
         break;
       }
 

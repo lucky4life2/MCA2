@@ -1027,7 +1027,12 @@ window.unpublishArticle = async (id) => {
 };
 window.deleteArticle = async (id) => {
   if (!(await mcaConfirm({ title: 'Delete article?', message: 'Delete this article? This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
+  const { data: article } = await supabase.from('news_articles').select('image_url').eq('id', id).maybeSingle();
   await supabase.from('news_articles').delete().eq('id', id);
+  // Audit fix publishing:delete-leaves-storage-objects: retract the stored
+  // hero image object as well as the row.
+  const path = storagePathFromStored('news-images', article?.image_url);
+  if (path) await removeStorageObjects('news-images', [path]);
   loadNewsAdmin();
   loadPendingNewsCount();
 };
@@ -1160,8 +1165,11 @@ async function uploadArchiveFileIfNeeded(userId) {
   const path = `${userId}/${Date.now()}-${slugify(_archivePendingFile.name.replace(/\.[^.]+$/, ''))}.${ext}`;
   const { error } = await supabase.storage.from(ARCHIVE_BUCKET).upload(path, _archivePendingFile);
   if (error) throw error;
-  const { data } = supabase.storage.from(ARCHIVE_BUCKET).getPublicUrl(path);
-  return { url: data.publicUrl, name: _archivePendingFile.name };
+  // The bucket is private: store the storage PATH, not a public URL.
+  // Render sites mint a short-lived signed URL from the path
+  // (signedUrlForPublished in supabase.js); a public URL would 404
+  // once the bucket is private.
+  return { url: path, name: _archivePendingFile.name };
 }
 
 async function saveArchiveDoc(forceStatus = null) {
@@ -1235,7 +1243,12 @@ window.unpublishDoc = async (id) => {
 };
 window.deleteDoc = async (id) => {
   if (!(await mcaConfirm({ title: 'Delete document?', message: 'Delete this document? This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
+  const { data: doc } = await supabase.from('archive_documents').select('file_url').eq('id', id).maybeSingle();
   await supabase.from('archive_documents').delete().eq('id', id);
+  // Audit fix publishing:delete-leaves-storage-objects: retract the stored
+  // file object as well as the row.
+  const path = storagePathFromStored(ARCHIVE_BUCKET, doc?.file_url);
+  if (path) await removeStorageObjects(ARCHIVE_BUCKET, [path]);
   loadArchiveAdmin();
 };
 
@@ -1807,9 +1820,44 @@ function toggleBillingAnchorDate() {
   document.getElementById('pm-billing-anchor-date-group').style.display = anchor === 'fixed' ? '' : 'none';
 }
 
+// ── Storage-object cleanup helpers ──────────────────────────────────────
+// Audit fixes publishing:delete-leaves-storage-objects and
+// admin.page.js:adminDeleteProduct:shop-images-orphan: deleting a row (or
+// dropping a gallery photo) must retract its storage object(s), or the old
+// public URL keeps serving. Stored values are either a bare storage path
+// (new uploads) or a legacy full public/signed URL; both shapes resolve to a
+// bucket path. Anything else (external URL, another bucket's object) is not
+// ours, so it resolves to null.
+function storagePathFromStored(bucket, stored) {
+  const raw = String(stored ?? '').trim();
+  if (!raw) return null;
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(raw) && !raw.startsWith('//')) return raw.replace(/^\/+/, '');
+  const m = raw.match(new RegExp(`/storage/v1/object/(?:public|sign|authenticated)/${bucket}/(.+)$`));
+  if (!m) return null;
+  const path = m[1].split('?')[0];
+  try { return decodeURIComponent(path); } catch { return path; }
+}
+
+// Best-effort removal: a storage failure must never block the row delete or
+// save that already happened, so failures are logged, not thrown.
+async function removeStorageObjects(bucket, paths) {
+  const unique = [...new Set((paths || []).filter(Boolean))];
+  if (!unique.length) return;
+  const { error } = await supabase.storage.from(bucket).remove(unique);
+  if (error) console.warn(`Could not remove ${bucket} object(s):`, error.message);
+}
+
 // ── Product photo gallery (drag & drop, multi-file, 10MB total cap) ──
 const PM_MAX_TOTAL_BYTES = 10 * 1024 * 1024; // 10 MB
-let _pmImages = []; // { type:'existing'|'new', url?, file?, previewUrl, name, size }
+let _pmImages = []; // { type:'existing'|'new', url?, path?, file?, previewUrl, name, size }
+// Snapshot of the saved gallery (url + storage path) when the product modal
+// opened, so a save that drops photos can retract the dropped objects
+// (audit admin.page.js:pm-save:shop-images-orphan-on-gallery-edit).
+let _pmPreEditImages = [];
+// True once the staff-only admin_notes RPC has returned for this modal open.
+// Until then the notes field is blank because the column is revoked from
+// direct reads — saving must not wipe the stored notes with that blank.
+let _pmNotesLoaded = false;
 
 function pmTotalBytes() {
   return _pmImages.reduce((sum, img) => sum + (img.size || 0), 0);
@@ -1868,7 +1916,10 @@ async function pmUploadPendingImages(productIdHint) {
   const folder = productIdHint || `new-${Date.now()}`;
   const uploaded = [];
   for (const img of _pmImages) {
-    if (img.type === 'existing') { uploaded.push({ url: img.url, name: img.name || '', size: img.size || 0 }); continue; }
+    // Keep the stored storage path alongside the URL for already-saved
+    // photos, so a later delete or gallery edit can retract the object
+    // without re-deriving the path from the URL.
+    if (img.type === 'existing') { uploaded.push({ url: img.url, path: img.path || storagePathFromStored('shop-images', img.url), name: img.name || '', size: img.size || 0 }); continue; }
     // Product photos are optimized before upload (resized, converted, EXIF stripped).
     const file = await optimizeImageFile(img.file);
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
@@ -1876,12 +1927,13 @@ async function pmUploadPendingImages(productIdHint) {
     const { error } = await supabase.storage.from('shop-images').upload(path, file);
     if (error) throw error;
     const { data } = supabase.storage.from('shop-images').getPublicUrl(path);
-    uploaded.push({ url: data.publicUrl, name: file.name, size: file.size });
+    uploaded.push({ url: data.publicUrl, path, name: file.name, size: file.size });
   }
   return uploaded;
 }
 
-function openProductModal(product = null) {
+async function openProductModal(product = null) {
+  _pmNotesLoaded = false;
   ['id','name','desc','price','inventory','category','weight','dimensions','material','sizes','colors','sku','notes'].forEach(k => {
     const el = document.getElementById('pm-'+k);
     // `??`, not `||`: a price of 0 (free) or inventory of 0 (out of stock) are
@@ -1906,12 +1958,28 @@ function openProductModal(product = null) {
   // unknown, so they don't count against the 10MB meter until re-uploaded).
   _pmImages = [];
   if (product?.images && Array.isArray(product.images) && product.images.length) {
-    _pmImages = product.images.map(img => ({ type: 'existing', url: img.url, name: img.name || '', size: img.size || 0 }));
+    _pmImages = product.images.map(img => ({ type: 'existing', url: img.url, path: img.path || null, name: img.name || '', size: img.size || 0 }));
   } else if (product) {
     if (product.image_url)  _pmImages.push({ type: 'existing', url: product.image_url,  name: '', size: 0 });
     if (product.image_url2) _pmImages.push({ type: 'existing', url: product.image_url2, name: '', size: 0 });
   }
+  _pmPreEditImages = _pmImages.map(img => ({ url: img.url, path: img.path || null }));
   pmRenderImages();
+
+  // Staff-only admin notes are revoked from direct table reads (audit
+  // shop-products-select-star-admin_notes-column-exposure), so the field
+  // above loads blank for existing products. Read them through the
+  // staff-only RPC before showing the modal; until it returns, a save must
+  // preserve the stored value rather than wiping it with the blank field.
+  if (product?.id) {
+    const { data: notes, error: notesErr } = await supabase.rpc('admin_get_product_notes', { p_product_id: product.id });
+    if (!notesErr) {
+      document.getElementById('pm-notes').value = notes ?? '';
+      _pmNotesLoaded = true;
+    }
+  } else {
+    _pmNotesLoaded = true; // new product: no stored notes to preserve
+  }
 
   toggleInventoryField();
   document.getElementById('product-modal').style.display = 'flex';
@@ -1954,14 +2022,47 @@ document.getElementById('pm-save').addEventListener('click', async () => {
   }
 
   const payload = { name, description: document.getElementById('pm-desc').value.trim()||null, price, inventory, product_type: productType, billing_cycle, billing_anchor, billing_anchor_date, category: document.getElementById('pm-category').value.trim()||null, active: document.getElementById('pm-active').value==='true', images: uploadedImages, image_url: uploadedImages[0]?.url || null, image_url2: uploadedImages[1]?.url || null, weight: document.getElementById('pm-weight').value.trim()||null, dimensions: document.getElementById('pm-dimensions').value.trim()||null, material: document.getElementById('pm-material').value.trim()||null, sizes: document.getElementById('pm-sizes').value.trim()||null, colors: document.getElementById('pm-colors').value.trim()||null, sku: document.getElementById('pm-sku').value.trim()||null, admin_notes: document.getElementById('pm-notes').value.trim()||null, cart_enabled: document.getElementById('pm-cart-enabled').checked };
+  // The notes field loads blank until the staff-only RPC returns; if it never
+  // did, omit admin_notes so the save preserves the stored value instead of
+  // wiping it. (The column UPDATE grant is separate from the revoked SELECT,
+  // so writing notes still works when the field did load.)
+  if (id && !_pmNotesLoaded) delete payload.admin_notes;
   const { error } = id ? await supabase.from('products').update(payload).eq('id',id) : await supabase.from('products').insert(payload);
   if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+  // Gallery edit dropped photos (audit admin.page.js:pm-save:shop-images-
+  // orphan-on-gallery-edit): the reduced list is saved now, so retract the
+  // dropped objects. Stored paths are preferred; legacy URLs re-derive it.
+  const savedUrls = new Set(uploadedImages.map(i => i.url));
+  const droppedPaths = _pmPreEditImages
+    .filter(old => old.url && !savedUrls.has(old.url))
+    .map(old => old.path || storagePathFromStored('shop-images', old.url));
+  await removeStorageObjects('shop-images', droppedPaths);
+  _pmPreEditImages = [];
   closeProductModal(); loadAdminProducts();
 });
 window.adminEditProduct = async (id) => { const { data } = await supabase.from('products').select('*').eq('id',id).single(); if (data) openProductModal(data); };
 window.adminDeleteProduct = async (id) => {
   if (!(await mcaConfirm({ title: 'Delete product?', message: 'Delete this product? This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
-  await supabase.from('products').delete().eq('id',id); loadAdminProducts();
+  // Audit fix admin.page.js:adminDeleteProduct:shop-images-orphan: fetch the
+  // row first so its image objects can be retracted too. Creation-time
+  // uploads live under a new-<timestamp> folder rather than the product-id
+  // prefix, so neither a stored path nor list-by-prefix alone suffices:
+  // derive paths from the stored URLs (or stored paths) AND list the
+  // product-id folder prefix as a fallback for edit-time uploads.
+  const { data: product } = await supabase.from('products').select('images,image_url,image_url2').eq('id', id).maybeSingle();
+  const fromUrls = [
+    ...(product?.images || []).map(i => i.path || storagePathFromStored('shop-images', i.url)),
+    storagePathFromStored('shop-images', product?.image_url),
+    storagePathFromStored('shop-images', product?.image_url2),
+  ];
+  let listedPaths = [];
+  try {
+    const { data: listed } = await supabase.storage.from('shop-images').list(id, { limit: 100 });
+    listedPaths = (listed || []).map(f => `${id}/${f.name}`);
+  } catch (e) { console.warn('Could not list product image folder:', e?.message); }
+  const { error } = await supabase.from('products').delete().eq('id', id);
+  if (!error) await removeStorageObjects('shop-images', [...fromUrls, ...listedPaths]);
+  loadAdminProducts();
 };
 
 // ── Config ────────────────────────────────────────────────────
@@ -2529,8 +2630,22 @@ function safeUrl(url) {
   } catch { return ''; }
 }
 
+// Attachment URLs are stored with the message row, and any member can submit
+// one — so a URL is trusted only when it points at the site's own storage
+// origin: this page's own host, or a *.supabase.co host (the
+// message-attachments bucket lives on the project's Supabase host). Anything
+// else — any other https host, any other scheme, any unparseable value — is
+// rejected, so a third-party URL can never be presented as a trusted
+// attachment or auto-loaded in the inbox.
+// Audit fix storage:stored-html-svg-inbox-link (admin half — same allowlist
+// as safeAttachmentUrl in account.page.js).
 function isSafeAttachmentUrl(url) {
-  return typeof url === 'string' && /^https:\/\//i.test(url);
+  try {
+    const parsed = new URL(String(url ?? ''));
+    if (parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase();
+    return host === window.location.hostname.toLowerCase() || host.endsWith('.supabase.co');
+  } catch { return false; }
 }
 
 function renderMsgAttachments(attachments) {
@@ -2539,9 +2654,15 @@ function renderMsgAttachments(attachments) {
   // inbox render. Only a real array of objects is rendered now; anything
   // else renders as no attachments (the DB half of this fix is the
   // admin_message_items attachments CHECK in supabase/migrations/).
+  // Audit fix storage:stored-html-svg-inbox-link: attachment URLs are
+  // rendered as TEXT LINKS ONLY, never auto-loaded as <img> — a third-party
+  // URL that slipped past the allowlist (or a future allowlist change) must
+  // not trigger a fetch, tracking pixel, or IP leak just because staff
+  // opened the inbox. The URL itself is still allowlisted above, so only
+  // the site's own storage origin ever reaches an href.
   if (!Array.isArray(attachments) || !attachments.length) return '';
   return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">
-    ${attachments.filter(a => a && typeof a === 'object' && isSafeAttachmentUrl(a.url)).map(a => `<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener"><img src="${escapeHtml(a.url)}" alt="${escapeHtml(a.name||'attachment')}" style="width:56px;height:56px;object-fit:cover;border-radius:5px;border:1px solid var(--border);"></a>`).join('')}
+    ${attachments.filter(a => a && typeof a === 'object' && isSafeAttachmentUrl(a.url)).map(a => `<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.name||'attachment')}</a>`).join('')}
   </div>`;
 }
 

@@ -315,8 +315,12 @@ async function buyOffering(o) {
 
   const btn = document.getElementById('buy-off-' + o.id);
   btn.disabled = true;
+  // Audit fix (economy:economy_place_order+buy_offering:token-regenerated-on-retry):
+  // the token is minted once per user intent, in this submit flow's scope,
+  // so a genuine retry reuses it and the server dedupe can match it.
+  const clientToken = newToken();
   const { error } = await supabase.rpc('economy_buy_offering_shares', {
-    p_account_id: accountId, p_offering_id: o.id, p_shares: qty, p_client_token: newToken()
+    p_account_id: accountId, p_offering_id: o.id, p_shares: qty, p_client_token: clientToken
   });
   btn.disabled = false;
 
@@ -554,9 +558,13 @@ async function placeOrder(c, side) {
 
   const btn = document.getElementById(side === 'buy' ? 'btn-buy' : 'btn-sell');
   btn.disabled = true;
+  // Audit fix (economy:economy_place_order+buy_offering:token-regenerated-on-retry):
+  // the token is minted once per user intent, in this submit flow's scope,
+  // so a genuine retry reuses it and the server dedupe can match it.
+  const clientToken = newToken();
   const { data, error } = await supabase.rpc('economy_place_order', {
     p_account_id: accountId, p_company_id: c.id, p_side: side,
-    p_quantity: qty, p_limit_price: price, p_expires_at: null, p_client_token: newToken()
+    p_quantity: qty, p_limit_price: price, p_expires_at: null, p_client_token: clientToken
   });
   btn.disabled = false;
 
@@ -852,7 +860,10 @@ async function renderManageCompany(tickerRaw) {
   const { data: offerings } = await supabase.from('economy_offerings')
     .select('*').eq('company_id', c.id).order('created_at', { ascending: false });
   const { data: officers } = await supabase.from('economy_company_members')
-    .select('*').eq('company_id', c.id);
+    // Audit fix (stocks:company-members:public-company-officer-roster),
+    // defence in depth: fetch only the columns the officer panel renders.
+    .select('user_id,role,can_manage_profile,can_manage_funds,can_manage_members,can_issue_shares,can_pay_dividends,can_publish_reports')
+    .eq('company_id', c.id);
   await loadDirectory();
 
   view.innerHTML =
@@ -1137,7 +1148,7 @@ async function renderAdmin() {
     .select('id,name,ticker,description,total_shares,created_at')
     .eq('approval_status', 'pending').order('created_at');
   const { data: pendingOfferings } = await supabase.from('economy_offerings')
-    .select('*,economy_companies(ticker,name)').eq('status', 'pending');
+    .select('*,economy_companies(ticker,name,approval_status)').eq('status', 'pending');
   const { data: flags } = await supabase.from('economy_trade_flags')
     .select('*').is('reviewed_at', null).order('created_at', { ascending: false }).limit(20);
   const { data: recon } = await supabase.rpc('economy_treasury_reconciliation');
@@ -1183,7 +1194,8 @@ async function renderAdmin() {
               const cc = o.economy_companies || {};
               return '<div class="econ-row"><div>' +
                 '<div class="econ-row-main">' + escapeHtml(cc.ticker || '?') + ' — ' +
-                  fmtShares(o.share_count) + ' shares at ' + fmtMarks(o.price) + '</div>' +
+                  fmtShares(o.share_count) + ' shares at ' + fmtMarks(o.price) +
+                  ' · company ' + escapeHtml(cc.approval_status || 'unknown') + '</div>' +
                 '<div class="econ-row-detail">' + escapeHtml(o.risk_disclosure) + '</div>' +
               '</div><div class="econ-row-actions">' +
                 '<button class="btn btn-primary" data-approve-off="' + o.id + '">Approve</button>' +
