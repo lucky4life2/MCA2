@@ -20,7 +20,12 @@ for (const { page, csp } of strict) {
   const allowed = (csp.match(/script-src ([^;]+)/) || [,''])[1].split(/\s+/);
   for (const m of html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)) {
     const src = (m[1].match(/src=["']([^"']+)/) || [])[1];
-    if (!src && m[2].trim()) { console.log('INLINE SCRIPT in', page); bad++; }
+    const type = (m[1].match(/\btype=["']([^"']+)/i) || [,''])[1].toLowerCase();
+    // JSON-LD is metadata, not executable JavaScript, so CSP does not
+    // require it to be externalized or covered by an inline-script nonce.
+    if (!src && m[2].trim() && type !== 'application/ld+json') {
+      console.log('INLINE SCRIPT in', page); bad++;
+    }
     if (src) {
       if (/^https?:/.test(src)) { const o = new URL(src).origin; if (!allowed.includes(o)) { console.log('BLOCKED ORIGIN', o, 'in', page); bad++; } }
       else checkJs(src.replace(/^\//, ''));
