@@ -287,7 +287,7 @@ async function loadDocumentReader() {
               ? `<div class="document-scan">
                   <div class="document-scan-label">Original Document</div>
                   <div class="document-pdf-wrap">
-                    <div class="document-pdf-icon">📄</div>
+                    <iframe class="document-pdf-frame" src="${esc(safeUrl(fileUrl))}" title="Original ${esc(doc.title || 'document')}"></iframe>
                     <div class="document-pdf-name">${esc(assetName)}</div>
                     <a href="${esc(safeUrl(fileUrl))}" target="_blank" rel="noopener noreferrer" class="document-pdf-btn">View PDF →</a>
                   </div>
