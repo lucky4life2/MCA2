@@ -71,6 +71,17 @@
       padding: 0 18px; font-size: 14px; line-height: 1.7; color: var(--mid, var(--muted));
     }
     .faq-item.open .faq-answer { padding: 0 18px 16px; }
+    /* Smooth height:auto animation: where the browser supports
+       interpolate-size, the height keyword itself transitions, so no JS
+       scrollHeight measurement is needed (see toggleFaq in help.page.js).
+       Older browsers keep the max-height path above, unchanged. */
+    @supports (interpolate-size: allow-keywords) {
+      .faq-answer {
+        interpolate-size: allow-keywords;
+        height: 0; max-height: none; transition: height .25s ease, padding .25s ease;
+      }
+      .faq-item.open .faq-answer { height: auto; }
+    }
     .faq-answer p { margin: 0 0 .75em; }
     .faq-answer p:last-child { margin-bottom: 0; }
 

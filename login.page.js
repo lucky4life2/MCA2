@@ -37,8 +37,7 @@
     if (!oauthError) return;
     const errEl = document.getElementById('signin-error');
     if (!errEl) return;
-    errEl.textContent = decodeURIComponent(oauthError.replace(/\+/g, ' '));
-    errEl.style.display = 'block';
+    window.mcaShowError(errEl, decodeURIComponent(oauthError.replace(/\+/g, ' ')));
     // Clean the error out of the URL so a refresh doesn't keep re-showing it.
     history.replaceState(null, '', window.location.pathname + window.location.search.replace(/[?&](error|error_description|error_code)=[^&]*/g, '').replace(/^&/, '?'));
   })();
@@ -157,8 +156,7 @@
     const errEl = (activePanel && activePanel.querySelector('.login-error'))
       || document.getElementById('signin-error');
     if (!errEl) return;
-    errEl.textContent = message;
-    errEl.style.display = 'block';
+    window.mcaShowError(errEl, message);
   }
 
   // ── Discord ───────────────────────────────────────────────────
@@ -229,8 +227,7 @@
     const btn       = document.getElementById('btn-email-signin');
     errEl.style.display = 'none';
     if (!identifier) {
-      errEl.textContent = 'Please enter your email or username.';
-      errEl.style.display = 'block'; return;
+      window.mcaShowError(errEl, 'Please enter your email or username.', document.getElementById('signin-email')); return;
     }
     btn.textContent = 'Signing in…'; btn.disabled = true;
     try {
@@ -238,8 +235,7 @@
     // server-side (service role), so no email address ever reaches the browser.
     errEl.style.display = 'none';
     if (!identifier || !password) {
-      errEl.textContent = 'Please enter your email or username and password.';
-      errEl.style.display = 'block';
+      window.mcaShowError(errEl, 'Please enter your email or username and password.', document.getElementById(!identifier ? 'signin-email' : 'signin-password'));
       btn.textContent = 'Sign In'; btn.disabled = false;
       return;
     }
@@ -270,8 +266,7 @@
           btn.textContent = 'Sign In'; btn.disabled = false;
           return;
         }
-        errEl.textContent = json.error || 'Sign in failed.';
-        errEl.style.display = 'block';
+        window.mcaShowError(errEl, json.error || 'Sign in failed.', document.getElementById('signin-password'));
         btn.textContent = 'Sign In'; btn.disabled = false;
         return;
       }
@@ -306,8 +301,7 @@
 
       finishLogin(returnTo);
     } catch(e) {
-      errEl.textContent   = e.message || 'Sign in failed.';
-      errEl.style.display = 'block';
+      window.mcaShowError(errEl, e.message || 'Sign in failed.', document.getElementById('signin-password'));
       btn.textContent = 'Sign In'; btn.disabled = false;
     }
   });
@@ -355,8 +349,7 @@
     const errEl = document.getElementById('forgot-error');
     errEl.style.display = 'none';
     if (!email) {
-      errEl.textContent = 'Please enter your email address.';
-      errEl.style.display = 'block'; return;
+      window.mcaShowError(errEl, 'Please enter your email address.', document.getElementById('forgot-email')); return;
     }
     const SUPABASE_URL = supabase.supabaseUrl;
     const ANON_KEY = supabase.supabaseKey;
@@ -367,8 +360,7 @@
     });
     const json = await res.json();
     if (!res.ok || json.error) {
-      errEl.textContent = json.error || 'Could not send reset code.';
-      errEl.style.display = 'block'; return;
+      window.mcaShowError(errEl, json.error || 'Could not send reset code.', document.getElementById('forgot-email')); return;
     }
     _pendingResetEmail = email;
     document.getElementById('forgot-step-email').style.display = 'none';
@@ -381,20 +373,16 @@
     const errEl   = document.getElementById('forgot-code-error');
     errEl.style.display = 'none';
     if (!code) {
-      errEl.textContent = 'Enter the code from your email.';
-      errEl.style.display = 'block'; return;
+      window.mcaShowError(errEl, 'Enter the code from your email.', document.getElementById('forgot-code')); return;
     }
     if (newPass.length < 8) {
-      errEl.textContent = 'Password must be at least 8 characters.';
-      errEl.style.display = 'block'; return;
+      window.mcaShowError(errEl, 'Password must be at least 8 characters.', document.getElementById('forgot-new-password')); return;
     }
     if (!/[A-Z]/.test(newPass)) {
-      errEl.textContent = 'Password must contain at least one uppercase letter.';
-      errEl.style.display = 'block'; return;
+      window.mcaShowError(errEl, 'Password must contain at least one uppercase letter.', document.getElementById('forgot-new-password')); return;
     }
     if (!/[a-z]/.test(newPass)) {
-      errEl.textContent = 'Password must contain at least one lowercase letter.';
-      errEl.style.display = 'block'; return;
+      window.mcaShowError(errEl, 'Password must contain at least one lowercase letter.', document.getElementById('forgot-new-password')); return;
     }
 
     const SUPABASE_URL = supabase.supabaseUrl;
@@ -406,8 +394,7 @@
     });
     const json = await res.json();
     if (!res.ok || json.error) {
-      errEl.textContent = json.error || 'Invalid or expired code.';
-      errEl.style.display = 'block'; return;
+      window.mcaShowError(errEl, json.error || 'Invalid or expired code.', document.getElementById('forgot-code')); return;
     }
     if (json.access_token && json.refresh_token) {
       await supabase.auth.setSession({ access_token: json.access_token, refresh_token: json.refresh_token });
@@ -430,8 +417,7 @@
     const btn   = document.getElementById('btn-mfa-verify');
     errEl.style.display = 'none';
     if (!/^\d{6}$/.test(code)) {
-      errEl.textContent = 'Enter the 6-digit code from your authenticator app.';
-      errEl.style.display = 'block'; return;
+      window.mcaShowError(errEl, 'Enter the 6-digit code from your authenticator app.', document.getElementById('mfa-code')); return;
     }
     btn.textContent = 'Verifying…'; btn.disabled = true;
     try {
@@ -445,8 +431,7 @@
       if (verifyErr) throw verifyErr;
       finishLogin(returnTo);
     } catch(e) {
-      errEl.textContent = e.message || 'Invalid code. Try again.';
-      errEl.style.display = 'block';
+      window.mcaShowError(errEl, e.message || 'Invalid code. Try again.', document.getElementById('mfa-code'));
       btn.textContent = 'Verify'; btn.disabled = false;
     }
   });
@@ -514,28 +499,22 @@
     // The message promised a *valid* address but only emptiness was checked,
     // so a typo like "me@" reached the Edge Function and failed there instead.
     if (!/^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(email)) {
-      errEl.textContent   = 'Please enter a valid email address.';
-      errEl.style.display = 'block'; return;
+      window.mcaShowError(errEl, 'Please enter a valid email address.', document.getElementById('signup-email')); return;
     }
     if (!dob) {
-      errEl.textContent   = 'Please enter your date of birth.';
-      errEl.style.display = 'block'; return;
+      window.mcaShowError(errEl, 'Please enter your date of birth.', dobMonthEl); return;
     }
     if (dob > todayIso) {
-      errEl.textContent   = 'Please enter a valid date of birth.';
-      errEl.style.display = 'block'; return;
+      window.mcaShowError(errEl, 'Please enter a valid date of birth.', dobYearEl); return;
     }
     if (password.length < 8) {
-      errEl.textContent   = 'Password must be at least 8 characters.';
-      errEl.style.display = 'block'; return;
+      window.mcaShowError(errEl, 'Password must be at least 8 characters.', document.getElementById('signup-password')); return;
     }
     if (!/[A-Z]/.test(password)) {
-      errEl.textContent   = 'Password must contain at least one uppercase letter.';
-      errEl.style.display = 'block'; return;
+      window.mcaShowError(errEl, 'Password must contain at least one uppercase letter.', document.getElementById('signup-password')); return;
     }
     if (!/[a-z]/.test(password)) {
-      errEl.textContent   = 'Password must contain at least one lowercase letter.';
-      errEl.style.display = 'block'; return;
+      window.mcaShowError(errEl, 'Password must contain at least one lowercase letter.', document.getElementById('signup-password')); return;
     }
     // Cloudflare Turnstile. Blocking an empty token here is only a UX
     // safeguard (it catches someone who skipped or closed the widget) — a
@@ -574,8 +553,7 @@
     btn.textContent = 'Create Account'; btn.disabled = false;
     if (!res.ok || json.error) {
       if (window.turnstile) window.turnstile.reset();
-      errEl.textContent   = json.error || 'Sign up failed.';
-      errEl.style.display = 'block'; return;
+      window.mcaShowError(errEl, json.error || 'Sign up failed.', document.getElementById('signup-email')); return;
     }
     // Show code-entry confirmation panel
     _pendingSignupEmail = email;
@@ -597,8 +575,7 @@
     const btn   = document.getElementById('btn-verify-signup');
     errEl.style.display = 'none';
     if (!code) {
-      errEl.textContent = 'Enter the code from your email.';
-      errEl.style.display = 'block'; return;
+      window.mcaShowError(errEl, 'Enter the code from your email.', document.getElementById('signup-code')); return;
     }
     btn.textContent = 'Verifying…'; btn.disabled = true;
     const SUPABASE_URL = supabase.supabaseUrl;
@@ -614,8 +591,7 @@
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || json.error) {
-        errEl.textContent = json.error || 'Invalid or expired code.';
-        errEl.style.display = 'block';
+        window.mcaShowError(errEl, json.error || 'Invalid or expired code.', document.getElementById('signup-code'));
         btn.textContent = 'Verify & Continue'; btn.disabled = false;
         return;
       }
