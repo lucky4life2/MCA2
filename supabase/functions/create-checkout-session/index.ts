@@ -237,7 +237,16 @@ Deno.serve(async (req: Request) => {
     }
     const isSubscription = product.product_type === 'subscription';
     isSubscription ? (hasSubscription = true) : (hasGoods = true);
-    const requestedQty = Math.max(1, Math.min(10, Math.floor(Number(item.qty) || 1)));
+    // Spending cap (club decision): at most 10 of one item per order.
+    // This REJECTS a quantity over 10 instead of silently clamping it
+    // (B6 fix 2026-11-15) — silently shipping 10 when the member asked
+    // for 11 hides that they got fewer than they paid attention to, and
+    // the cap is a block, not a suggestion. A missing/invalid qty still
+    // defaults to 1, as before.
+    const requestedQty = Math.max(1, Math.floor(Number(item.qty) || 1));
+    if (!isSubscription && requestedQty > 10) {
+      return json({ error: `You can buy at most 10 of "${product.name}" in one order.` }, 400);
+    }
 
     // Stock is only tracked for physical goods, never for a subscription
     // seat. A null inventory means the product doesn't track stock at
