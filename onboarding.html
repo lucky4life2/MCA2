@@ -103,9 +103,22 @@
     .onboard-progress-step.current .onboard-progress-label { color: var(--blue); }
     .onboard-progress-step.done .onboard-progress-label { color: var(--green-text); }
 
-    /* Step panels */
+    /* Step panels — directional slides instead of fades: moving forward
+       (account -> verify -> path -> done) the new panel slides in from the
+       right; going back it slides in from the left. showStep() in
+       onboarding.page.js sets .mca-dir-back on the panel before activating
+       it; without that class the forward animation applies. */
     .onboard-step { display: none; }
-    .onboard-step.active { display: block; }
+    .onboard-step.active { display: block; animation: mca-onboard-in 0.3s ease both; }
+    .onboard-step.mca-dir-back.active { animation-name: mca-onboard-in-back; }
+    @keyframes mca-onboard-in {
+      from { opacity: 0; transform: translateX(24px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes mca-onboard-in-back {
+      from { opacity: 0; transform: translateX(-24px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
 
     /* Path picker cards */
     .onboard-paths {
@@ -176,35 +189,39 @@
       width: 100%; background: #5865F2; color: #fff;
       font-size: 13px; font-weight: 600;
       padding: 11px 0; border: none; border-radius: 4px;
-      cursor: pointer; transition: background 0.15s;
+      cursor: pointer; transition: background 0.15s, transform 0.1s ease;
       display: flex; align-items: center; justify-content: center; gap: 8px;
       margin-bottom: 4px;
     }
     .onboard-btn-discord:hover { background: #4752c4; }
+    .onboard-btn-discord:active { transform: scale(0.97); }
     .onboard-btn-google {
       width: 100%; background: #fff; color: #3c4043;
       font-size: 13px; font-weight: 600;
       padding: 11px 0; border: 1px solid var(--border); border-radius: 4px;
-      cursor: pointer; transition: background 0.15s, border-color 0.15s;
+      cursor: pointer; transition: background 0.15s, border-color 0.15s, transform 0.1s ease;
       display: flex; align-items: center; justify-content: center; gap: 8px;
       margin-bottom: 4px;
     }
     .onboard-btn-google:hover { background: #f7f8f8; border-color: #c9ccd1; }
+    .onboard-btn-google:active { transform: scale(0.97); }
     .onboard-btn-primary {
       width: 100%; background: var(--blue); color: #fff;
       font-size: 13px; font-weight: 600;
       padding: 11px 0; border: none; border-radius: 4px;
-      cursor: pointer; transition: background 0.15s; margin-top: 4px;
+      cursor: pointer; transition: background 0.15s, transform 0.1s ease; margin-top: 4px;
     }
     .onboard-btn-primary:hover { background: var(--blue-dark); }
+    .onboard-btn-primary:active { transform: scale(0.97); }
     .onboard-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
     .onboard-btn-outline {
       width: 100%; background: var(--white); color: var(--blue);
       font-size: 13px; font-weight: 600;
       padding: 11px 0; border: 1px solid var(--blue); border-radius: 4px;
-      cursor: pointer; transition: background 0.15s; margin-top: 8px;
+      cursor: pointer; transition: background 0.15s, transform 0.1s ease; margin-top: 8px;
     }
     .onboard-btn-outline:hover { background: #eef3fc; }
+    .onboard-btn-outline:active { transform: scale(0.97); }
     .onboard-error {
       font-size: 12px; color: #c0392b;
       margin-top: 8px; display: none;

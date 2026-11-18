@@ -23,7 +23,7 @@
 .skip-link {
   position: absolute;
   left: 8px;
-  top: -48px;
+  top: 8px;
   z-index: 10000;
   background: var(--blue);
   color: #fff;
@@ -32,10 +32,12 @@
   font-size: 14px;
   font-weight: 600;
   text-decoration: none;
-  transition: top .15s ease;
+  /* transform (not top): compositor-only, no layout work per frame. */
+  transform: translateY(-56px);
+  transition: transform .15s ease;
 }
 .skip-link:focus {
-  top: 8px;
+  transform: translateY(0);
   outline: 3px solid #fff;
   outline-offset: 2px;
 }
@@ -435,9 +437,10 @@ nav {
   width: 100%; background: var(--blue); color: #fff;
   font-size: 13px; font-weight: 600; letter-spacing: 0.5px;
   padding: 12px 0; border: none; border-radius: 4px;
-  cursor: pointer; transition: background 0.15s;
+  cursor: pointer; transition: background 0.15s, transform 0.1s ease;
 }
 .btn-checkout:hover { background: var(--blue-dark); }
+.btn-checkout:active { transform: scale(0.97); }
 .btn-checkout:disabled {
   background: var(--border); color: var(--muted); cursor: not-allowed;
 }
@@ -531,8 +534,11 @@ nav {
   font-size: 13px; font-weight: 600;
   padding: 11px 22px; border: none; border-radius: 4px; cursor: pointer;
   text-decoration: none; display: inline-block;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, transform 0.1s ease;
 }
+/* Press feedback: a subtle 0.97 squash while held. transform is in the
+   transition above so it eases instead of snapping. */
+.btn:active { transform: scale(0.97); }
 .btn-danger {
   background: #c0392b; color: var(--white);
 }
@@ -541,23 +547,26 @@ nav {
   background: #5865F2; color: var(--white); font-size: 13px; font-weight: 600;
   padding: 11px 22px; border: none; border-radius: 4px; cursor: pointer;
   text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
-  transition: background 0.15s;
+  transition: background 0.15s, transform 0.1s ease;
 }
 .btn-discord:hover { background: #4752c4; }
+.btn-discord:active { transform: scale(0.97); }
 .btn-outline {
   background: transparent; color: var(--blue); font-size: 13px; font-weight: 600;
   padding: 11px 22px; border: 2px solid var(--blue); border-radius: 4px;
   cursor: pointer; text-decoration: none; display: inline-block;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, transform 0.1s ease;
 }
 .btn-outline:hover { background: var(--blue); color: var(--white); }
+.btn-outline:active { transform: scale(0.97); }
 .btn-primary {
   background: var(--blue); color: var(--white); font-size: 13px; font-weight: 600;
   padding: 11px 22px; border: none; border-radius: 4px;
   cursor: pointer; text-decoration: none; display: inline-block;
-  transition: background 0.15s;
+  transition: background 0.15s, transform 0.1s ease;
 }
 .btn-primary:hover { background: var(--blue-dark); }
+.btn-primary:active { transform: scale(0.97); }
 .btn-sm { padding: 6px 12px; font-size: 12px; }
 
 /* ── FORMS ── */
@@ -783,7 +792,7 @@ footer {
   transform: translateX(-50%) translateY(10px);
   background: var(--blue); color: white; font-size: 13px; font-weight: 500;
   padding: 10px 22px; border-radius: 4px; opacity: 0; pointer-events: none;
-  transition: all 0.25s; z-index: 9999;
+  transition: opacity 0.25s, transform 0.25s; z-index: 9999;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
@@ -827,7 +836,7 @@ footer {
   height: 2px;
   background: var(--black);
   border-radius: 2px;
-  transition: all 0.25s;
+  transition: transform 0.25s, opacity 0.25s;
 }
 .nav-hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
 .nav-hamburger.open span:nth-child(2) { opacity: 0; }
@@ -1022,8 +1031,27 @@ footer {
   margin-top: 1.5rem;
 }
 .slide { display: none; position: relative; }
-.slide.active { display: block; animation: slideFadeIn 0.6s ease; }
-@keyframes slideFadeIn { from { opacity: 0; } to { opacity: 1; } }
+/* Slides enter with a subtle scale from 0.97 + a short directional slide
+   instead of a plain fade: forward (next / auto-advance / dot to the right)
+   comes from the right, backward from the left. The direction class is set
+   on .slideshow by slideshow.js before the new slide activates; with no
+   direction class the slide just fades + scales in. */
+.slide.active { display: block; animation: mca-slide-in 0.45s ease both; }
+.slideshow.mca-dir-next .slide.active { animation-name: mca-slide-in-next; }
+.slideshow.mca-dir-prev .slide.active { animation-name: mca-slide-in-prev; }
+.slideshow.mca-swipe .slide.active { animation-duration: 0.35s; animation-timing-function: cubic-bezier(0.22, 1.3, 0.36, 1); }
+@keyframes mca-slide-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes mca-slide-in-next {
+  from { opacity: 0; transform: translateX(24px) scale(0.97); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes mca-slide-in-prev {
+  from { opacity: 0; transform: translateX(-24px) scale(0.97); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
 .slide img {
   width: 100%; height: 420px;
   object-fit: cover; object-position: center; display: block;
@@ -1040,11 +1068,13 @@ footer {
   color: var(--blue); width: 36px; height: 36px; border-radius: 50%;
   font-size: 16px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  transition: background 0.15s, opacity 0.15s;
+  transition: background 0.15s, opacity 0.15s, transform 0.1s ease;
   z-index: 10; opacity: 0; line-height: 1;
 }
 .slideshow:hover .slideshow-btn { opacity: 1; }
 .slideshow-btn:hover { background: var(--white); }
+/* Press feedback — keeps the vertical centering, adds the 0.97 squash. */
+.slideshow-btn:active { transform: translateY(-50%) scale(0.97); }
 .slideshow-btn.prev { left: 12px; }
 .slideshow-btn.next { right: 12px; }
 .slideshow-dots { display: flex; justify-content: center; gap: 6px; margin-top: 12px; }
@@ -2310,4 +2340,42 @@ html[data-member-gate] body > :not(nav):not(footer):not(script):not(.member-gate
   a { text-decoration: underline; color: #000 !important; }
   h1, h2, h3, img, table { break-inside: avoid; }
   .article-body a[href]::after { content: " (" attr(href) ")"; font-size: 0.85em; }
+}
+
+/* ── UI ANIMATION HACKS ──────────────────────────────────────────
+   Subtle, site-wide motion polish. Every animation here is small on
+   purpose (0.97 scale, 24px slides, 0.45s max) so it reads as polished,
+   not flashy. All of it is disabled for prefers-reduced-motion users. */
+
+/* Hack 3 — shake on error. Applied by nav.js's mcaShakeField() to the
+   field that failed validation; the class is removed on animationend so
+   the same field can shake again on the next bad submit. */
+@keyframes mca-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+.mca-shake { animation: mca-shake 0.4s ease; }
+
+/* Hack 1 — entry scale. Modals scale in from 0.97 instead of appearing. */
+@keyframes mca-enter {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.mca-modal, .econ-modal { animation: mca-enter 0.18s ease both; }
+
+/* Hack 7 — theme-switch kill switch. nav.js adds this class to <html>
+   around the data-theme flip (with a forced reflow in between) so no
+   element's color/background transition plays during the instant switch. */
+.mca-no-transition, .mca-no-transition * { transition: none !important; }
+
+/* Reduced motion: everything above becomes instant. */
+@media (prefers-reduced-motion: reduce) {
+  .slide.active,
+  .mca-modal, .econ-modal,
+  .mca-shake { animation: none !important; }
+  .btn, .btn-discord, .btn-outline, .btn-primary, .btn-checkout,
+  .slideshow-btn, .skip-link, .toast, .nav-hamburger span { transition: none !important; }
 }

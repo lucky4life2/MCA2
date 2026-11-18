@@ -35,12 +35,18 @@ let _user = null;
 const titleEl = document.getElementById('onboard-title');
 const subtitleEl = document.getElementById('onboard-subtitle');
 
-function showStep(name) {
+function showStep(name, dir) {
   // 'verify' is a sub-state of the Account progress step.
   const progressName = name === 'verify' ? 'account' : name;
-  document.querySelectorAll('.onboard-step').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.onboard-step').forEach(el => el.classList.remove('active', 'mca-dir-back'));
   const panel = document.getElementById('step-' + name);
-  if (panel) panel.classList.add('active');
+  if (panel) {
+    // Directional slide: forward enters from the right (default), back
+    // enters from the left. Set the direction class before .active so the
+    // panel's animation picks it up on this activation.
+    if (dir === 'back') panel.classList.add('mca-dir-back');
+    panel.classList.add('active');
+  }
   const meta = STEP_META[name];
   if (meta) { titleEl.textContent = meta.title; subtitleEl.textContent = meta.subtitle; }
   document.querySelectorAll('.onboard-progress-step').forEach(el => {
@@ -74,12 +80,13 @@ document.getElementById('back-to-signin').addEventListener('click', () => {
   window.location.href = 'login.html';
 });
 document.getElementById('back-from-path').addEventListener('click', () => {
-  showStep('account');
+  showStep('account', 'back');
 });
 document.getElementById('btn-path-continue').addEventListener('click', () => {
   if (!_path) {
     const err = document.getElementById('path-error');
     err.style.display = 'block';
+    window.mcaShakeField(document.querySelector('.onboard-paths'));
     return;
   }
   showStep('done');
@@ -171,8 +178,7 @@ function showAccountError(message) {
   // would write into a hidden panel and the member would never see it.
   showEmailForm();
   const errEl = document.getElementById('signup-error');
-  errEl.textContent = message;
-  errEl.style.display = 'block';
+  window.mcaShowError(errEl, message);
 }
 
 // ── OAuth (redirects back here, then resumes at Done — or the path
@@ -212,28 +218,22 @@ document.getElementById('btn-email-signup').addEventListener('click', async () =
   errEl.style.display = 'none';
   if (!requireSignupConsent()) return;
   if (!/^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(email)) {
-    errEl.textContent = 'Please enter a valid email address.';
-    errEl.style.display = 'block'; return;
+    window.mcaShowError(errEl, 'Please enter a valid email address.', document.getElementById('signup-email')); return;
   }
   if (!dob) {
-    errEl.textContent = 'Please enter your date of birth.';
-    errEl.style.display = 'block'; return;
+    window.mcaShowError(errEl, 'Please enter your date of birth.', dobMonthEl); return;
   }
   if (dob > todayIso) {
-    errEl.textContent = 'Please enter a valid date of birth.';
-    errEl.style.display = 'block'; return;
+    window.mcaShowError(errEl, 'Please enter a valid date of birth.', dobYearEl); return;
   }
   if (password.length < 8) {
-    errEl.textContent = 'Password must be at least 8 characters.';
-    errEl.style.display = 'block'; return;
+    window.mcaShowError(errEl, 'Password must be at least 8 characters.', document.getElementById('signup-password')); return;
   }
   if (!/[A-Z]/.test(password)) {
-    errEl.textContent = 'Password must contain at least one uppercase letter.';
-    errEl.style.display = 'block'; return;
+    window.mcaShowError(errEl, 'Password must contain at least one uppercase letter.', document.getElementById('signup-password')); return;
   }
   if (!/[a-z]/.test(password)) {
-    errEl.textContent = 'Password must contain at least one lowercase letter.';
-    errEl.style.display = 'block'; return;
+    window.mcaShowError(errEl, 'Password must contain at least one lowercase letter.', document.getElementById('signup-password')); return;
   }
   const turnstileToken = (window.turnstile && turnstileWidgetId !== null)
     ? window.turnstile.getResponse(turnstileWidgetId)
@@ -263,8 +263,7 @@ document.getElementById('btn-email-signup').addEventListener('click', async () =
   btn.textContent = 'Create Account'; btn.disabled = false;
   if (!res.ok || json.error) {
     if (window.turnstile && turnstileWidgetId !== null) window.turnstile.reset(turnstileWidgetId);
-    errEl.textContent = json.error || 'Sign up failed.';
-    errEl.style.display = 'block'; return;
+    window.mcaShowError(errEl, json.error || 'Sign up failed.', document.getElementById('signup-email')); return;
   }
   _pendingSignupEmail = email;
   _pendingSignupUserId = json.userId;
@@ -281,8 +280,7 @@ document.getElementById('btn-verify-signup').addEventListener('click', async () 
   const btn = document.getElementById('btn-verify-signup');
   errEl.style.display = 'none';
   if (!code) {
-    errEl.textContent = 'Enter the code from your email.';
-    errEl.style.display = 'block'; return;
+    window.mcaShowError(errEl, 'Enter the code from your email.', document.getElementById('signup-code')); return;
   }
   btn.textContent = 'Verifying…'; btn.disabled = true;
   const SUPABASE_URL = supabase.supabaseUrl;
@@ -295,8 +293,7 @@ document.getElementById('btn-verify-signup').addEventListener('click', async () 
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok || json.error) {
-      errEl.textContent = json.error || 'Invalid or expired code.';
-      errEl.style.display = 'block';
+      window.mcaShowError(errEl, json.error || 'Invalid or expired code.', document.getElementById('signup-code'));
       btn.textContent = 'Verify & Continue'; btn.disabled = false;
       return;
     }
@@ -379,7 +376,7 @@ async function backfillUsername() {
 
 
 // ── Back links ──────────────────────────────────────────────────
-document.getElementById('back-from-verify').addEventListener('click', () => showStep('account'));
+document.getElementById('back-from-verify').addEventListener('click', () => showStep('account', 'back'));
 
 // ── Done ────────────────────────────────────────────────────────
 document.getElementById('btn-done-account').addEventListener('click', () => {
