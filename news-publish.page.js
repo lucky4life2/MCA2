@@ -578,7 +578,7 @@ async function notifySubscribers(articleId) {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
-    const res = await fetch('https://ghyajcawrnrvnwhicfql.supabase.co/functions/v1/notify-news-subscribers', {
+    const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/notify-news-subscribers', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

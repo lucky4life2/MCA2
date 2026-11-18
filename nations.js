@@ -2,8 +2,8 @@
 
 import { supabase, getUser } from './supabase.js';
 
-const SUPABASE_URL_N  = 'https://ghyajcawrnrvnwhicfql.supabase.co';
-const SUPABASE_ANON_N = 'sb_publishable_XWEEEHkmW9jbipNoS7N7AQ_UhwPpECD';
+const SUPABASE_URL_N  = 'https://hjaywokvgdzhvsoygctc.supabase.co';
+const SUPABASE_ANON_N = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
 
 /* ── ESCAPING ──────────────────────────────────────────────────
    Nation rows are editable by nation leaders through update_own_nation, so
