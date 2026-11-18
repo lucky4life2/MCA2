@@ -1,4 +1,4 @@
-const SUPABASE_URL = 'https://ghyajcawrnrvnwhicfql.supabase.co';
+const SUPABASE_URL = 'https://hjaywokvgdzhvsoygctc.supabase.co';
 
 const SCOPE_COPY = {
   news: 'Stop receiving news update emails from Minecraft Club of America?',
