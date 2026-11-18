@@ -5,8 +5,8 @@
 // Bump this deliberately when upgrading.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
 
-const SUPABASE_URL = 'https://hjaywokvgdzhvsoygctc.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_4lPs4a1t0cOdDRZ1VTpMpQ_fC2dHV_T';
+const SUPABASE_URL = 'https://ghyajcawrnrvnwhicfql.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_XWEEEHkmW9jbipNoS7N7AQ_UhwPpECD';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {

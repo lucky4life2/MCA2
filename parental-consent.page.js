@@ -1,4 +1,4 @@
-const SUPABASE_URL = 'https://hjaywokvgdzhvsoygctc.supabase.co';
+const SUPABASE_URL = 'https://ghyajcawrnrvnwhicfql.supabase.co';
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

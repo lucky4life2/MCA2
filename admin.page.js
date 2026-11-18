@@ -976,7 +976,7 @@ async function notifySubscribers(articleId) {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
-    const res = await fetch('https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/notify-news-subscribers', {
+    const res = await fetch('https://ghyajcawrnrvnwhicfql.supabase.co/functions/v1/notify-news-subscribers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
       body: JSON.stringify({ articleId }),
@@ -1655,7 +1655,7 @@ window.deleteAccount = async (id) => {
 };
 
 // ── Plugin bridge ─────────────────────────────────────────────
-const EDGE_FUNCTION_URL = 'https://hjaywokvgdzhvsoygctc.supabase.co/functions/v1/mcaverify';
+const EDGE_FUNCTION_URL = 'https://ghyajcawrnrvnwhicfql.supabase.co/functions/v1/mcaverify';
 const PLUGIN_HEARTBEAT_STALE_MS = 3 * 60 * 1000; // 3 minutes — plugin pings every 60s by default
 // Humanize a heartbeat age so the admin UI never shows a raw "101904m ago".
 function humanizeDuration(ms) {
