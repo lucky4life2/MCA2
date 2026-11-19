@@ -1482,7 +1482,7 @@ function renderVerifyCodeSection() {
   if (!_verifyCode) _verifyCode = generateCode();
   return `
     <div style="border-top:1px solid var(--border);padding-top:1.25rem;margin-top:0.25rem;">
-      <p class="mc-unverified-note">Run this command in-game on the MCA server to verify your account:</p>
+      <p class="mc-unverified-note">Your Minecraft verification code — run this command in-game on the MCA server to verify your account:</p>
       <div class="mc-code-box">
         <code class="mc-code-command" style="margin:0;flex:1;">/mcaverify ${_verifyCode}</code>
         <button class="btn-copy" id="btn-copy-code">Copy</button>

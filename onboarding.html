@@ -431,6 +431,7 @@
             <select id="signup-club" class="onboard-form-input">
               <option value="">I'm not in a club yet</option>
             </select>
+            <div class="onboard-hint">You can join MCA without being part of a school chapter.</div>
           </div>
           <div class="onboard-error" id="signup-error"></div>
           <p class="onboard-oauth-note" style="margin-bottom:10px;">We collect your email address, date of birth, and optional club choice to create and protect your account. Date of birth is used only to apply age-appropriate protections — see the <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>
@@ -448,10 +449,10 @@
           <div style="text-align:center;padding:0.5rem 0 1rem;">
             <div style="font-size:2rem;margin-bottom:0.5rem;">✉️</div>
             <div style="font-family:'Times New Roman',serif;font-size:1.2rem;color:var(--blue);">Check your email</div>
-            <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-top:0.5rem;">We sent a 6-digit code to <strong id="verify-email-display" style="color:var(--black);"></strong>. Enter it below to activate your account.</p>
+            <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-top:0.5rem;">We sent a 6-digit email verification code to <strong id="verify-email-display" style="color:var(--black);"></strong>. Enter it below, here on the signup page, to activate your account.</p>
           </div>
           <div class="onboard-form-group">
-            <label class="onboard-form-label" for="signup-code">Verification Code</label>
+            <label class="onboard-form-label" for="signup-code">Email Verification Code</label>
             <input type="text" id="signup-code" class="onboard-form-input" placeholder="123456" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
           </div>
           <div class="onboard-error" id="confirm-error"></div>
@@ -476,7 +477,7 @@
             </div>
             <div class="onboard-next-step">
               <span class="onboard-next-step-num">3</span>
-              <span><strong>Verify your Minecraft account</strong>: Enter your Minecraft name on <a href="account.html">your account page</a> and get your code. Join the server and run <strong>/mcaverify</strong> in-game. Paid membership and verification are required to play.</span>
+              <span><strong>Verify your Minecraft account</strong>: Enter your Minecraft name on <a href="account.html">your account page</a> and get your Minecraft verification code. Join the server and run <strong>/mcaverify</strong> in-game. Paid membership and verification are required to play.</span>
             </div>
           </div>
           <button class="onboard-btn-primary" id="btn-done-account">Go to My Account</button>
