@@ -32,7 +32,9 @@
       text-decoration: none; display: inline-flex; align-items: center; gap: 10px;
       transition: background .15s, transform .1s;
     }
-    .btn-contact:hover { background: var(--blue-dark, #123); }
+    @media (hover: hover) {
+      .btn-contact:hover { background: var(--blue-dark, #123); }
+    }
     .btn-contact:active { transform: translateY(1px); }
 
     .faq-toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 1.75rem; }
@@ -63,7 +65,9 @@
       gap: 12px; font-size: 15px; font-weight: 600; color: var(--black);
       font-family: 'Open Sans', sans-serif;
     }
-    .faq-question:hover { background: var(--bg); }
+    @media (hover: hover) {
+      .faq-question:hover { background: var(--bg); }
+    }
     .faq-chevron { flex-shrink: 0; transition: transform .2s; color: var(--muted); }
     .faq-item.open .faq-chevron { transform: rotate(180deg); }
     .faq-answer {

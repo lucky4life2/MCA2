@@ -1297,7 +1297,9 @@ function renderRolePreviewBanner(preview, mod) {
         font-size: 12px; font-weight: 700;
         padding: 4px 10px; cursor: pointer;
       }
-      #role-preview-banner .rpb-exit:hover { background: rgba(255,255,255,.3); }
+      @media (hover: hover) {
+        #role-preview-banner .rpb-exit:hover { background: rgba(255,255,255,.3); }
+      }
     `;
     document.head.appendChild(style);
   }

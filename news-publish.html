@@ -105,7 +105,9 @@
     #np-body { font-family: 'Courier New', monospace; font-size: 13px; min-height: 320px; line-height: 1.7; }
     .editor-toolbar { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
     .tb-btn { font-size: 11px; font-weight: 600; padding: 4px 9px; border: 1px solid var(--border); background: var(--white); color: var(--black); border-radius: 3px; cursor: pointer; transition: background .1s; font-family: monospace; }
-    .tb-btn:hover { background: var(--bg); }
+    @media (hover: hover) {
+      .tb-btn:hover { background: var(--bg); }
+    }
 
     /* ── Preview ──────────────────────────── */
     #np-preview { min-height: 200px; font-size: 14px; line-height: 1.85; color: var(--black); }
@@ -136,15 +138,25 @@
     /* ── Buttons ───────────────────────────── */
     .btn { font-size: 12px; font-weight: 600; padding: 8px 16px; border-radius: 4px; cursor: pointer; transition: background .15s, color .15s; border: none; white-space: nowrap; }
     .btn-primary  { background: var(--blue); color: #fff; }
-    .btn-primary:hover  { background: var(--blue-dark); }
+    @media (hover: hover) {
+      .btn-primary:hover { background: var(--blue-dark); }
+    }
     .btn-success  { background: #2d7d2f; color: #fff; }
-    .btn-success:hover  { background: #235e25; }
+    @media (hover: hover) {
+      .btn-success:hover { background: #235e25; }
+    }
     .btn-outline  { background: transparent; color: var(--blue); border: 1px solid var(--border); }
-    .btn-outline:hover  { background: var(--blue); color: #fff; }
+    @media (hover: hover) {
+      .btn-outline:hover { background: var(--blue); color: #fff; }
+    }
     .btn-ghost   { background: transparent; color: var(--muted); border: 1px solid var(--border); }
-    .btn-ghost:hover   { background: var(--bg); color: var(--black); }
+    @media (hover: hover) {
+      .btn-ghost:hover { background: var(--bg); color: var(--black); }
+    }
     .btn-danger  { background: transparent; color: #c0392b; border: 1px solid var(--border); }
-    .btn-danger:hover  { background: #c0392b; color: #fff; }
+    @media (hover: hover) {
+      .btn-danger:hover { background: #c0392b; color: #fff; }
+    }
     .btn-sm { font-size: 10px; padding: 4px 9px; }
     .btn-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 

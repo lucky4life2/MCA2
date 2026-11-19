@@ -79,7 +79,9 @@
     .login-tab.active {
       background: var(--blue); color: #fff;
     }
-    .login-tab:not(.active):hover { background: var(--bg); color: var(--blue); }
+    @media (hover: hover) {
+      .login-tab:not(.active):hover { background: var(--bg); color: var(--blue); }
+    }
 
     /* Panels */
     .login-panel { display: none; }
@@ -120,7 +122,9 @@
       display: flex; align-items: center; justify-content: center; gap: 8px;
       margin-bottom: 4px;
     }
-    .btn-login-discord:hover { background: #4752c4; }
+    @media (hover: hover) {
+      .btn-login-discord:hover { background: #4752c4; }
+    }
     .btn-login-discord:active { transform: scale(0.97); }
 
     .btn-login-google {
@@ -131,7 +135,9 @@
       display: flex; align-items: center; justify-content: center; gap: 8px;
       margin-bottom: 4px;
     }
-    .btn-login-google:hover { background: #f7f8f8; border-color: #c9ccd1; }
+    @media (hover: hover) {
+      .btn-login-google:hover { background: #f7f8f8; border-color: #c9ccd1; }
+    }
     .btn-login-google:active { transform: scale(0.97); }
 
     .btn-login-submit {
@@ -140,7 +146,9 @@
       padding: 11px 0; border: none; border-radius: 4px;
       cursor: pointer; transition: background 0.15s, transform 0.1s ease; margin-top: 4px;
     }
-    .btn-login-submit:hover { background: var(--blue-dark); }
+    @media (hover: hover) {
+      .btn-login-submit:hover { background: var(--blue-dark); }
+    }
     .btn-login-submit:active { transform: scale(0.97); }
 
     .login-error {
@@ -166,14 +174,18 @@
       margin-top: 1.25rem; text-decoration: none;
       transition: color 0.15s;
     }
-    .login-back-link:hover { color: var(--blue); }
+    @media (hover: hover) {
+      .login-back-link:hover { color: var(--blue); }
+    }
     .login-forgot-link {
       display: block; text-align: right;
       font-size: 11px; color: var(--muted);
       margin-top: -8px; margin-bottom: 12px;
       text-decoration: none; transition: color 0.15s;
     }
-    .login-forgot-link:hover { color: var(--blue); }
+    @media (hover: hover) {
+      .login-forgot-link:hover { color: var(--blue); }
+    }
     .password-hint {
       font-size: 11px; color: var(--muted);
       margin-top: 4px; line-height: 1.5;
@@ -191,13 +203,17 @@
       font-size: 12px; color: var(--muted); line-height: 1.5; cursor: pointer;
     }
     .login-consent a { color: var(--blue); text-decoration: none; }
-    .login-consent a:hover { text-decoration: underline; }
+    @media (hover: hover) {
+      .login-consent a:hover { text-decoration: underline; }
+    }
     .login-oauth-consent-note {
       font-size: 11px; color: var(--muted); line-height: 1.5;
       text-align: center; margin: 10px 0 2px;
     }
     .login-oauth-consent-note a { color: var(--blue); text-decoration: none; }
-    .login-oauth-consent-note a:hover { text-decoration: underline; }
+    @media (hover: hover) {
+      .login-oauth-consent-note a:hover { text-decoration: underline; }
+    }
 
     .login-card-footer {
       padding: 1rem 2rem;
@@ -210,7 +226,9 @@
     .login-card-footer-text a {
       color: var(--blue); text-decoration: none; font-weight: 600;
     }
-    .login-card-footer-text a:hover { text-decoration: underline; }
+    @media (hover: hover) {
+      .login-card-footer-text a:hover { text-decoration: underline; }
+    }
   </style>
 </head>
 <body>

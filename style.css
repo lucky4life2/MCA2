@@ -68,16 +68,26 @@
 [data-theme="dark"] .section-image figcaption { background: var(--white); }
 [data-theme="dark"] .nav-dropdown { background: var(--white); border-color: var(--border); }
 [data-theme="dark"] .nav-dropdown li a { color: var(--mid); }
-[data-theme="dark"] .nav-dropdown li a:hover { background: var(--bg); color: var(--black); }
+@media (hover: hover) {
+  [data-theme="dark"] .nav-dropdown li a:hover { background: var(--bg); color: var(--black); }
+}
 [data-theme="dark"] .nav-account-dropdown { box-shadow: 0 6px 20px rgba(0,0,0,0.5); }
 [data-theme="dark"] .nav-account-dropdown-item { color: var(--mid); }
-[data-theme="dark"] .nav-account-dropdown-item:hover { background: var(--bg); color: var(--black); }
-[data-theme="dark"] #nav-signout-btn:hover { background: rgba(192,57,43,0.15); }
+@media (hover: hover) {
+  [data-theme="dark"] .nav-account-dropdown-item:hover { background: var(--bg); color: var(--black); }
+}
+@media (hover: hover) {
+  [data-theme="dark"] #nav-signout-btn:hover { background: rgba(192,57,43,0.15); }
+}
 [data-theme="dark"] a { color: var(--blue); }
-[data-theme="dark"] a:hover { color: var(--black); }
+@media (hover: hover) {
+  [data-theme="dark"] a:hover { color: var(--black); }
+}
 [data-theme="dark"] .nav-links a { color: var(--muted); text-decoration: none; }
-[data-theme="dark"] .nav-links a:hover,
 [data-theme="dark"] .nav-links a.active { color: var(--blue); }
+@media (hover: hover) {
+  [data-theme="dark"] .nav-links a:hover { color: var(--blue); }
+}
 /* Cards and surfaces */
 [data-theme="dark"] .callout { background: rgba(149,176,217,0.08); }
 [data-theme="dark"] .leadership-team-card { background: var(--white); }
@@ -92,8 +102,9 @@
 /* Featured banner — keep readable in dark with slightly lighter bg */
 [data-theme="dark"] .featured-banner,
 [data-theme="dark"] .featured-banner-wrap { background: #1e2d4a; }
-[data-theme="dark"] .featured-banner:hover,
-[data-theme="dark"] .featured-banner-wrap:hover .featured-banner { background: #243354; }
+@media (hover: hover) {
+  [data-theme="dark"] .featured-banner:hover, [data-theme="dark"] .featured-banner-wrap:hover .featured-banner { background: #243354; }
+}
 [data-theme="dark"] .featured-banner-title { color: var(--black); }
 [data-theme="dark"] .featured-tag { color: #111620; }  /* dark text on green always */
 [data-theme="dark"] .archive-card-category { background: var(--blue); color: #111620; }
@@ -101,20 +112,30 @@
 [data-theme="dark"] .history-table thead tr { background: #1e2d4a; }
 [data-theme="dark"] .history-table th { color: var(--mid); }
 [data-theme="dark"] .history-table td { border-color: var(--border); }
-[data-theme="dark"] .history-table tr:hover td { background: rgba(255,255,255,0.03); }
+@media (hover: hover) {
+  [data-theme="dark"] .history-table tr:hover td { background: rgba(255,255,255,0.03); }
+}
 [data-theme="dark"] .history-table .current-row td { background: rgba(108,210,110,0.06); }
 /* Leader table */
 [data-theme="dark"] .leader-table td { border-color: var(--border); }
 /* Btn outline */
 [data-theme="dark"] .btn-outline { color: var(--blue); border-color: var(--blue); }
-[data-theme="dark"] .btn-outline:hover { background: var(--blue); color: #111620; }
+@media (hover: hover) {
+  [data-theme="dark"] .btn-outline:hover { background: var(--blue); color: #111620; }
+}
 /* Checkout/primary buttons keep bg but adjust for dark */
 [data-theme="dark"] .btn-checkout { background: var(--blue); color: #111620; }
-[data-theme="dark"] .btn-checkout:hover { background: var(--blue-dark); }
+@media (hover: hover) {
+  [data-theme="dark"] .btn-checkout:hover { background: var(--blue-dark); }
+}
 [data-theme="dark"] .btn-primary { background: var(--blue); color: #111620; }
-[data-theme="dark"] .btn-primary:hover { background: var(--blue-dark); }
+@media (hover: hover) {
+  [data-theme="dark"] .btn-primary:hover { background: var(--blue-dark); }
+}
 [data-theme="dark"] .document-pdf-btn { background: var(--blue); color: #111620; }
-[data-theme="dark"] .document-pdf-btn:hover { background: var(--blue-dark); }
+@media (hover: hover) {
+  [data-theme="dark"] .document-pdf-btn:hover { background: var(--blue-dark); }
+}
 /* Slideshow controls */
 [data-theme="dark"] .slideshow-btn { background: rgba(26,32,53,0.92); border-color: var(--border); }
 /* Cart */
@@ -154,7 +175,9 @@
   flex-shrink: 0;
   margin-right: 4px;
 }
-.nav-theme-toggle:hover { color: var(--blue); background: var(--border); }
+@media (hover: hover) {
+  .nav-theme-toggle:hover { color: var(--blue); background: var(--border); }
+}
 .nav-theme-toggle svg { display: block; }
 .nav-theme-toggle .icon-sun  { display: none; }
 .nav-theme-toggle .icon-moon { display: block; }
@@ -196,14 +219,18 @@ nav {
   transition: color 0.15s; border-bottom: 2px solid transparent;
   display: inline-block;
 }
-.nav-links a:hover  { color: var(--blue); border-bottom-color: var(--green); }
+@media (hover: hover) {
+  .nav-links a:hover { color: var(--blue); border-bottom-color: var(--green); }
+}
 .nav-links a.active { color: var(--blue); border-bottom-color: var(--green); }
 .nav-discord {
   margin-left: 8px; background: #5865F2 !important; color: white !important;
   border-bottom: none !important; padding: 6px 16px !important;
   border-radius: 4px; font-weight: 600 !important; transition: background 0.15s !important;
 }
-.nav-discord:hover { background: #4752c4 !important; color: white !important; border-bottom-color: transparent !important; }
+@media (hover: hover) {
+  .nav-discord:hover { background: #4752c4 !important; color: white !important; border-bottom-color: transparent !important; }
+}
 .nav-theme-item { display: flex; align-items: center; margin-left: 8px; }
 .nav-theme-item-mobile { display: none; }
 .nav-account-item { display: flex; align-items: center; margin-left: 4px; }
@@ -233,7 +260,9 @@ nav {
   border-bottom: none !important;
   transition: background 0.12s, color 0.12s;
 }
-.nav-dropdown li a:hover { background: var(--bg); color: var(--blue); }
+@media (hover: hover) {
+  .nav-dropdown li a:hover { background: var(--bg); color: var(--blue); }
+}
 .nav-dropdown li a.active { color: var(--blue); font-weight: 600; }
 
 /* On mobile, dropdown expands inline */
@@ -269,7 +298,9 @@ nav {
   display: flex; align-items: center; gap: 6px;
   text-decoration: none; white-space: nowrap;
 }
-.nav-account-btn:hover { color: var(--blue); border-color: var(--blue); }
+@media (hover: hover) {
+  .nav-account-btn:hover { color: var(--blue); border-color: var(--blue); }
+}
 .nav-account-user { color: var(--blue); border-color: var(--blue); }
 
 /* Account dropdown */
@@ -288,7 +319,9 @@ nav {
   text-align: left; transition: background 0.12s, color 0.12s;
   text-decoration: none;
 }
-.nav-account-dropdown-item:hover { background: var(--bg); color: var(--black); }
+@media (hover: hover) {
+  .nav-account-dropdown-item:hover { background: var(--bg); color: var(--black); }
+}
 
 /* Divider between grouped items in the account dropdown */
 .nav-account-dropdown-divider { height: 1px; background: var(--border); margin: 4px 0; }
@@ -308,8 +341,12 @@ nav {
 .nav-account-submenu-panel .nav-account-dropdown-item { font-size: 12.5px; }
 
 #nav-signout-btn { color: #c0392b; }
-#nav-signout-btn:hover { background: #fdf2f2; color: #a93226; }
-[data-theme="dark"] #nav-signout-btn:hover { background: rgba(192,57,43,0.15); }
+@media (hover: hover) {
+  #nav-signout-btn:hover { background: #fdf2f2; color: #a93226; }
+}
+@media (hover: hover) {
+  [data-theme="dark"] #nav-signout-btn:hover { background: rgba(192,57,43,0.15); }
+}
 
 @media (max-width: 480px) {
   .nav-account-dropdown {
@@ -330,7 +367,9 @@ nav {
   display: flex; align-items: center; justify-content: center;
   border-radius: 4px; transition: color 0.15s, background 0.15s;
 }
-.nav-cart-btn:hover { color: var(--blue); background: var(--border); }
+@media (hover: hover) {
+  .nav-cart-btn:hover { color: var(--blue); background: var(--border); }
+}
 .nav-cart-count {
   position: absolute; top: 0; right: 0;
   background: var(--green-text); color: var(--white);
@@ -371,7 +410,9 @@ nav {
   color: var(--muted); font-size: 20px; line-height: 1;
   padding: 4px; border-radius: 3px; transition: color 0.15s;
 }
-.cart-drawer-close:hover { color: var(--black); }
+@media (hover: hover) {
+  .cart-drawer-close:hover { color: var(--black); }
+}
 .cart-drawer-body {
   flex: 1; overflow-y: auto; padding: 1rem 1.5rem;
 }
@@ -413,7 +454,9 @@ nav {
   color: var(--mid); display: flex; align-items: center; justify-content: center;
   transition: background 0.12s, border-color 0.12s;
 }
-.cart-qty-btn:hover { background: var(--bg); border-color: var(--blue); color: var(--blue); }
+@media (hover: hover) {
+  .cart-qty-btn:hover { background: var(--bg); border-color: var(--blue); color: var(--blue); }
+}
 .cart-qty { font-size: 13px; font-weight: 600; color: var(--black); min-width: 16px; text-align: center; }
 .cart-item-remove {
   background: none; border: none; cursor: pointer;
@@ -421,7 +464,9 @@ nav {
   border-radius: 3px; transition: color 0.12s;
   margin-left: auto; flex-shrink: 0;
 }
-.cart-item-remove:hover { color: #c0392b; }
+@media (hover: hover) {
+  .cart-item-remove:hover { color: #c0392b; }
+}
 .cart-drawer-footer {
   padding: 1.25rem 1.5rem;
   border-top: 1px solid var(--border);
@@ -439,7 +484,9 @@ nav {
   padding: 12px 0; border: none; border-radius: 4px;
   cursor: pointer; transition: background 0.15s, transform 0.1s ease;
 }
-.btn-checkout:hover { background: var(--blue-dark); }
+@media (hover: hover) {
+  .btn-checkout:hover { background: var(--blue-dark); }
+}
 .btn-checkout:active { transform: scale(0.97); }
 .btn-checkout:disabled {
   background: var(--border); color: var(--muted); cursor: not-allowed;
@@ -542,14 +589,18 @@ nav {
 .btn-danger {
   background: #c0392b; color: var(--white);
 }
-.btn-danger:hover { background: #a93226; }
+@media (hover: hover) {
+  .btn-danger:hover { background: #a93226; }
+}
 .btn-discord {
   background: #5865F2; color: var(--white); font-size: 13px; font-weight: 600;
   padding: 11px 22px; border: none; border-radius: 4px; cursor: pointer;
   text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
   transition: background 0.15s, transform 0.1s ease;
 }
-.btn-discord:hover { background: #4752c4; }
+@media (hover: hover) {
+  .btn-discord:hover { background: #4752c4; }
+}
 .btn-discord:active { transform: scale(0.97); }
 .btn-outline {
   background: transparent; color: var(--blue); font-size: 13px; font-weight: 600;
@@ -557,7 +608,9 @@ nav {
   cursor: pointer; text-decoration: none; display: inline-block;
   transition: background 0.15s, color 0.15s, transform 0.1s ease;
 }
-.btn-outline:hover { background: var(--blue); color: var(--white); }
+@media (hover: hover) {
+  .btn-outline:hover { background: var(--blue); color: var(--white); }
+}
 .btn-outline:active { transform: scale(0.97); }
 .btn-primary {
   background: var(--blue); color: var(--white); font-size: 13px; font-weight: 600;
@@ -565,7 +618,9 @@ nav {
   cursor: pointer; text-decoration: none; display: inline-block;
   transition: background 0.15s, transform 0.1s ease;
 }
-.btn-primary:hover { background: var(--blue-dark); }
+@media (hover: hover) {
+  .btn-primary:hover { background: var(--blue-dark); }
+}
 .btn-primary:active { transform: scale(0.97); }
 .btn-sm { padding: 6px 12px; font-size: 12px; }
 
@@ -654,7 +709,9 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 2rem 0; 
   border-radius: 4px; padding: 5px 10px; cursor: pointer;
   transition: background 0.15s; flex-shrink: 0;
 }
-.copy-btn:hover { filter: brightness(0.92); }
+@media (hover: hover) {
+  .copy-btn:hover { filter: brightness(0.92); }
+}
 
 /* ── STATUS BADGE ── */
 .status-badge {
@@ -783,7 +840,9 @@ footer {
   gap: 7px;
   transition: color 0.15s;
 }
-.footer-col a:hover { color: var(--blue); }
+@media (hover: hover) {
+  .footer-col a:hover { color: var(--blue); }
+}
 .footer-col a svg { flex-shrink: 0; }
 
 /* ── TOAST ── */
@@ -814,7 +873,9 @@ footer {
   flex-shrink: 0; background: var(--blue); color: #fff; border: none; border-radius: 4px;
   font-size: 13px; font-weight: 600; padding: 8px 18px; cursor: pointer; transition: background .15s;
 }
-.cookie-banner-dismiss:hover { background: var(--blue-dark); }
+@media (hover: hover) {
+  .cookie-banner-dismiss:hover { background: var(--blue-dark); }
+}
 
 /* ── HAMBURGER MENU ─────────────────────────────────────────── */
 .nav-hamburger {
@@ -886,11 +947,17 @@ footer {
     border-left: 3px solid transparent;
   }
 
-  .nav-links a:hover,
   .nav-links a.active {
     border-left-color: var(--green);
     border-bottom: none !important;
     background: rgba(24,72,158,0.03);
+  }
+  @media (hover: hover) {
+    .nav-links a:hover {
+        border-left-color: var(--green);
+        border-bottom: none !important;
+        background: rgba(24,72,158,0.03);
+      }
   }
 
   .nav-discord {
@@ -1071,8 +1138,12 @@ footer {
   transition: background 0.15s, opacity 0.15s, transform 0.1s ease;
   z-index: 10; opacity: 0; line-height: 1;
 }
-.slideshow:hover .slideshow-btn { opacity: 1; }
-.slideshow-btn:hover { background: var(--white); }
+@media (hover: hover) {
+  .slideshow:hover .slideshow-btn { opacity: 1; }
+}
+@media (hover: hover) {
+  .slideshow-btn:hover { background: var(--white); }
+}
 /* Press feedback — keeps the vertical centering, adds the 0.97 squash. */
 .slideshow-btn:active { transform: translateY(-50%) scale(0.97); }
 .slideshow-btn.prev { left: 12px; }
@@ -1189,7 +1260,9 @@ footer {
 .history-table td:first-child { color: var(--black); white-space: nowrap; }
 .history-table td:nth-child(2) { white-space: nowrap; color: var(--muted); font-size: 13px; }
 .history-table tbody tr:last-child td { border-bottom: none; }
-.history-table tbody tr:hover { background: rgba(24,72,158,0.03); }
+@media (hover: hover) {
+  .history-table tbody tr:hover { background: rgba(24,72,158,0.03); }
+}
 
 /* Highlight the current/active server row */
 .history-table .current-row td { background: rgba(108,210,110,0.08); }
@@ -1323,8 +1396,10 @@ footer {
 .news-card:first-child { padding-top: 0; }
 .news-card:last-child  { border-bottom: none; }
 
-.news-card:hover .news-card-title {
-  color: var(--blue);
+@media (hover: hover) {
+  .news-card:hover .news-card-title {
+    color: var(--blue);
+  }
 }
 
 .news-card-meta {
@@ -1451,7 +1526,9 @@ footer {
   transition: color 0.15s;
 }
 
-.article-back:hover { color: var(--green-text); }
+@media (hover: hover) {
+  .article-back:hover { color: var(--green-text); }
+}
 
 .article-body h1,
 .article-body h2,
@@ -1496,7 +1573,9 @@ footer {
   text-underline-offset: 3px;
 }
 
-.article-body a:hover { color: var(--green-text); }
+@media (hover: hover) {
+  .article-body a:hover { color: var(--green-text); }
+}
 
 /* Pull quote */
 .pull-quote {
@@ -1555,8 +1634,10 @@ footer {
   transition: background 0.15s;
 }
 
-.featured-banner:hover {
-  background: var(--blue-dark);
+@media (hover: hover) {
+  .featured-banner:hover {
+    background: var(--blue-dark);
+  }
 }
 
 .featured-banner-inner {
@@ -1822,8 +1903,10 @@ footer {
   transition: box-shadow 0.15s;
 }
 
-.leadership-team-card:hover {
-  box-shadow: 0 4px 16px rgba(24,72,158,0.08);
+@media (hover: hover) {
+  .leadership-team-card:hover {
+    box-shadow: 0 4px 16px rgba(24,72,158,0.08);
+  }
 }
 
 .leadership-team-name {
@@ -1893,7 +1976,9 @@ footer {
   transition: all 0.15s;
 }
 
-.archive-filter-btn:hover { border-color: var(--blue); color: var(--blue); }
+@media (hover: hover) {
+  .archive-filter-btn:hover { border-color: var(--blue); color: var(--blue); }
+}
 .archive-filter-btn.active {
   background: var(--blue);
   border-color: var(--blue);
@@ -1941,7 +2026,9 @@ footer {
 }
 
 .archive-card:last-child { border-bottom: none; }
-.archive-card:hover .archive-card-title { color: var(--blue); }
+@media (hover: hover) {
+  .archive-card:hover .archive-card-title { color: var(--blue); }
+}
 
 .archive-card-thumb {
   width: 72px;
@@ -2107,7 +2194,9 @@ footer {
   transition: background 0.15s;
 }
 
-.document-pdf-btn:hover { background: var(--blue-dark); }
+@media (hover: hover) {
+  .document-pdf-btn:hover { background: var(--blue-dark); }
+}
 
 /* ── FEATURED BANNER DISMISS BUTTON ─────────────────────────── */
 .featured-banner-dismiss {
@@ -2125,7 +2214,9 @@ footer {
   transition: color 0.15s;
   flex-shrink: 0;
 }
-.featured-banner-dismiss:hover { color: white; }
+@media (hover: hover) {
+  .featured-banner-dismiss:hover { color: white; }
+}
 
 /* Make the banner wrapper relative so dismiss button can be positioned */
 #featured-banner { position: relative; }
@@ -2154,7 +2245,9 @@ footer {
   color: var(--mid);
   font-family: inherit;
 }
-.nation-back-btn:hover { border-color: var(--blue); color: var(--blue); }
+@media (hover: hover) {
+  .nation-back-btn:hover { border-color: var(--blue); color: var(--blue); }
+}
 
 /* ══ Economy & Exchange ═══════════════════════════════════════
    Shared by economy.html and stocks.html. Page shell, cards,
@@ -2216,7 +2309,9 @@ footer {
 
 .econ-tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
 .econ-tab { background: none; border: none; border-bottom: 2px solid transparent; padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; font-family: inherit; }
-.econ-tab:hover { color: var(--blue); }
+@media (hover: hover) {
+  .econ-tab:hover { color: var(--blue); }
+}
 .econ-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
 
 .econ-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
@@ -2321,7 +2416,9 @@ html[data-member-gate] body > :not(nav):not(footer):not(script):not(.member-gate
   font-size: 13px; color: var(--muted); cursor: pointer; text-align: left;
   display: flex; align-items: center;
 }
-.footer-copy-btn:hover { color: var(--blue); }
+@media (hover: hover) {
+  .footer-copy-btn:hover { color: var(--blue); }
+}
 .footer-copy-btn:focus { outline: 3px solid var(--blue); outline-offset: 1px; border-radius: 4px; }
 
 /* Site search page */
@@ -2336,13 +2433,52 @@ html[data-member-gate] body > :not(nav):not(footer):not(script):not(.member-gate
 .search-results { list-style: none; margin: 1.5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 1rem; }
 .search-result { border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; background: var(--white); }
 .search-result a { font-weight: 600; font-size: 16px; text-decoration: none; }
-.search-result a:hover { text-decoration: underline; }
+@media (hover: hover) {
+  .search-result a:hover { text-decoration: underline; }
+}
 .search-result-kind { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .search-result-desc { color: var(--mid); font-size: 14px; line-height: 1.5; margin: 0.35rem 0 0; }
 .search-empty { color: var(--muted); font-size: 15px; margin-top: 1.5rem; }
 .search-note { color: var(--muted); font-size: 13px; margin-top: 1.5rem; }
 
 /* Print: hide navigation and interactive chrome, expand the content. */
+@media print {
+/* ── Mobile touch rules — 10 niche mobile hacks ──────────────────
+   Touch-only properties are safe to apply globally (they are no-ops
+   on desktop); the 16px input rule is scoped to small screens so
+   desktop type is untouched. */
+
+/* 1. Inputs at 16px or more on small screens, so iPhones don't zoom
+   in when a field is tapped. */
+@media (max-width: 768px) {
+  input, select, textarea { font-size: 16px; }
+  /* Hover can no longer reveal the slideshow arrows on touch, so
+     keep them visible on small screens. */
+  .slideshow-btn { opacity: 1; }
+}
+
+/* 2. No grey tap flash on links and buttons. Buttons already have
+   their own :active squash; links get a subtle press fade on coarse
+   pointers. */
+a, button { -webkit-tap-highlight-color: transparent; }
+@media (pointer: coarse) {
+  a:active { opacity: 0.75; }
+}
+
+/* 6. Scrollable popups, sheets and drawers keep their scroll to
+   themselves instead of scrolling the page behind them. The two
+   modals get a viewport cap + their own scroll so the rule has
+   something to contain on small screens. */
+.mca-modal, .econ-modal {
+  overscroll-behavior: contain;
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
+}
+.cart-drawer-body { overscroll-behavior: contain; }
+
+/* 8. Quick taps on buttons and links shouldn't zoom the page. */
+button, a { touch-action: manipulation; }
+
 @media print {
   nav, footer, .cookie-banner, .toast, .mca-back-to-top, .mca-modal-overlay,
   button, .btn, .news-search-wrap, .search-input-wrap { display: none !important; }
