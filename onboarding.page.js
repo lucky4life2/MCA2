@@ -95,14 +95,17 @@ document.getElementById('btn-path-continue').addEventListener('click', () => {
 // ── DOB selects: month + year only (option 3). The signup edge function
 // still expects a full DOB date, so we send the first of the month
 // (YYYY-MM-01) — age validation and the age band still compute from it.
-// Year range covers the school-club age band (13–19): a 19-year-old can
-// have been born in thisYear-20 (e.g. December), and a 13-year-old in
-// thisYear-13.
+// Year range covers the school-club age band (5–19): a 19-year-old can
+// have been born in thisYear-20 (e.g. December), and a 5-year-old in
+// thisYear-5. Under-13s land in coppa_restricted until a parent approves
+// (see the account-page age gate); the year list has to include them or
+// they cannot sign up at all. The youngest year (thisYear-5) is the
+// elementary-school floor — raise it if MCA ever sets a minimum age.
 const dobMonthEl = document.getElementById('signup-dob-month');
 const dobYearEl = document.getElementById('signup-dob-year');
 if (dobYearEl) {
   const thisYear = new Date().getFullYear();
-  for (let y = thisYear - 13; y >= thisYear - 20; y--) {
+  for (let y = thisYear - 5; y >= thisYear - 20; y--) {
     dobYearEl.insertAdjacentHTML('beforeend', `<option value="${y}">${y}</option>`);
   }
 }
