@@ -271,7 +271,14 @@ async function uploadFileIfNeeded() {
   if (_pendingFile.size > 10 * 1024 * 1024) throw new Error('That file is over 10 MB. Please choose a smaller file.');
   const ext = (_pendingFile.name.split('.').pop() || '').toLowerCase();
   const path = `${_user.id}/${Date.now()}-${slugify(_pendingFile.name.replace(/\.[^.]+$/, ''))}.${ext}`;
-  const { error } = await supabase.storage.from(BUCKET).upload(path, _pendingFile);
+  // The storage RLS policy allowlists mimetypes (application/pdf, image/*),
+  // but the recorded mimetype comes from the browser File's type, which is
+  // empty when the file arrives without one — and then the policy rejects
+  // the insert with "new row violates row-level security policy". Send the
+  // type explicitly from the extension so the upload no longer depends on
+  // the browser's MIME sniffing.
+  const contentType = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', pdf: 'application/pdf' }[ext] || _pendingFile.type || 'application/octet-stream';
+  const { error } = await supabase.storage.from(BUCKET).upload(path, _pendingFile, { contentType });
   if (error) throw error;
   // The bucket is private: store the storage PATH, not a public URL.
   // Render sites mint a short-lived signed URL from the path
