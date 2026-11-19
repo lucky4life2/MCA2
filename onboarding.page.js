@@ -92,25 +92,42 @@ document.getElementById('btn-path-continue').addEventListener('click', () => {
   showStep('done');
 });
 
-// ── DOB selects: month + year only (option 3). The signup edge function
-// still expects a full DOB date, so we send the first of the month
-// (YYYY-MM-01) — age validation and the age band still compute from it.
+// ── DOB selects: month + day + year (full date, same as login.html).
+// The signup edge function expects a full DOB date; buildDob() returns
+// '' for a blank or impossible combination (e.g. Feb 30) via the same
+// round-trip check login.html uses, so the age band computes from an
+// exact birthday instead of the first of the month.
 // Year range covers the school-club age band (13–19): a 19-year-old can
 // have been born in thisYear-20 (e.g. December), and a 13-year-old in
 // thisYear-13.
 const dobMonthEl = document.getElementById('signup-dob-month');
+const dobDayEl = document.getElementById('signup-dob-day');
 const dobYearEl = document.getElementById('signup-dob-year');
+if (dobDayEl) {
+  for (let d = 1; d <= 31; d++) {
+    const v = String(d).padStart(2, '0');
+    dobDayEl.insertAdjacentHTML('beforeend', `<option value="${v}">${d}</option>`);
+  }
+}
 if (dobYearEl) {
   const thisYear = new Date().getFullYear();
   for (let y = thisYear - 13; y >= thisYear - 20; y--) {
     dobYearEl.insertAdjacentHTML('beforeend', `<option value="${y}">${y}</option>`);
   }
 }
+// Combines the three selects into "YYYY-MM-DD", or returns '' if any is
+// blank or the combination isn't a real calendar date (e.g. Feb 30) —
+// Date normalizes overflow instead of erroring, so round-tripping through
+// it and comparing the parts back is what actually catches that.
 function buildDob() {
   const m = dobMonthEl ? dobMonthEl.value : '';
+  const d = dobDayEl ? dobDayEl.value : '';
   const y = dobYearEl ? dobYearEl.value : '';
-  if (!m || !y) return '';
-  return `${y}-${m}-01`;
+  if (!m || !d || !y) return '';
+  const iso = `${y}-${m}-${d}`;
+  const dt = new Date(`${iso}T00:00:00Z`);
+  if (dt.getUTCFullYear() !== Number(y) || dt.getUTCMonth() + 1 !== Number(m) || dt.getUTCDate() !== Number(d)) return '';
+  return iso;
 }
 const todayIso = new Date().toISOString().slice(0, 10);
 

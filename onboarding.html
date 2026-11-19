@@ -391,7 +391,7 @@
           <div class="onboard-divider"><span class="onboard-divider-text">or</span></div>
           <div class="onboard-consent">
             <input type="checkbox" id="signup-consent">
-            <label for="signup-consent">I agree to the <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</label>
+            <label for="signup-consent">I agree to the <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>. If I'm under 13, I understand a parent or guardian must approve my account before I can use it.</label>
           </div>
           <div class="onboard-error" id="signup-consent-error">Please accept the Terms of Service and Privacy Policy to continue.</div>
           <button class="onboard-btn-primary" id="btn-show-email-form" style="margin-top:4px;">Continue with email</button>
@@ -420,11 +420,14 @@
                 <option value="07">July</option><option value="08">August</option><option value="09">September</option>
                 <option value="10">October</option><option value="11">November</option><option value="12">December</option>
               </select>
+              <select id="signup-dob-day" class="onboard-form-input" autocomplete="bday-day" style="flex:0 0 90px;">
+                <option value="">Day</option>
+              </select>
               <select id="signup-dob-year" class="onboard-form-input" autocomplete="bday-year" style="flex:0 0 120px;">
                 <option value="">Year</option>
               </select>
             </div>
-            <div class="onboard-hint">Month and year only — we use them to apply age-appropriate protections.</div>
+            <div class="onboard-hint">We ask for your birthday so we can apply the right protections for your age. If you're under 13, a parent or guardian will need to approve your account before you can use it — we'll email them a link to review and approve. Your birthday can't be changed once you enter it.</div>
           </div>
           <div class="onboard-form-group">
             <label class="onboard-form-label" for="signup-club">Your Club</label>
