@@ -796,13 +796,13 @@ document.getElementById('np-summary').addEventListener('input', updateCharCounts
 document.getElementById('np-body').addEventListener('input', () => { updatePreview(); updateCharCounts(); });
 
 // ── Button wiring ─────────────────────────────────────────────
-document.getElementById('btn-clear-editor').addEventListener('click', () => {
-  if (document.getElementById('np-title').value && !confirm('Clear the editor? Unsaved changes will be lost.')) return;
+document.getElementById('btn-clear-editor').addEventListener('click', async () => {
+  if (document.getElementById('np-title').value && !(await mcaConfirm({ title: 'Clear the editor?', message: 'Unsaved changes will be lost.', confirmText: 'Clear' }))) return;
   clearEditor();
 });
 document.getElementById('btn-save-draft').addEventListener('click', () => saveArticle('draft'));
-document.getElementById('btn-publish').addEventListener('click', () => {
-  if (!confirm('Publish this article? It will be visible to everyone on the website.')) return;
+document.getElementById('btn-publish').addEventListener('click', async () => {
+  if (!(await mcaConfirm({ title: 'Publish this article?', message: 'It will be visible to everyone on the website.', confirmText: 'Publish' }))) return;
   saveArticle('published');
 });
 
