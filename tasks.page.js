@@ -1047,6 +1047,13 @@ document.getElementById('tk-comments').addEventListener('click', async (e) => {
   }
 });
 
+document.getElementById('tk-comment-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    document.getElementById('tk-comment-add').click();
+  }
+});
+
 document.getElementById('tk-comment-add').onclick = async () => {
   const taskId = document.getElementById('tk-id').value;
   const input = document.getElementById('tk-comment-input');

@@ -135,7 +135,9 @@
       transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
       font-family: 'Open Sans', sans-serif;
     }
-    .onboard-path-card:hover { border-color: var(--blue); box-shadow: 0 2px 12px rgba(24,68,158,0.10); }
+    @media (hover: hover) {
+      .onboard-path-card:hover { border-color: var(--blue); box-shadow: 0 2px 12px rgba(24,68,158,0.10); }
+    }
     .onboard-path-card.selected {
       border-color: var(--blue); background: #eef3fc;
       box-shadow: 0 2px 12px rgba(24,68,158,0.12);
@@ -193,7 +195,9 @@
       display: flex; align-items: center; justify-content: center; gap: 8px;
       margin-bottom: 4px;
     }
-    .onboard-btn-discord:hover { background: #4752c4; }
+    @media (hover: hover) {
+      .onboard-btn-discord:hover { background: #4752c4; }
+    }
     .onboard-btn-discord:active { transform: scale(0.97); }
     .onboard-btn-google {
       width: 100%; background: #fff; color: #3c4043;
@@ -203,7 +207,9 @@
       display: flex; align-items: center; justify-content: center; gap: 8px;
       margin-bottom: 4px;
     }
-    .onboard-btn-google:hover { background: #f7f8f8; border-color: #c9ccd1; }
+    @media (hover: hover) {
+      .onboard-btn-google:hover { background: #f7f8f8; border-color: #c9ccd1; }
+    }
     .onboard-btn-google:active { transform: scale(0.97); }
     .onboard-btn-primary {
       width: 100%; background: var(--blue); color: #fff;
@@ -211,7 +217,9 @@
       padding: 11px 0; border: none; border-radius: 4px;
       cursor: pointer; transition: background 0.15s, transform 0.1s ease; margin-top: 4px;
     }
-    .onboard-btn-primary:hover { background: var(--blue-dark); }
+    @media (hover: hover) {
+      .onboard-btn-primary:hover { background: var(--blue-dark); }
+    }
     .onboard-btn-primary:active { transform: scale(0.97); }
     .onboard-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
     .onboard-btn-outline {
@@ -220,7 +228,9 @@
       padding: 11px 0; border: 1px solid var(--blue); border-radius: 4px;
       cursor: pointer; transition: background 0.15s, transform 0.1s ease; margin-top: 8px;
     }
-    .onboard-btn-outline:hover { background: #eef3fc; }
+    @media (hover: hover) {
+      .onboard-btn-outline:hover { background: #eef3fc; }
+    }
     .onboard-btn-outline:active { transform: scale(0.97); }
     .onboard-error {
       font-size: 12px; color: #c0392b;
@@ -238,7 +248,9 @@
       background: none; border: none; width: 100%;
       font-family: 'Open Sans', sans-serif;
     }
-    .onboard-back-link:hover { color: var(--blue); }
+    @media (hover: hover) {
+      .onboard-back-link:hover { color: var(--blue); }
+    }
     .onboard-hint {
       font-size: 11px; color: var(--muted);
       margin-top: 4px; line-height: 1.5;
@@ -255,13 +267,17 @@
       font-size: 12px; color: var(--muted); line-height: 1.5; cursor: pointer;
     }
     .onboard-consent a { color: var(--blue); text-decoration: none; }
-    .onboard-consent a:hover { text-decoration: underline; }
+    @media (hover: hover) {
+      .onboard-consent a:hover { text-decoration: underline; }
+    }
     .onboard-oauth-note {
       font-size: 11px; color: var(--muted); line-height: 1.5;
       text-align: center; margin: 10px 0 2px;
     }
     .onboard-oauth-note a { color: var(--blue); text-decoration: none; }
-    .onboard-oauth-note a:hover { text-decoration: underline; }
+    @media (hover: hover) {
+      .onboard-oauth-note a:hover { text-decoration: underline; }
+    }
 
     /* Done step */
     .onboard-done-icon {
@@ -296,7 +312,9 @@
     }
     .onboard-next-step strong { color: var(--black); }
     .onboard-next-step a { color: var(--blue); text-decoration: none; }
-    .onboard-next-step a:hover { text-decoration: underline; }
+    @media (hover: hover) {
+      .onboard-next-step a:hover { text-decoration: underline; }
+    }
 
     .onboard-card-footer {
       padding: 1rem 2rem;
@@ -309,7 +327,9 @@
     .onboard-card-footer-text a {
       color: var(--blue); text-decoration: none; font-weight: 600;
     }
-    .onboard-card-footer-text a:hover { text-decoration: underline; }
+    @media (hover: hover) {
+      .onboard-card-footer-text a:hover { text-decoration: underline; }
+    }
   </style>
 </head>
 <body>
