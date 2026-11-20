@@ -609,7 +609,7 @@ async function renderClubManage(clubId) {
 // renderMembership() above and the server's private.membership_state():
 // any non-'none' membership whose period end is still in the future
 // counts as paid — active, trialing, past-due, and cancelled-with-time-
-// remaining all keep server access (that's also what the MCAVerify join
+// remaining all keep server access (that's also what the MCA plugin join
 // gate allows). A never-paid or expired membership does not. The
 // Minecraft name entry and verify-code generation only exist behind
 // this gate; before payment the section shows a locked message with a

@@ -4,7 +4,7 @@ import { supabase } from './supabase.js';
 // Step-by-step account creation: account first, then "how you play",
 // then done. Minecraft verification is NOT part of this wizard — it
 // unlocks on the account page only after the member has paid, and the
-// MCAVerify plugin's join gate is what keeps the server locked until
+// MCA plugin's join gate is what keeps the server locked until
 // then. Reuses the same server calls as login.html (signup-with-email,
 // verify-signup-code, resend-signup-code), so the wizard is a new front
 // door, not a second auth system.
