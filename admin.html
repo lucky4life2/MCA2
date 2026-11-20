@@ -570,11 +570,11 @@
         </div>
         <div class="plugin-status">
           <div class="plugin-dot unknown" id="economy-plugin-dot"></div>
-          <span id="economy-plugin-status-text">Checking economy plugin...</span>
+          <span id="economy-plugin-status-text">Checking economy heartbeat...</span>
         </div>
         <div style="padding:0 1.5rem 1.25rem;">
           <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:.75rem;">
-            The plugin bridge allows the MCA Minecraft server to call the <code style="font-family:monospace;font-size:12px;">/mcaverify</code> Supabase Edge Function when a player runs the command in-game.
+            The MCA plugin is one jar now (Minecraft verification + economy). The bridge lets the server call the <code style="font-family:monospace;font-size:12px;">/mcaverify</code> Supabase Edge Function when a player runs the command in-game, and the plugin sends a heartbeat every minute.
           </p>
           <button class="btn btn-outline" id="btn-ping-plugin">Ping Bridge</button>
         </div>

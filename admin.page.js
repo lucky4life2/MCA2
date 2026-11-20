@@ -1684,7 +1684,7 @@ async function checkPluginBridge() {
   try {
     const { data, error } = await supabase.from('settings').select('value').eq('key', 'plugin_heartbeat').single();
     if (error || !data) {
-      dot.className = 'plugin-dot offline'; text.textContent = 'Edge Function is reachable, but the plugin has never sent a heartbeat. Is MCAVerify installed and running?'; badge.textContent = 'Plugin Not Detected'; badge.className = 'badge badge-unlinked';
+      dot.className = 'plugin-dot offline'; text.textContent = 'Edge Function is reachable, but the plugin has never sent a heartbeat. Is the MCA plugin installed and running?'; badge.textContent = 'Plugin Not Detected'; badge.className = 'badge badge-unlinked';
       return;
     }
     const heartbeat = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
@@ -1709,14 +1709,14 @@ document.getElementById('btn-ping-plugin').addEventListener('click', () => {
   checkEconomyPlugin();
 });
 
-// Economy plugin heartbeat — same settings-table mechanism as MCAVerify,
+// Economy heartbeat — same settings-table mechanism as the verify heartbeat,
 // under its own key. No Edge Function involved.
 async function checkEconomyPlugin() {
   const dot = document.getElementById('economy-plugin-dot'), text = document.getElementById('economy-plugin-status-text');
   try {
     const { data, error } = await supabase.from('settings').select('value').eq('key', 'economy_plugin_heartbeat').single();
     if (error || !data) {
-      dot.className = 'plugin-dot offline'; text.textContent = 'Economy plugin: no heartbeat yet. Is MCAEconomy installed and running?';
+      dot.className = 'plugin-dot offline'; text.textContent = 'Economy heartbeat: no heartbeat yet. Is the MCA plugin installed and running?';
       return;
     }
     const heartbeat = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
@@ -1724,13 +1724,13 @@ async function checkEconomyPlugin() {
     const ageMs = Date.now() - lastSeen.getTime();
     const ago = humanizeDuration(ageMs);
     if (isNaN(ageMs) || ageMs > PLUGIN_HEARTBEAT_STALE_MS) {
-      dot.className = 'plugin-dot offline'; text.textContent = `Economy plugin: heartbeat stale (last seen ${ago}).`;
+      dot.className = 'plugin-dot offline'; text.textContent = `Economy heartbeat stale (last seen ${ago}).`;
       return;
     }
     const server = heartbeat.server ? ` · ${heartbeat.server}` : '';
-    dot.className = 'plugin-dot online'; text.textContent = `Economy plugin running (last heartbeat ${ago}${server}).`;
+    dot.className = 'plugin-dot online'; text.textContent = `Economy heartbeat running (last heartbeat ${ago}${server}).`;
   } catch(e) {
-    dot.className = 'plugin-dot offline'; text.textContent = 'Economy plugin: could not read heartbeat from Supabase.';
+    dot.className = 'plugin-dot offline'; text.textContent = 'Economy heartbeat: could not read heartbeat from Supabase.';
   }
 }
 
