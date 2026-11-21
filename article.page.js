@@ -128,7 +128,7 @@ if (!slug) {
   try {
     const { data: articles, error } = await supabase
       .from('news_articles')
-      .select('id,title,slug,summary,body,category,author_name,published_at,updated_at,image_url,status')
+      .select('id,title,slug,summary,body,category,author_name,published_at,updated_at,image_url,hero_images,status')
       .eq('status', 'published')
       .eq('slug', slug)
       .limit(1);
@@ -168,10 +168,23 @@ if (!slug) {
 
       // news-images is a private bucket: the stored image_url is a storage
       // path (or a legacy public URL). Mint a signed URL for the hero
-      // image and for any inline photos embedded in the body markdown.
+      // images and for any inline photos embedded in the body markdown.
       // This page only ever loads published rows, so the publication
       // gate passes here; a failed mint renders no hero image.
       const heroUrl = await signedUrlForPublished('news-images', article.image_url, { status: article.status });
+      const extraHeroes = (Array.isArray(article.hero_images) ? article.hero_images : []).filter(v => typeof v === 'string' && v);
+      const extraHeroUrls = [];
+      for (const v of extraHeroes) {
+        const u = await signedUrlForPublished('news-images', v, { status: article.status });
+        if (u) extraHeroUrls.push(u);
+      }
+      // Main hero first, then the extra heroes; extraStart is the gallery
+      // index of the first extra (1 when there is a main hero, 0 when the
+      // main slot is empty and the extras carry the gallery alone).
+      const heroGallery = [];
+      if (safeUrl(heroUrl)) heroGallery.push(safeUrl(heroUrl));
+      const extraStart = heroGallery.length;
+      for (const u of extraHeroUrls) { const s = safeUrl(u); if (s) heroGallery.push(s); }
       const bodyMd = await resolvePrivateBucketImagesInMarkdown('news-images', bodyMdRaw, { status: article.status });
 
       bodyEl.innerHTML = `
@@ -184,7 +197,7 @@ if (!slug) {
                 Share
               </button>
             </div>
-            ${safeUrl(heroUrl) ? `<div class="article-image" style="margin-bottom:2rem;"><img src="${esc(safeUrl(heroUrl))}" alt="${esc(article.title)}"></div>` : ''}
+            ${heroGallery.length ? `<div class="article-image" style="margin-bottom:2rem;"><img id="article-hero-main" src="${esc(heroGallery[0])}" alt="${esc(article.title)}">${extraHeroUrls.length ? `<div id="article-hero-thumbs" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">${extraHeroUrls.map((u, i) => `<img src="${esc(safeUrl(u))}" data-hero-thumb="${extraStart + i}" alt="Hero photo ${extraStart + i + 1}" style="width:72px;height:54px;object-fit:cover;border-radius:4px;cursor:pointer;">`).join('')}</div>` : ''}</div>` : ''}
             <div class="article-meta-top">
               <span class="news-card-category">${esc(cat)}</span>
               <span style="font-size:12px;color:var(--muted);">${esc(formatDate(article.published_at))}</span>
@@ -204,6 +217,17 @@ if (!slug) {
         </div>`;
 
       document.getElementById('share-btn').addEventListener('click', () => shareArticle(article));
+
+      // Extra hero images: clicking a thumbnail swaps the main hero photo.
+      const heroThumbs = document.querySelectorAll('#article-hero-thumbs [data-hero-thumb]');
+      heroThumbs.forEach(thumb => thumb.addEventListener('click', () => {
+        const main = document.getElementById('article-hero-main');
+        const url = heroGallery[Number(thumb.dataset.heroThumb)];
+        if (main && url) {
+          main.src = url;
+          heroThumbs.forEach(t => t.style.outline = t === thumb ? '2px solid var(--blue)' : 'none');
+        }
+      }));
 
       loadingEl.style.display = 'none';
       bodyEl.style.display = 'block';
