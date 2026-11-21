@@ -430,6 +430,8 @@ function clearEditor() {
   document.getElementById('np-body').value       = '';
   document.getElementById('np-author-name').value    = '';
   document.getElementById('np-published-at').value   = '';
+  _articlePhotos = [];
+  renderPhotoStrip();
   setCoauthors([]);
   document.getElementById('editor-heading').textContent = 'New Article';
   document.getElementById('np-summary-count').textContent = '0 / 280';
@@ -445,9 +447,18 @@ window.loadIntoEditor = async (id) => {
   document.getElementById('np-editing-id').value = id;
   document.getElementById('np-title').value      = a.title   || '';
   document.getElementById('np-category').value   = a.category || '';
+  _articlePhotos = [];
   setHeroImage(a.image_url || '');
   document.getElementById('np-summary').value    = a.summary  || '';
   document.getElementById('np-body').value       = a.body     || '';
+  // Photos already in the body join the strip, so reopening an article
+  // shows all of its photos in the box, not just the hero.
+  for (const m of (a.body || '').matchAll(/!\[[^\]]*\]\(([^)\s]+)\)/g)) {
+    const u = m[1];
+    if (!u || u.startsWith('data:') || u === (a.image_url || '')) continue;
+    trackArticlePhoto(u, '');
+  }
+  renderPhotoStrip();
   document.getElementById('np-author-name').value = a.author_name || '';
   setCoauthors(_coauthorsSupported ? await resolveCoauthorNames(a.coauthor_ids) : []);
   if (a.published_at) {
@@ -488,6 +499,38 @@ async function uploadNewsImage(file) {
   return path;
 }
 
+// Non-hero photos attached to the article in this editor session: hero
+// dropzone extras, inline Photo uploads, and images already in the body
+// when an article is loaded. The hero itself lives in the #np-image input;
+// this list is everything else, shown as a thumbnail strip under the hero
+// preview so all of the article's photos show up in the box together.
+let _articlePhotos = []; // [{ value, alt }]
+function trackArticlePhoto(value, alt) {
+  if (!value) return;
+  if (_articlePhotos.some(p => p.value === value)) return;
+  _articlePhotos.push({ value, alt: alt || value.split('/').pop() || 'photo' });
+}
+
+async function renderPhotoStrip() {
+  const box = document.getElementById('np-image-thumbs');
+  if (!_articlePhotos.length) { box.innerHTML = ''; box.style.display = 'none'; return; }
+  box.innerHTML = '<div style="width:100%;font-size:10px;color:var(--muted);text-align:center;">Also in this article:</div>' + _articlePhotos.map((p, i) =>
+    `<div style="width:64px;text-align:center;">
+       <img data-idx="${i}" alt="${esc(p.alt)}" style="width:64px;height:48px;object-fit:cover;border-radius:4px;display:block;background:var(--bg);">
+       <div style="font-size:9px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(p.alt)}">${esc(p.alt)}</div>
+     </div>`).join('');
+  box.style.display = 'flex';
+  for (let i = 0; i < _articlePhotos.length; i++) {
+    const p = _articlePhotos[i];
+    const img = box.querySelector(`[data-idx="${i}"]`);
+    if (!img) continue;
+    const src = await signedUrlForPublished('news-images', p.value, { isAuthorOrApprover: true });
+    // The strip may have re-rendered while the signed URL was minting;
+    // only fill in the image that is still showing for this photo.
+    if (src && img.isConnected && img.dataset.idx === String(i)) img.src = src;
+  }
+}
+
 async function setHeroImage(url) {
   // The np-image input keeps the STORED value (a storage path, a legacy
   // public URL, or a hand-pasted external URL). The preview <img> needs
@@ -503,7 +546,7 @@ async function setHeroImage(url) {
   const showUrl = (current === (url || '')) ? previewUrl : null;
   document.getElementById('np-image-preview').src = showUrl || '';
   document.getElementById('np-image-preview-wrap').style.display = showUrl ? '' : 'none';
-  document.getElementById('np-image-dropzone-label').textContent = url ? 'Click to replace' : 'Drag & drop photos here, or click to browse';
+  document.getElementById('np-image-dropzone-label').textContent = url ? 'Click to add more photos' : 'Drag & drop photos here, or click to browse';
 }
 
 // Hero dropzone accepts more than one photo: the first successful upload
@@ -521,23 +564,28 @@ async function handleHeroFiles(fileList) {
   const uploadingEl = document.getElementById('np-image-uploading');
   errEl.style.display = 'none';
   uploadingEl.style.display = '';
-  let heroSet = false;
+  // The hero persists across separate uploads: only the first photo ever
+  // becomes the hero. A later drop/pick adds to the article instead of
+  // replacing the hero that is already showing in the box.
+  let hasHero = !!document.getElementById('np-image').value;
   let addedToBody = 0;
   const failures = [];
   for (const file of files) {
     try {
       const path = await uploadNewsImage(file);
-      if (!heroSet) {
+      if (!hasHero) {
         await setHeroImage(path);
-        heroSet = true;
+        hasHero = true;
       } else {
         appendBodyImage(file.name, path);
+        trackArticlePhoto(path, file.name.replace(/\.[^.]+$/, ''));
         addedToBody++;
       }
     } catch (err) {
       failures.push(file.name + ': ' + err.message);
     }
   }
+  renderPhotoStrip();
   uploadingEl.style.display = 'none';
   if (failures.length) {
     errEl.textContent = 'Upload failed for ' + failures.length + ' photo' + (failures.length === 1 ? '' : 's') + ': ' + failures[0];
@@ -613,12 +661,14 @@ npInlineImageFile.addEventListener('change', async e => {
       const path = await uploadNewsImage(p.file);
       const alt = p.file.name.replace(/\.[^.]+$/, '');
       textarea.value = textarea.value.replace(p.text, `![${alt}](${path})`);
+      trackArticlePhoto(path, alt);
     } catch (err) {
       textarea.value = textarea.value.replace(p.text, '');
       failures.push(p.file.name + ': ' + err.message);
     }
     updatePreview(); updateCharCounts();
   }
+  renderPhotoStrip();
   if (failures.length) toast('Photo upload failed for ' + failures.length + ': ' + failures[0], true);
   if (picked.length > files.length) toast('Skipped ' + (picked.length - files.length) + ' non-image file' + (picked.length - files.length === 1 ? '' : 's') + '.', true);
 });
