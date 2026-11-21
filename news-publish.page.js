@@ -425,7 +425,8 @@ function clearEditor() {
   document.getElementById('np-editing-id').value = '';
   document.getElementById('np-title').value      = '';
   document.getElementById('np-category').value   = '';
-  setHeroImage('');
+  _heroImages = [];
+  refreshHeroBox();
   document.getElementById('np-summary').value    = '';
   document.getElementById('np-body').value       = '';
   document.getElementById('np-author-name').value    = '';
@@ -448,14 +449,18 @@ window.loadIntoEditor = async (id) => {
   document.getElementById('np-title').value      = a.title   || '';
   document.getElementById('np-category').value   = a.category || '';
   _articlePhotos = [];
-  setHeroImage(a.image_url || '');
+  // Main hero first, then the extra heroes, in order.
+  _heroImages = [a.image_url, ...((Array.isArray(a.hero_images) ? a.hero_images : []).filter(v => typeof v === 'string'))].filter(Boolean);
+  _heroImages = [...new Set(_heroImages)];
+  refreshHeroBox();
   document.getElementById('np-summary').value    = a.summary  || '';
   document.getElementById('np-body').value       = a.body     || '';
   // Photos already in the body join the strip, so reopening an article
-  // shows all of its photos in the box, not just the hero.
+  // shows all of its photos in the box — except the heroes, which have
+  // their own row above.
   for (const m of (a.body || '').matchAll(/!\[[^\]]*\]\(([^)\s]+)\)/g)) {
     const u = m[1];
-    if (!u || u.startsWith('data:') || u === (a.image_url || '')) continue;
+    if (!u || u.startsWith('data:') || _heroImages.includes(u)) continue;
     trackArticlePhoto(u, '');
   }
   renderPhotoStrip();
@@ -499,11 +504,11 @@ async function uploadNewsImage(file) {
   return path;
 }
 
-// Non-hero photos attached to the article in this editor session: hero
-// dropzone extras, inline Photo uploads, and images already in the body
-// when an article is loaded. The hero itself lives in the #np-image input;
-// this list is everything else, shown as a thumbnail strip under the hero
-// preview so all of the article's photos show up in the box together.
+// Non-hero photos attached to the article in this editor session: inline
+// Photo uploads, body drops, and images already in the body when an
+// article is loaded. The heroes live in _heroImages; this list is
+// everything else, shown as a thumbnail strip under the hero preview so
+// all of the article's photos show up in the box together.
 let _articlePhotos = []; // [{ value, alt }]
 function trackArticlePhoto(value, alt) {
   if (!value) return;
@@ -531,27 +536,79 @@ async function renderPhotoStrip() {
   }
 }
 
-async function setHeroImage(url) {
-  // The np-image input keeps the STORED value (a storage path, a legacy
-  // public URL, or a hand-pasted external URL). The preview <img> needs
-  // a renderable URL: news-images is a private bucket, so mint a signed
-  // URL. The viewer here is the author/coauthor/approver previewing
-  // their own article, so the publication gate is bypassed for preview.
-  document.getElementById('np-image').value = url || '';
-  const previewUrl = url ? await signedUrlForPublished('news-images', url, { isAuthorOrApprover: true }) : null;
-  // The input may have changed while the signed URL was minting (a
-  // second upload, a manual-URL edit); only show the preview that
-  // belongs to the value currently in the input.
-  const current = document.getElementById('np-image').value;
-  const showUrl = (current === (url || '')) ? previewUrl : null;
-  document.getElementById('np-image-preview').src = showUrl || '';
-  document.getElementById('np-image-preview-wrap').style.display = showUrl ? '' : 'none';
-  document.getElementById('np-image-dropzone-label').textContent = url ? 'Click to add more photos' : 'Drag & drop photos here, or click to browse';
+// Hero images: an article can have more than one. _heroImages holds the
+// ordered STORED values (a storage path, a legacy public URL, or a
+// hand-pasted external URL); _heroImages[0] is the main hero and mirrors
+// the #np-image input, which the save path still reads. The extras live
+// in the news_articles.hero_images column; image_url stays the main hero
+// so the news list, admin modal, and old articles keep working unchanged.
+let _heroImages = []; // [stored value, ...]
+
+function heroAlt(value) {
+  const name = String(value || '').split('/').pop() || 'photo';
+  return name.replace(/\.[^.]+$/, '') || 'photo';
 }
 
-// Hero dropzone accepts more than one photo: the first successful upload
-// becomes the hero image, any extras are appended to the article body as
-// inline images so nothing the author picked is silently dropped.
+async function refreshHeroBox() {
+  const primary = _heroImages[0] || '';
+  // The np-image input keeps the STORED primary value. The preview <img>
+  // needs a renderable URL: news-images is a private bucket, so mint a
+  // signed URL. The viewer here is the author/coauthor/approver
+  // previewing their own article, so the publication gate is bypassed
+  // for preview.
+  document.getElementById('np-image').value = primary;
+  const previewUrl = primary ? await signedUrlForPublished('news-images', primary, { isAuthorOrApprover: true }) : null;
+  // The hero may have changed while the signed URL was minting; only show
+  // the preview that belongs to the current main hero.
+  const current = _heroImages[0] || '';
+  const showUrl = (current === primary) ? previewUrl : null;
+  document.getElementById('np-image-preview').src = showUrl || '';
+  document.getElementById('np-image-preview-wrap').style.display = showUrl ? '' : 'none';
+  document.getElementById('np-image-dropzone-label').textContent = primary ? 'Click to add more hero photos' : 'Drag & drop photos here, or click to browse';
+  renderHeroThumbs();
+}
+
+// Thumbnails of every hero image, under the big main preview: click one
+// to make it the main hero, × to take it out of the hero set.
+async function renderHeroThumbs() {
+  const box = document.getElementById('np-hero-thumbs');
+  if (_heroImages.length < 2) { box.innerHTML = ''; box.style.display = 'none'; return; }
+  box.innerHTML = '<div style="width:100%;font-size:10px;color:var(--muted);text-align:center;">Hero images — click one to make it the main photo:</div>' + _heroImages.map((value, i) =>
+    `<div data-hero-idx="${i}" style="width:64px;text-align:center;position:relative;cursor:pointer;">
+       <img alt="${esc(heroAlt(value))}" title="${i === 0 ? 'Main hero' : 'Click to make this the main hero'}" style="width:64px;height:48px;object-fit:cover;border-radius:4px;display:block;background:var(--bg);${i === 0 ? 'outline:2px solid var(--blue);' : ''}">
+       <span data-hero-remove="${i}" title="Remove from hero images" style="position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:11px;line-height:16px;text-align:center;cursor:pointer;">×</span>
+       <div style="font-size:9px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(heroAlt(value))}">${i === 0 ? 'Main' : 'Hero'} · ${esc(heroAlt(value))}</div>
+     </div>`).join('');
+  box.style.display = 'flex';
+  for (let i = 0; i < _heroImages.length; i++) {
+    const value = _heroImages[i];
+    const img = box.querySelector(`[data-hero-idx="${i}"] img`);
+    if (!img) continue;
+    const src = await signedUrlForPublished('news-images', value, { isAuthorOrApprover: true });
+    // The thumbs may have re-rendered while the signed URL was minting;
+    // only fill in the image that still shows this photo at this spot.
+    if (src && img.isConnected && _heroImages[i] === value) img.src = src;
+  }
+}
+
+async function setHeroImage(url) {
+  // Sets the main hero, keeping any extra heroes. Clearing it promotes
+  // the next hero to main (or empties the set when there is none).
+  url = (url || '').trim();
+  if (url) {
+    if (_heroImages.length) _heroImages[0] = url;
+    else _heroImages.push(url);
+  } else {
+    _heroImages.shift();
+  }
+  await refreshHeroBox();
+}
+
+// Hero dropzone accepts more than one photo: every photo dropped or
+// picked here becomes a hero image. The first is the main hero; the rest
+// show as thumbnails under it in the box and on the article page.
+// Photos meant for the article body go through the Photo button, or a
+// drop straight into the body textbox, instead.
 async function handleHeroFiles(fileList) {
   const picked = Array.from(fileList || []);
   const files = picked.filter(f => f && f.type.startsWith('image/'));
@@ -564,28 +621,16 @@ async function handleHeroFiles(fileList) {
   const uploadingEl = document.getElementById('np-image-uploading');
   errEl.style.display = 'none';
   uploadingEl.style.display = '';
-  // The hero persists across separate uploads: only the first photo ever
-  // becomes the hero. A later drop/pick adds to the article instead of
-  // replacing the hero that is already showing in the box.
-  let hasHero = !!document.getElementById('np-image').value;
-  let addedToBody = 0;
   const failures = [];
   for (const file of files) {
     try {
       const path = await uploadNewsImage(file);
-      if (!hasHero) {
-        await setHeroImage(path);
-        hasHero = true;
-      } else {
-        appendBodyImage(file.name, path);
-        trackArticlePhoto(path, file.name.replace(/\.[^.]+$/, ''));
-        addedToBody++;
-      }
+      _heroImages.push(path);
     } catch (err) {
       failures.push(file.name + ': ' + err.message);
     }
   }
-  renderPhotoStrip();
+  await refreshHeroBox();
   uploadingEl.style.display = 'none';
   if (failures.length) {
     errEl.textContent = 'Upload failed for ' + failures.length + ' photo' + (failures.length === 1 ? '' : 's') + ': ' + failures[0];
@@ -593,18 +638,9 @@ async function handleHeroFiles(fileList) {
   }
   const ok = files.length - failures.length;
   if (ok > 0) {
-    toast(`Uploaded ${ok} photo${ok === 1 ? '' : 's'}` + (addedToBody ? ` (${addedToBody} added to the article)` : '') + (failures.length ? `, ${failures.length} failed` : ''));
+    toast(`Uploaded ${ok} hero photo${ok === 1 ? '' : 's'}` + (failures.length ? `, ${failures.length} failed` : ''));
   }
   if (skipped) toast('Skipped ' + skipped + ' non-image file' + (skipped === 1 ? '' : 's') + '.', true);
-}
-
-// Append an inline image markdown line to the end of the article body.
-function appendBodyImage(fileName, path) {
-  const textarea = document.getElementById('np-body');
-  const alt = fileName.replace(/\.[^.]+$/, '');
-  const line = `![${alt}](${path})`;
-  textarea.value = textarea.value ? textarea.value.replace(/\s+$/, '') + '\n\n' + line + '\n' : line + '\n';
-  updatePreview(); updateCharCounts();
 }
 
 const npImageDropzone = document.getElementById('np-image-dropzone');
@@ -623,6 +659,27 @@ npImageDropzone.addEventListener('drop', e => {
   handleHeroFiles(e.dataTransfer.files);
 });
 
+// Hero thumbnail strip: click a thumb to make it the main hero, × to take
+// it out of the hero set (the next hero becomes main). Delegated, since
+// the strip re-renders on every hero change.
+document.getElementById('np-hero-thumbs').addEventListener('click', async e => {
+  const removeBtn = e.target.closest('[data-hero-remove]');
+  if (removeBtn) {
+    _heroImages.splice(Number(removeBtn.dataset.heroRemove), 1);
+    await refreshHeroBox();
+    return;
+  }
+  const thumb = e.target.closest('[data-hero-idx]');
+  if (thumb) {
+    const idx = Number(thumb.dataset.heroIdx);
+    if (idx > 0) {
+      const [picked] = _heroImages.splice(idx, 1);
+      _heroImages.unshift(picked);
+      await refreshHeroBox();
+    }
+  }
+});
+
 // Manual URL fallback, tucked behind a toggle link so uploading stays the default path.
 const npImageUrlToggle = document.getElementById('np-image-url-toggle');
 const npImageUrlInput  = document.getElementById('np-image-url-input');
@@ -634,26 +691,19 @@ npImageUrlToggle.addEventListener('click', e => {
 });
 npImageUrlInput.addEventListener('input', () => setHeroImage(npImageUrlInput.value.trim()));
 
-// Inline "insert photo" toolbar button — uploads and drops markdown at the cursor.
-// Accepts more than one photo: each gets its own unique placeholder, so one
-// upload finishing can't overwrite another photo's spot.
-const npInlineImageFile = document.getElementById('np-inline-image-file');
-document.getElementById('tb-insert-image').addEventListener('click', () => npInlineImageFile.click());
-npInlineImageFile.addEventListener('change', async e => {
-  const picked = Array.from(e.target.files || []);
-  npInlineImageFile.value = '';
-  const files = picked.filter(f => f && f.type.startsWith('image/'));
-  if (!files.length) {
-    if (picked.length) toast('Only image files can be uploaded.', true);
-    return;
-  }
+// Upload photos and insert them into the body at the given position, one
+// unique placeholder per photo so uploads finishing out of order can't
+// overwrite each other's spot. Shared by the Photo button and by dropping
+// photos straight into the body textbox.
+async function insertBodyPhotos(files, start, end) {
   const textarea = document.getElementById('np-body');
-  const start = textarea.selectionStart, end = textarea.selectionEnd;
+  const from = Math.max(0, Math.min(start ?? textarea.selectionStart, textarea.value.length));
+  const to = Math.max(from, Math.min(end ?? from, textarea.value.length));
   const placeholders = files.map((file, i) => {
     const token = `photo-${Date.now().toString(36)}-${i}-${Math.random().toString(36).slice(2, 6)}`;
     return { file, text: `![Uploading ${token}…]()` };
   });
-  textarea.setRangeText(placeholders.map(p => p.text).join('\n'), start, end, 'end');
+  textarea.setRangeText(placeholders.map(p => p.text).join('\n'), from, to, 'end');
   updatePreview(); updateCharCounts();
   const failures = [];
   for (const p of placeholders) {
@@ -670,6 +720,60 @@ npInlineImageFile.addEventListener('change', async e => {
   }
   renderPhotoStrip();
   if (failures.length) toast('Photo upload failed for ' + failures.length + ': ' + failures[0], true);
+}
+
+// Inline "insert photo" toolbar button — uploads and drops markdown at the cursor.
+const npInlineImageFile = document.getElementById('np-inline-image-file');
+document.getElementById('tb-insert-image').addEventListener('click', () => npInlineImageFile.click());
+npInlineImageFile.addEventListener('change', async e => {
+  const picked = Array.from(e.target.files || []);
+  npInlineImageFile.value = '';
+  const files = picked.filter(f => f && f.type.startsWith('image/'));
+  if (!files.length) {
+    if (picked.length) toast('Only image files can be uploaded.', true);
+    return;
+  }
+  const textarea = document.getElementById('np-body');
+  await insertBodyPhotos(files, textarea.selectionStart, textarea.selectionEnd);
+  if (picked.length > files.length) toast('Skipped ' + (picked.length - files.length) + ' non-image file' + (picked.length - files.length === 1 ? '' : 's') + '.', true);
+});
+
+// Drag & drop straight into the body textbox works the same as the Photo
+// button: the photos upload and land as markdown where they were dropped.
+function dropCaretPosition(textarea, event) {
+  // Caret position in the textbox under the mouse. Falls back to the
+  // current caret when the browser can't tell us.
+  try {
+    if (document.caretRangeFromPoint) {
+      const r = document.caretRangeFromPoint(event.clientX, event.clientY);
+      if (r && (r.startContainer === textarea || textarea.contains(r.startContainer)) && typeof r.startOffset === 'number') return r.startOffset;
+    }
+    if (document.caretPositionFromPoint) {
+      const p = document.caretPositionFromPoint(event.clientX, event.clientY);
+      if (p && (p.offsetNode === textarea || textarea.contains(p.offsetNode)) && typeof p.offset === 'number') return p.offset;
+    }
+  } catch { /* fall through to the caret */ }
+  return textarea.selectionStart;
+}
+
+const npBody = document.getElementById('np-body');
+npBody.addEventListener('dragover', e => {
+  // Only take over when files are being dragged in; dragging text around
+  // inside the box keeps the browser's default move-text behaviour.
+  if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes('Files')) return;
+  e.preventDefault();
+  npBody.style.borderColor = 'var(--blue)';
+});
+npBody.addEventListener('dragleave', () => { npBody.style.borderColor = ''; });
+npBody.addEventListener('drop', async e => {
+  if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+  e.preventDefault();
+  npBody.style.borderColor = '';
+  const picked = Array.from(e.dataTransfer.files);
+  const files = picked.filter(f => f && f.type.startsWith('image/'));
+  if (!files.length) { toast('Only image files can be uploaded.', true); return; }
+  const pos = dropCaretPosition(npBody, e);
+  await insertBodyPhotos(files, pos, pos);
   if (picked.length > files.length) toast('Skipped ' + (picked.length - files.length) + ' non-image file' + (picked.length - files.length === 1 ? '' : 's') + '.', true);
 });
 
@@ -738,7 +842,8 @@ async function saveArticleInner(forcedStatus) {
     title,
     body,
     category:    document.getElementById('np-category').value.trim() || 'General',
-    image_url:   document.getElementById('np-image').value.trim() || null,
+    image_url:   _heroImages[0] || null,
+    hero_images: _heroImages.slice(1),
     summary:     document.getElementById('np-summary').value.trim() || null,
     status,
     author_name: authorName,
@@ -816,13 +921,14 @@ function newsImageStoragePath(stored) {
 
 window.deleteArticle = async (id) => {
   if (!(await mcaConfirm({ title: 'Delete article?', message: 'Delete this article? This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
-  const { data: article } = await supabase.from('news_articles').select('image_url').eq('id', id).maybeSingle();
+  const { data: article } = await supabase.from('news_articles').select('image_url,hero_images').eq('id', id).maybeSingle();
   const { error } = await supabase.from('news_articles').delete().eq('id', id);
   if (error) { toast('Error: '+error.message, true); return; }
-  const path = newsImageStoragePath(article?.image_url);
-  if (path) {
-    const { error: rmErr } = await supabase.storage.from('news-images').remove([path]);
-    if (rmErr) console.warn('Could not remove deleted article image:', rmErr.message);
+  const paths = [article?.image_url, ...((Array.isArray(article?.hero_images) ? article.hero_images : []).filter(v => typeof v === 'string'))]
+    .map(v => newsImageStoragePath(v)).filter(Boolean);
+  if (paths.length) {
+    const { error: rmErr } = await supabase.storage.from('news-images').remove(paths);
+    if (rmErr) console.warn('Could not remove deleted article images:', rmErr.message);
   }
   if (_editingId === id) clearEditor();
   toast('Article deleted');

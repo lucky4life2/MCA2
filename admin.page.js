@@ -1027,12 +1027,13 @@ window.unpublishArticle = async (id) => {
 };
 window.deleteArticle = async (id) => {
   if (!(await mcaConfirm({ title: 'Delete article?', message: 'Delete this article? This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
-  const { data: article } = await supabase.from('news_articles').select('image_url').eq('id', id).maybeSingle();
+  const { data: article } = await supabase.from('news_articles').select('image_url,hero_images').eq('id', id).maybeSingle();
   await supabase.from('news_articles').delete().eq('id', id);
   // Audit fix publishing:delete-leaves-storage-objects: retract the stored
-  // hero image object as well as the row.
-  const path = storagePathFromStored('news-images', article?.image_url);
-  if (path) await removeStorageObjects('news-images', [path]);
+  // hero image objects as well as the row.
+  const paths = [article?.image_url, ...((Array.isArray(article?.hero_images) ? article.hero_images : []).filter(v => typeof v === 'string'))]
+    .map(v => storagePathFromStored('news-images', v)).filter(Boolean);
+  if (paths.length) await removeStorageObjects('news-images', paths);
   loadNewsAdmin();
   loadPendingNewsCount();
 };
