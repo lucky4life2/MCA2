@@ -60,7 +60,11 @@ function safeUrl(url) {
   if (url == null || String(url).trim() === '') return '';
   try {
     const p = new URL(String(url), location.href);
-    return (p.protocol === 'https:' || p.protocol === 'http:') ? p.href : '';
+    // blob: is allowed too: pending photos (not uploaded yet) preview
+    // through object URLs this page created with URL.createObjectURL.
+    // A blob URL can only point at a blob this page made, so it can't
+    // smuggle in an outside resource the way data: or javascript: could.
+    return (p.protocol === 'https:' || p.protocol === 'http:' || p.protocol === 'blob:') ? p.href : '';
   } catch { return ''; }
 }
 
@@ -439,6 +443,7 @@ function clearEditor() {
   document.getElementById('np-editing-id').value = '';
   document.getElementById('np-title').value      = '';
   document.getElementById('np-category').value   = '';
+  discardPendingUploads();
   _heroImages = [];
   refreshHeroBox();
   document.getElementById('np-summary').value    = '';
@@ -458,14 +463,18 @@ function clearEditor() {
 window.loadIntoEditor = async (id) => {
   const a = _myArticles.find(x => x.id === id);
   if (!a) return;
+  discardPendingUploads();
   _editingId = id;
   document.getElementById('np-editing-id').value = id;
   document.getElementById('np-title').value      = a.title   || '';
   document.getElementById('np-category').value   = a.category || '';
   _articlePhotos = [];
-  // Main hero first, then the extra heroes, in order.
-  _heroImages = [a.image_url, ...((Array.isArray(a.hero_images) ? a.hero_images : []).filter(v => typeof v === 'string'))].filter(Boolean);
-  _heroImages = [...new Set(_heroImages)];
+  // Main hero first, then the extra heroes, in order. Stored heroes
+  // have no pending file; a picked-but-unsaved hero carries its File.
+  _heroImages = [a.image_url, ...((Array.isArray(a.hero_images) ? a.hero_images : []).filter(v => typeof v === 'string'))]
+    .filter(Boolean)
+    .filter((v, i, arr) => arr.indexOf(v) === i)
+    .map(v => ({ value: v, file: null, preview: '' }));
   refreshHeroBox();
   document.getElementById('np-summary').value    = a.summary  || '';
   document.getElementById('np-body').value       = a.body     || '';
@@ -477,14 +486,15 @@ window.loadIntoEditor = async (id) => {
   // join the strip.
   const photoDefs = {};
   for (const m of (a.body || '').matchAll(/^\[([^\]]+)\]:[ \t]*([^\s]+)/gm)) photoDefs[m[1].trim().toLowerCase()] = m[2];
+  const heroValues = new Set(_heroImages.map(h => h.value));
   for (const m of (a.body || '').matchAll(/!\[[^\]]*\]\(([^)\s]+)\)/g)) {
     const u = m[1];
-    if (!u || u.startsWith('data:') || _heroImages.includes(u)) continue;
+    if (!u || u.startsWith('data:') || heroValues.has(u)) continue;
     trackArticlePhoto(u, '');
   }
   for (const m of (a.body || '').matchAll(/!\[([^\]]*)\]\[([^\]]+)\]/g)) {
     const u = photoDefs[m[2].trim().toLowerCase()];
-    if (!u || u.startsWith('data:') || _heroImages.includes(u)) continue;
+    if (!u || u.startsWith('data:') || heroValues.has(u)) continue;
     trackArticlePhoto(u, m[1] || '');
   }
   renderPhotoStrip();
@@ -511,8 +521,34 @@ window.loadIntoEditor = async (id) => {
 // under the article's id once it has one, or a per-session draft folder
 // before the first save. Uploads store the storage PATH; render sites
 // mint a signed URL from it (signedUrlForPublished in supabase.js).
+//
+// DEFERRED UPLOADS: picking or dropping a photo does NOT upload it.
+// The File stays in memory and previews through an object URL until
+// the author clicks Save Draft or Publish, when flushPendingUploads()
+// uploads everything still in the article. Closing the editor without
+// saving leaves nothing orphaned in storage.
 let _uploadFolder = `draft-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
 function uploadFolder() { return _editingId || _uploadFolder; }
+
+// Body photos picked but not yet uploaded, keyed by their placeholder
+// token: { file, alt, preview } where preview is an object URL for the
+// Preview tab and the thumbnail strip. Emptied by flushPendingUploads()
+// (uploaded) or discardPendingUploads() (editor cleared / article loaded).
+let _pendingBody = new Map();
+
+// Drop a pending hero's object URL (its File was removed or uploaded).
+function revokeHeroEntry(entry) {
+  if (entry && entry.file && entry.preview) URL.revokeObjectURL(entry.preview);
+}
+
+// Throw away every not-yet-uploaded photo: pending heroes lose their
+// object URLs, pending body photos are forgotten. Nothing in storage
+// is touched — these files were never uploaded.
+function discardPendingUploads() {
+  for (const entry of _heroImages) revokeHeroEntry(entry);
+  for (const p of _pendingBody.values()) URL.revokeObjectURL(p.preview);
+  _pendingBody.clear();
+}
 
 async function uploadNewsImage(file) {
   // News photos are optimized before upload (resized, converted, EXIF stripped).
@@ -560,35 +596,42 @@ async function renderPhotoStrip() {
   }
 }
 
-// Hero images: an article can have more than one. _heroImages holds the
-// ordered STORED values (a storage path, a legacy public URL, or a
-// hand-pasted external URL); _heroImages[0] is the main hero and mirrors
-// the #np-image input, which the save path still reads. The extras live
-// in the news_articles.hero_images column; image_url stays the main hero
-// so the news list, admin modal, and old articles keep working unchanged.
-let _heroImages = []; // [stored value, ...]
+// Hero images: an article can have more than one. _heroImages holds
+// ordered entries { value, file, preview }: value is the STORED value
+// (a storage path, a legacy public URL, or a hand-pasted external URL),
+// file is the picked File while the photo is still pending upload
+// (null once stored), and preview is its object URL for that window.
+// _heroImages[0] is the main hero and mirrors the #np-image input,
+// which the save path still reads. The extras live in the
+// news_articles.hero_images column; image_url stays the main hero so
+// the news list, admin modal, and old articles keep working unchanged.
+let _heroImages = []; // [{ value, file, preview }, ...]
 
-function heroAlt(value) {
-  const name = String(value || '').split('/').pop() || 'photo';
+function heroAlt(entry) {
+  if (entry.file) return (entry.file.name.replace(/\.[^.]+$/, '') || 'photo');
+  const name = String(entry.value || '').split('/').pop() || 'photo';
   return name.replace(/\.[^.]+$/, '') || 'photo';
 }
 
 async function refreshHeroBox() {
-  const primary = _heroImages[0] || '';
-  // The np-image input keeps the STORED primary value. The preview <img>
-  // needs a renderable URL: news-images is a private bucket, so mint a
-  // signed URL. The viewer here is the author/coauthor/approver
-  // previewing their own article, so the publication gate is bypassed
-  // for preview.
+  const entry = _heroImages[0];
+  const primary = entry?.value || '';
+  // The np-image input keeps the STORED primary value (empty while the
+  // main hero is still pending upload). The preview <img> needs a
+  // renderable URL: a pending hero uses its object URL; a stored one
+  // mints a signed URL (private bucket), publication gate bypassed —
+  // this is the author/coauthor/approver previewing their own article.
   document.getElementById('np-image').value = primary;
-  const previewUrl = primary ? await signedUrlForPublished('news-images', primary, { isAuthorOrApprover: true }) : null;
+  let previewUrl = null;
+  if (entry?.file) previewUrl = entry.preview;
+  else if (primary) previewUrl = await signedUrlForPublished('news-images', primary, { isAuthorOrApprover: true });
   // The hero may have changed while the signed URL was minting; only show
   // the preview that belongs to the current main hero.
-  const current = _heroImages[0] || '';
-  const showUrl = (current === primary) ? previewUrl : null;
+  const current = _heroImages[0];
+  const showUrl = (current === entry) ? previewUrl : null;
   document.getElementById('np-image-preview').src = showUrl || '';
   document.getElementById('np-image-preview-wrap').style.display = showUrl ? '' : 'none';
-  document.getElementById('np-image-dropzone-label').textContent = primary ? 'Click to add more hero photos' : 'Drag & drop photos here, or click to browse';
+  document.getElementById('np-image-dropzone-label').textContent = (primary || entry) ? 'Click to add more hero photos' : 'Drag & drop photos here, or click to browse';
   renderHeroThumbs();
 }
 
@@ -597,33 +640,36 @@ async function refreshHeroBox() {
 async function renderHeroThumbs() {
   const box = document.getElementById('np-hero-thumbs');
   if (_heroImages.length < 2) { box.innerHTML = ''; box.style.display = 'none'; return; }
-  box.innerHTML = '<div style="width:100%;font-size:10px;color:var(--muted);text-align:center;">Hero images — click one to make it the main photo:</div>' + _heroImages.map((value, i) =>
+  box.innerHTML = '<div style="width:100%;font-size:10px;color:var(--muted);text-align:center;">Hero images — click one to make it the main photo:</div>' + _heroImages.map((entry, i) =>
     `<div data-hero-idx="${i}" style="width:64px;text-align:center;position:relative;cursor:pointer;">
-       <img alt="${esc(heroAlt(value))}" title="${i === 0 ? 'Main hero' : 'Click to make this the main hero'}" style="width:64px;height:48px;object-fit:cover;border-radius:4px;display:block;background:var(--bg);${i === 0 ? 'outline:2px solid var(--blue);' : ''}">
+       <img alt="${esc(heroAlt(entry))}" title="${i === 0 ? 'Main hero' : 'Click to make this the main hero'}" style="width:64px;height:48px;object-fit:cover;border-radius:4px;display:block;background:var(--bg);${i === 0 ? 'outline:2px solid var(--blue);' : ''}">
        <span data-hero-remove="${i}" title="Remove from hero images" style="position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:11px;line-height:16px;text-align:center;cursor:pointer;">×</span>
-       <div style="font-size:9px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(heroAlt(value))}">${i === 0 ? 'Main' : 'Hero'} · ${esc(heroAlt(value))}</div>
+       <div style="font-size:9px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(heroAlt(entry))}">${i === 0 ? 'Main' : 'Hero'} · ${esc(heroAlt(entry))}</div>
      </div>`).join('');
   box.style.display = 'flex';
   for (let i = 0; i < _heroImages.length; i++) {
-    const value = _heroImages[i];
+    const entry = _heroImages[i];
     const img = box.querySelector(`[data-hero-idx="${i}"] img`);
     if (!img) continue;
-    const src = await signedUrlForPublished('news-images', value, { isAuthorOrApprover: true });
+    if (entry.file) { img.src = entry.preview; continue; }
+    const src = await signedUrlForPublished('news-images', entry.value, { isAuthorOrApprover: true });
     // The thumbs may have re-rendered while the signed URL was minting;
     // only fill in the image that still shows this photo at this spot.
-    if (src && img.isConnected && _heroImages[i] === value) img.src = src;
+    if (src && img.isConnected && _heroImages[i] === entry) img.src = src;
   }
 }
 
 async function setHeroImage(url) {
   // Sets the main hero, keeping any extra heroes. Clearing it promotes
   // the next hero to main (or empties the set when there is none).
+  // Replacing a pending main hero discards its file (never uploaded).
   url = (url || '').trim();
   if (url) {
-    if (_heroImages.length) _heroImages[0] = url;
-    else _heroImages.push(url);
+    const entry = { value: url, file: null, preview: '' };
+    if (_heroImages.length) { revokeHeroEntry(_heroImages[0]); _heroImages[0] = entry; }
+    else _heroImages.push(entry);
   } else {
-    _heroImages.shift();
+    revokeHeroEntry(_heroImages.shift());
   }
   await refreshHeroBox();
 }
@@ -633,6 +679,8 @@ async function setHeroImage(url) {
 // show as thumbnails under it in the box and on the article page.
 // Photos meant for the article body go through the Photo button, or a
 // drop straight into the body textbox, instead.
+// Photos are NOT uploaded here — the File is kept in memory and
+// previews through an object URL until Save/Publish uploads it.
 async function handleHeroFiles(fileList) {
   const picked = Array.from(fileList || []);
   const files = picked.filter(f => f && f.type.startsWith('image/'));
@@ -641,29 +689,11 @@ async function handleHeroFiles(fileList) {
     if (skipped) toast('Only image files can be uploaded.', true);
     return;
   }
-  const errEl = document.getElementById('np-image-error');
-  const uploadingEl = document.getElementById('np-image-uploading');
-  errEl.style.display = 'none';
-  uploadingEl.style.display = '';
-  const failures = [];
   for (const file of files) {
-    try {
-      const path = await uploadNewsImage(file);
-      _heroImages.push(path);
-    } catch (err) {
-      failures.push(file.name + ': ' + err.message);
-    }
+    _heroImages.push({ value: '', file, preview: URL.createObjectURL(file) });
   }
   await refreshHeroBox();
-  uploadingEl.style.display = 'none';
-  if (failures.length) {
-    errEl.textContent = 'Upload failed for ' + failures.length + ' photo' + (failures.length === 1 ? '' : 's') + ': ' + failures[0];
-    errEl.style.display = 'block';
-  }
-  const ok = files.length - failures.length;
-  if (ok > 0) {
-    toast(`Uploaded ${ok} hero photo${ok === 1 ? '' : 's'}` + (failures.length ? `, ${failures.length} failed` : ''));
-  }
+  toast(`Added ${files.length} hero photo${files.length === 1 ? '' : 's'} — will upload when you save`);
   if (skipped) toast('Skipped ' + skipped + ' non-image file' + (skipped === 1 ? '' : 's') + '.', true);
 }
 
@@ -689,7 +719,8 @@ npImageDropzone.addEventListener('drop', e => {
 document.getElementById('np-hero-thumbs').addEventListener('click', async e => {
   const removeBtn = e.target.closest('[data-hero-remove]');
   if (removeBtn) {
-    _heroImages.splice(Number(removeBtn.dataset.heroRemove), 1);
+    const [removed] = _heroImages.splice(Number(removeBtn.dataset.heroRemove), 1);
+    revokeHeroEntry(removed); // a pending hero's file is never uploaded
     await refreshHeroBox();
     return;
   }
@@ -743,27 +774,22 @@ async function insertBodyPhotos(files, start, end) {
   const to = Math.max(from, Math.min(end ?? from, textarea.value.length));
   const placeholders = files.map((file, i) => {
     const token = `photo-${Date.now().toString(36)}-${i}-${Math.random().toString(36).slice(2, 6)}`;
-    return { file, text: `![Uploading ${token}…]()` };
+    return { file, token, text: `![Uploading ${token}…]()` };
   });
   textarea.setRangeText(placeholders.map(p => p.text).join('\n'), from, to, 'end');
-  updatePreview(); updateCharCounts();
-  const failures = [];
+  // Photos are NOT uploaded here — each File is kept in _pendingBody
+  // under its placeholder token and previews through an object URL
+  // until Save/Publish (flushPendingUploads) uploads it. Deleting the
+  // placeholder line before saving drops the photo without uploading.
   for (const p of placeholders) {
-    try {
-      const path = await uploadNewsImage(p.file);
-      const alt = p.file.name.replace(/\.[^.]+$/, '');
-      const ref = nextPhotoRef();
-      textarea.value = textarea.value.replace(p.text, `![${alt}][${ref}]`);
-      appendPhotoDefinition(ref, path);
-      trackArticlePhoto(path, alt);
-    } catch (err) {
-      textarea.value = textarea.value.replace(p.text, '');
-      failures.push(p.file.name + ': ' + err.message);
-    }
-    updatePreview(); updateCharCounts();
+    const alt = p.file.name.replace(/\.[^.]+$/, '');
+    const pending = { file: p.file, alt, preview: URL.createObjectURL(p.file) };
+    _pendingBody.set(p.token, pending);
+    trackArticlePhoto(pending.preview, alt);
   }
+  updatePreview(); updateCharCounts();
   renderPhotoStrip();
-  if (failures.length) toast('Photo upload failed for ' + failures.length + ': ' + failures[0], true);
+  toast(`Added ${placeholders.length} photo${placeholders.length === 1 ? '' : 's'} — will upload when you save`);
 }
 
 // Inline "insert photo" toolbar button — uploads and drops markdown at the cursor.
@@ -864,11 +890,81 @@ async function saveArticle(forcedStatus) {
   }
 }
 
+// Upload every photo added in this editor session that is still in
+// the article, then rewrite the body and heroes to the stored paths.
+// This is the ONLY place photos upload: nothing was sent to storage
+// when the photos were picked, so closing the editor without saving
+// leaves nothing orphaned. Returns false (after a toast naming the
+// file) when an upload fails — the save must not go ahead pointing at
+// a photo that isn't in storage. A photo whose upload already
+// succeeded is stored in the editor state right away, so retrying the
+// save only uploads the ones still pending.
+async function flushPendingUploads() {
+  let ok = true;
+  // Heroes first, in order.
+  for (const entry of _heroImages) {
+    if (!entry.file) continue;
+    try {
+      entry.value = await uploadNewsImage(entry.file);
+      URL.revokeObjectURL(entry.preview);
+      entry.file = null; entry.preview = '';
+    } catch (err) {
+      toast('Photo upload failed: ' + entry.file.name + ': ' + err.message + ' — article not saved.', true);
+      ok = false;
+      break;
+    }
+  }
+  if (ok) {
+    // Body photos: only placeholders still in the body text upload.
+    const textarea = document.getElementById('np-body');
+    const present = new Set();
+    for (const m of textarea.value.matchAll(/!\[Uploading ([A-Za-z0-9-]+)…\]\(\)/g)) present.add(m[1]);
+    for (const [token, p] of [..._pendingBody]) {
+      if (!present.has(token)) {
+        // The author deleted the line — drop the photo, never upload it.
+        URL.revokeObjectURL(p.preview);
+        _pendingBody.delete(token);
+        _articlePhotos = _articlePhotos.filter(x => x.value !== p.preview);
+        continue;
+      }
+      try {
+        const path = await uploadNewsImage(p.file);
+        const ref = nextPhotoRef();
+        textarea.value = textarea.value.replace(`![Uploading ${token}…]()`, `![${p.alt}][${ref}]`);
+        appendPhotoDefinition(ref, path);
+        const stripEntry = _articlePhotos.find(x => x.value === p.preview);
+        if (stripEntry) stripEntry.value = path;
+        URL.revokeObjectURL(p.preview);
+        _pendingBody.delete(token);
+      } catch (err) {
+        toast('Photo upload failed: ' + p.file.name + ': ' + err.message + ' — article not saved.', true);
+        ok = false;
+        break;
+      }
+    }
+    if (ok) {
+      // A placeholder whose token is unknown (hand-edited) can't resolve —
+      // strip it so a half-finished marker never lands in the saved article.
+      textarea.value = textarea.value.replace(/^!\[Uploading [^\]]*…\]\(\)\n?/gm, '');
+    }
+  }
+  // Re-render either way: photos that did upload must stop showing
+  // their (now revoked) object URLs and show the stored image instead.
+  await refreshHeroBox();
+  renderPhotoStrip();
+  updatePreview(); updateCharCounts();
+  return ok;
+}
+
 async function saveArticleInner(forcedStatus) {
   const id      = document.getElementById('np-editing-id').value;
   const title   = document.getElementById('np-title').value.trim();
-  const body    = document.getElementById('np-body').value.trim();
   if (!title) { toast('Please enter a headline.', true); return; }
+
+  // Uploads happen here, at save time — nothing was uploaded when the
+  // photos were picked. A failed upload aborts the save (see above).
+  if (!(await flushPendingUploads())) return;
+  const body = document.getElementById('np-body').value.trim();
 
   // Non-approvers (News Team) can't self-publish — their "Publish" goes to review instead
   let status = forcedStatus || 'draft';
@@ -886,8 +982,8 @@ async function saveArticleInner(forcedStatus) {
     title,
     body,
     category:    document.getElementById('np-category').value.trim() || 'General',
-    image_url:   _heroImages[0] || null,
-    hero_images: _heroImages.slice(1),
+    image_url:   _heroImages[0]?.value || null,
+    hero_images: _heroImages.slice(1).map(h => h.value),
     summary:     document.getElementById('np-summary').value.trim() || null,
     status,
     author_name: authorName,
@@ -1026,10 +1122,19 @@ let _previewToken = 0;
 async function updatePreview() {
   const token = ++_previewToken;
   const body = document.getElementById('np-body').value;
+  // Pending (not yet uploaded) body photos show through their object
+  // URLs: swap each placeholder for an inline image pointing at the
+  // blob URL. The signed-URL resolver passes blob: URLs through
+  // untouched (they are not storage paths), and renderMarkdown renders
+  // them via the blob: allowance in safeUrl.
+  const previewBody = body.replace(/!\[Uploading ([A-Za-z0-9-]+)…\]\(\)/g, (m, token) => {
+    const p = _pendingBody.get(token);
+    return p ? `![${p.alt}](${p.preview})` : m;
+  });
   // Body markdown may embed news-images photos as storage paths; resolve
   // them to signed URLs for the author's preview (publication gate
   // bypassed — this is the author's own draft).
-  const resolved = await resolvePrivateBucketImagesInMarkdown('news-images', body, { isAuthorOrApprover: true });
+  const resolved = await resolvePrivateBucketImagesInMarkdown('news-images', previewBody, { isAuthorOrApprover: true });
   if (token !== _previewToken) return;
   document.getElementById('np-preview').innerHTML = renderMarkdown(resolved);
 }
