@@ -23,6 +23,12 @@ function safeUrl(url) {
 
 function renderMarkdown(md) {
   if (!md) return '';
+  // Reference-style images/links: `[photo-1]: <url>` definitions are
+  // collected and stripped; `![alt][photo-1]` / `[text][photo-1]` resolve
+  // against them. Body photos are inserted this way so the typing box
+  // shows a short readable line instead of a long storage path.
+  const refDefs = {};
+  md = md.replace(/^\[([^\]]+)\]:[ \t]*(\S+)[ \t]*$/gm, (m, ref, url) => { refDefs[ref.trim().toLowerCase()] = url; return ''; });
   let html = md
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
     .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
@@ -37,6 +43,14 @@ function renderMarkdown(md) {
     // CommonMark — `_(.+?)_` used to eat them and italicise the middle.
     .replace(/(^|[^A-Za-z0-9_])_([^_\n]+)_(?![A-Za-z0-9_])/g, '$1<em>$2</em>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/!\[([^\]]*)\]\[([^\]]+)\]/g, (m, alt, ref) => {
+      const u = safeUrl(refDefs[ref.trim().toLowerCase()] || '');
+      return u ? `<img src="${u}" alt="${alt}" style="max-width:100%;border-radius:4px;">` : alt;
+    })
+    .replace(/\[([^\]]+)\]\[([^\]]+)\]/g, (m, text, ref) => {
+      const u = safeUrl(refDefs[ref.trim().toLowerCase()] || '');
+      return u ? `<a href="${u}" target="_blank" rel="noopener noreferrer">${text}</a>` : text;
+    })
     .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m, alt, url) => {
       const u = safeUrl(url);
       return u ? `<img src="${u}" alt="${alt}" style="max-width:100%;border-radius:4px;">` : '';
