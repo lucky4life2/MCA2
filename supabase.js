@@ -485,8 +485,10 @@ export async function signedUrlForPublished(bucket, storedUrl, { status, isAutho
 /**
  * Rewrites markdown image URLs that point at objects in a private bucket
  * to render-time signed URLs (see signedUrlForPublished). News body
- * markdown embeds inline photos as `![alt](<stored path or URL>)`, so
- * the hero image_url alone is not the whole render surface.
+ * markdown embeds inline photos as `![alt](<stored path or URL>)`, and
+ * reference-style photos as `![alt][photo-1]` with a `[photo-1]: <stored
+ * path or URL>` definition at the end, so the hero image_url alone is
+ * not the whole render surface.
  * External image URLs pass through untouched; an image whose signed URL
  * cannot be minted is left as-is (it 404s rather than vanishing the
  * surrounding text — the owning row is already gated to published-or-
@@ -495,14 +497,21 @@ export async function signedUrlForPublished(bucket, storedUrl, { status, isAutho
  */
 export async function resolvePrivateBucketImagesInMarkdown(bucket, md, opts = {}) {
   if (!md || typeof md !== 'string') return md || '';
-  const matches = [...md.matchAll(/!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)];
-  if (!matches.length) return md;
+  const urls = new Set();
+  for (const m of md.matchAll(/!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) urls.add(m[1]);
+  for (const m of md.matchAll(/^\[[^\]]+\]:[ \t]*([^\s]+)/gm)) urls.add(m[1]);
+  if (!urls.size) return md;
   const resolved = new Map();
-  await Promise.all(matches.map(async (m) => {
-    if (!resolved.has(m[1])) resolved.set(m[1], await signedUrlForPublished(bucket, m[1], opts));
+  await Promise.all([...urls].map(async (u) => {
+    if (!resolved.has(u)) resolved.set(u, await signedUrlForPublished(bucket, u, opts));
   }));
-  return md.replace(/!\[([^\]]*)\]\(([^)\s]+)((?:\s+"[^"]*")?)\)/g, (m, alt, url, title) => {
+  let out = md.replace(/!\[([^\]]*)\]\(([^)\s]+)((?:\s+"[^"]*")?)\)/g, (m, alt, url, title) => {
     const next = resolved.get(url);
     return next ? `![${alt}](${next}${title})` : m;
   });
+  out = out.replace(/^(\[[^\]]+\]:[ \t]*)([^\s]+)/gm, (m, pre, url) => {
+    const next = resolved.get(url);
+    return next ? pre + next : m;
+  });
+  return out;
 }

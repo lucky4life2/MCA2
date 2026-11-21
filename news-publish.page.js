@@ -67,6 +67,12 @@ function safeUrl(url) {
 // ── Markdown renderer (mirrors news.js) ──────────────────────
 function renderMarkdown(md) {
   if (!md) return '<em style="color:var(--muted);">Nothing to preview yet.</em>';
+  // Reference-style images/links: `[photo-1]: <url>` definitions are
+  // collected and stripped; `![alt][photo-1]` / `[text][photo-1]` resolve
+  // against them. Body photos are inserted this way so the typing box
+  // shows a short readable line instead of a long storage path.
+  const refDefs = {};
+  md = md.replace(/^\[([^\]]+)\]:[ \t]*(\S+)[ \t]*$/gm, (m, ref, url) => { refDefs[ref.trim().toLowerCase()] = url; return ''; });
   let html = md
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
     .replace(/^#### (.+)$/gm,'<h4>$1</h4>').replace(/^### (.+)$/gm,'<h3>$1</h3>')
@@ -75,6 +81,14 @@ function renderMarkdown(md) {
     .replace(/\*\*\*(.+?)\*\*\*/g,'<strong><em>$1</em></strong>')
     .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>')
     .replace(/(^|[^A-Za-z0-9_])_([^_\n]+)_(?![A-Za-z0-9_])/g,'$1<em>$2</em>').replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/!\[([^\]]*)\]\[([^\]]+)\]/g, (m, alt, ref) => {
+      const u = safeUrl(refDefs[ref.trim().toLowerCase()] || '');
+      return u ? `<img src="${u}" alt="${alt}">` : alt;
+    })
+    .replace(/\[([^\]]+)\]\[([^\]]+)\]/g, (m, text, ref) => {
+      const u = safeUrl(refDefs[ref.trim().toLowerCase()] || '');
+      return u ? `<a href="${u}" target="_blank" rel="noopener noreferrer">${text}</a>` : text;
+    })
     .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m, alt, url) => {
       const u = safeUrl(url);
       return u ? `<img src="${u}" alt="${alt}">` : '';
@@ -458,10 +472,20 @@ window.loadIntoEditor = async (id) => {
   // Photos already in the body join the strip, so reopening an article
   // shows all of its photos in the box — except the heroes, which have
   // their own row above.
+  // Reference-style photo definitions (`[photo-1]: <path>`) resolve first,
+  // so both inline `![alt](path)` and reference `![alt][photo-1]` images
+  // join the strip.
+  const photoDefs = {};
+  for (const m of (a.body || '').matchAll(/^\[([^\]]+)\]:[ \t]*([^\s]+)/gm)) photoDefs[m[1].trim().toLowerCase()] = m[2];
   for (const m of (a.body || '').matchAll(/!\[[^\]]*\]\(([^)\s]+)\)/g)) {
     const u = m[1];
     if (!u || u.startsWith('data:') || _heroImages.includes(u)) continue;
     trackArticlePhoto(u, '');
+  }
+  for (const m of (a.body || '').matchAll(/!\[([^\]]*)\]\[([^\]]+)\]/g)) {
+    const u = photoDefs[m[2].trim().toLowerCase()];
+    if (!u || u.startsWith('data:') || _heroImages.includes(u)) continue;
+    trackArticlePhoto(u, m[1] || '');
   }
   renderPhotoStrip();
   document.getElementById('np-author-name').value = a.author_name || '';
@@ -695,6 +719,24 @@ npImageUrlInput.addEventListener('input', () => setHeroImage(npImageUrlInput.val
 // unique placeholder per photo so uploads finishing out of order can't
 // overwrite each other's spot. Shared by the Photo button and by dropping
 // photos straight into the body textbox.
+// Photos go in as reference-style markdown — `![alt][photo-1]` where you
+// write, with the long storage path kept in a `[photo-1]: <path>`
+// definition at the end of the body — so the typing box shows a short
+// readable line instead of a path, and the preview/article still render
+// the actual picture.
+function nextPhotoRef() {
+  const body = document.getElementById('np-body').value;
+  let max = 0;
+  for (const m of body.matchAll(/\[photo-(\d+)\]/g)) max = Math.max(max, Number(m[1]));
+  return 'photo-' + (max + 1);
+}
+
+function appendPhotoDefinition(ref, path) {
+  const textarea = document.getElementById('np-body');
+  const def = `[${ref}]: ${path}`;
+  textarea.value = textarea.value ? textarea.value.replace(/\s+$/, '') + '\n\n' + def + '\n' : def + '\n';
+}
+
 async function insertBodyPhotos(files, start, end) {
   const textarea = document.getElementById('np-body');
   const from = Math.max(0, Math.min(start ?? textarea.selectionStart, textarea.value.length));
@@ -710,7 +752,9 @@ async function insertBodyPhotos(files, start, end) {
     try {
       const path = await uploadNewsImage(p.file);
       const alt = p.file.name.replace(/\.[^.]+$/, '');
-      textarea.value = textarea.value.replace(p.text, `![${alt}](${path})`);
+      const ref = nextPhotoRef();
+      textarea.value = textarea.value.replace(p.text, `![${alt}][${ref}]`);
+      appendPhotoDefinition(ref, path);
       trackArticlePhoto(path, alt);
     } catch (err) {
       textarea.value = textarea.value.replace(p.text, '');
