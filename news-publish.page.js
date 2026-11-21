@@ -503,30 +503,66 @@ async function setHeroImage(url) {
   const showUrl = (current === (url || '')) ? previewUrl : null;
   document.getElementById('np-image-preview').src = showUrl || '';
   document.getElementById('np-image-preview-wrap').style.display = showUrl ? '' : 'none';
-  document.getElementById('np-image-dropzone-label').textContent = url ? 'Click to replace' : 'Drag & drop a photo here, or click to browse';
+  document.getElementById('np-image-dropzone-label').textContent = url ? 'Click to replace' : 'Drag & drop photos here, or click to browse';
 }
 
-async function handleHeroFile(file) {
-  if (!file || !file.type.startsWith('image/')) return;
+// Hero dropzone accepts more than one photo: the first successful upload
+// becomes the hero image, any extras are appended to the article body as
+// inline images so nothing the author picked is silently dropped.
+async function handleHeroFiles(fileList) {
+  const picked = Array.from(fileList || []);
+  const files = picked.filter(f => f && f.type.startsWith('image/'));
+  const skipped = picked.length - files.length;
+  if (!files.length) {
+    if (skipped) toast('Only image files can be uploaded.', true);
+    return;
+  }
   const errEl = document.getElementById('np-image-error');
   const uploadingEl = document.getElementById('np-image-uploading');
   errEl.style.display = 'none';
   uploadingEl.style.display = '';
-  try {
-    const url = await uploadNewsImage(file);
-    setHeroImage(url);
-  } catch (err) {
-    errEl.textContent = 'Upload failed: ' + err.message;
-    errEl.style.display = 'block';
-  } finally {
-    uploadingEl.style.display = 'none';
+  let heroSet = false;
+  let addedToBody = 0;
+  const failures = [];
+  for (const file of files) {
+    try {
+      const path = await uploadNewsImage(file);
+      if (!heroSet) {
+        await setHeroImage(path);
+        heroSet = true;
+      } else {
+        appendBodyImage(file.name, path);
+        addedToBody++;
+      }
+    } catch (err) {
+      failures.push(file.name + ': ' + err.message);
+    }
   }
+  uploadingEl.style.display = 'none';
+  if (failures.length) {
+    errEl.textContent = 'Upload failed for ' + failures.length + ' photo' + (failures.length === 1 ? '' : 's') + ': ' + failures[0];
+    errEl.style.display = 'block';
+  }
+  const ok = files.length - failures.length;
+  if (ok > 0) {
+    toast(`Uploaded ${ok} photo${ok === 1 ? '' : 's'}` + (addedToBody ? ` (${addedToBody} added to the article)` : '') + (failures.length ? `, ${failures.length} failed` : ''));
+  }
+  if (skipped) toast('Skipped ' + skipped + ' non-image file' + (skipped === 1 ? '' : 's') + '.', true);
+}
+
+// Append an inline image markdown line to the end of the article body.
+function appendBodyImage(fileName, path) {
+  const textarea = document.getElementById('np-body');
+  const alt = fileName.replace(/\.[^.]+$/, '');
+  const line = `![${alt}](${path})`;
+  textarea.value = textarea.value ? textarea.value.replace(/\s+$/, '') + '\n\n' + line + '\n' : line + '\n';
+  updatePreview(); updateCharCounts();
 }
 
 const npImageDropzone = document.getElementById('np-image-dropzone');
 const npImageFile     = document.getElementById('np-image-file');
 npImageDropzone.addEventListener('click', () => npImageFile.click());
-npImageFile.addEventListener('change', e => { handleHeroFile(e.target.files[0]); npImageFile.value = ''; });
+npImageFile.addEventListener('change', e => { handleHeroFiles(e.target.files); npImageFile.value = ''; });
 ['dragover','dragenter'].forEach(evt => npImageDropzone.addEventListener(evt, e => {
   e.preventDefault(); npImageDropzone.style.borderColor = 'var(--blue)'; npImageDropzone.style.background = 'var(--bg)';
 }));
@@ -536,7 +572,7 @@ npImageFile.addEventListener('change', e => { handleHeroFile(e.target.files[0]);
 npImageDropzone.addEventListener('drop', e => {
   e.preventDefault();
   npImageDropzone.style.borderColor = 'var(--border)'; npImageDropzone.style.background = 'transparent';
-  handleHeroFile(e.dataTransfer.files[0]);
+  handleHeroFiles(e.dataTransfer.files);
 });
 
 // Manual URL fallback, tucked behind a toggle link so uploading stays the default path.
@@ -551,26 +587,40 @@ npImageUrlToggle.addEventListener('click', e => {
 npImageUrlInput.addEventListener('input', () => setHeroImage(npImageUrlInput.value.trim()));
 
 // Inline "insert photo" toolbar button — uploads and drops markdown at the cursor.
+// Accepts more than one photo: each gets its own unique placeholder, so one
+// upload finishing can't overwrite another photo's spot.
 const npInlineImageFile = document.getElementById('np-inline-image-file');
 document.getElementById('tb-insert-image').addEventListener('click', () => npInlineImageFile.click());
 npInlineImageFile.addEventListener('change', async e => {
-  const file = e.target.files[0];
+  const picked = Array.from(e.target.files || []);
   npInlineImageFile.value = '';
-  if (!file || !file.type.startsWith('image/')) return;
+  const files = picked.filter(f => f && f.type.startsWith('image/'));
+  if (!files.length) {
+    if (picked.length) toast('Only image files can be uploaded.', true);
+    return;
+  }
   const textarea = document.getElementById('np-body');
   const start = textarea.selectionStart, end = textarea.selectionEnd;
-  const placeholder = '![Uploading photo…]()';
-  textarea.setRangeText(placeholder, start, end, 'end');
+  const placeholders = files.map((file, i) => {
+    const token = `photo-${Date.now().toString(36)}-${i}-${Math.random().toString(36).slice(2, 6)}`;
+    return { file, text: `![Uploading ${token}…]()` };
+  });
+  textarea.setRangeText(placeholders.map(p => p.text).join('\n'), start, end, 'end');
   updatePreview(); updateCharCounts();
-  try {
-    const url = await uploadNewsImage(file);
-    const alt = file.name.replace(/\.[^.]+$/, '');
-    textarea.value = textarea.value.replace(placeholder, `![${alt}](${url})`);
-  } catch (err) {
-    textarea.value = textarea.value.replace(placeholder, '');
-    toast('Photo upload failed: ' + err.message, true);
+  const failures = [];
+  for (const p of placeholders) {
+    try {
+      const path = await uploadNewsImage(p.file);
+      const alt = p.file.name.replace(/\.[^.]+$/, '');
+      textarea.value = textarea.value.replace(p.text, `![${alt}](${path})`);
+    } catch (err) {
+      textarea.value = textarea.value.replace(p.text, '');
+      failures.push(p.file.name + ': ' + err.message);
+    }
+    updatePreview(); updateCharCounts();
   }
-  updatePreview(); updateCharCounts();
+  if (failures.length) toast('Photo upload failed for ' + failures.length + ': ' + failures[0], true);
+  if (picked.length > files.length) toast('Skipped ' + (picked.length - files.length) + ' non-image file' + (picked.length - files.length === 1 ? '' : 's') + '.', true);
 });
 
 // ── Email subscribers when an article goes live ────────────────
