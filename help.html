@@ -32,7 +32,9 @@
       text-decoration: none; display: inline-flex; align-items: center; gap: 10px;
       transition: background .15s, transform .1s;
     }
-    .btn-contact:hover { background: var(--blue-dark, #123); }
+    @media (hover: hover) {
+      .btn-contact:hover { background: var(--blue-dark, #123); }
+    }
     .btn-contact:active { transform: translateY(1px); }
 
     .faq-toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 1.75rem; }
@@ -63,7 +65,9 @@
       gap: 12px; font-size: 15px; font-weight: 600; color: var(--black);
       font-family: 'Open Sans', sans-serif;
     }
-    .faq-question:hover { background: var(--bg); }
+    @media (hover: hover) {
+      .faq-question:hover { background: var(--bg); }
+    }
     .faq-chevron { flex-shrink: 0; transition: transform .2s; color: var(--muted); }
     .faq-item.open .faq-chevron { transform: rotate(180deg); }
     .faq-answer {
@@ -71,6 +75,17 @@
       padding: 0 18px; font-size: 14px; line-height: 1.7; color: var(--mid, var(--muted));
     }
     .faq-item.open .faq-answer { padding: 0 18px 16px; }
+    /* Smooth height:auto animation: where the browser supports
+       interpolate-size, the height keyword itself transitions, so no JS
+       scrollHeight measurement is needed (see toggleFaq in help.page.js).
+       Older browsers keep the max-height path above, unchanged. */
+    @supports (interpolate-size: allow-keywords) {
+      .faq-answer {
+        interpolate-size: allow-keywords;
+        height: 0; max-height: none; transition: height .25s ease, padding .25s ease;
+      }
+      .faq-item.open .faq-answer { height: auto; }
+    }
     .faq-answer p { margin: 0 0 .75em; }
     .faq-answer p:last-child { margin-bottom: 0; }
 

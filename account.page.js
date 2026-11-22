@@ -458,10 +458,25 @@ function safeColor(c) {
   return /^#[0-9a-fA-F]{3,8}$/.test(v) ? v : '#888888';
 }
 
-// Attachment URLs are stored with the message row; only an https URL may reach
-// an href/src, matching the check admin.html already applies.
+// Attachment URLs are stored with the message row, and any member can
+// submit one — so a URL is trusted only when it points at the site's
+// own storage origin: this site's own host, or a *.supabase.co host
+// (the message-attachments bucket lives on the project's Supabase
+// host). Anything else — any other https host, any other scheme, any
+// unparseable value — is rejected, so a third-party URL can never be
+// presented as a trusted attachment or auto-loaded in the inbox.
+// Audit fix storage:stored-html-svg-inbox-link.
 function safeAttachmentUrl(u) {
-  return /^https:\/\//i.test(String(u ?? '')) ? String(u) : '';
+  try {
+    const parsed = new URL(String(u ?? ''));
+    if (parsed.protocol !== 'https:') return '';
+    const host = parsed.hostname.toLowerCase();
+    const ownHost = window.location.hostname.toLowerCase();
+    if (host === ownHost || host.endsWith('.supabase.co')) return parsed.href;
+    return '';
+  } catch {
+    return '';
+  }
 }
 
 // Regex escaper (not textContent/innerHTML) so quotes are escaped too — this
@@ -594,7 +609,7 @@ async function renderClubManage(clubId) {
 // renderMembership() above and the server's private.membership_state():
 // any non-'none' membership whose period end is still in the future
 // counts as paid — active, trialing, past-due, and cancelled-with-time-
-// remaining all keep server access (that's also what the MCAVerify join
+// remaining all keep server access (that's also what the MCA plugin join
 // gate allows). A never-paid or expired membership does not. The
 // Minecraft name entry and verify-code generation only exist behind
 // this gate; before payment the section shows a locked message with a
@@ -1467,7 +1482,7 @@ function renderVerifyCodeSection() {
   if (!_verifyCode) _verifyCode = generateCode();
   return `
     <div style="border-top:1px solid var(--border);padding-top:1.25rem;margin-top:0.25rem;">
-      <p class="mc-unverified-note">Run this command in-game on the MCA server to verify your account:</p>
+      <p class="mc-unverified-note">Your Minecraft verification code — run this command in-game on the MCA server to verify your account:</p>
       <div class="mc-code-box">
         <code class="mc-code-command" style="margin:0;flex:1;">/mcaverify ${_verifyCode}</code>
         <button class="btn-copy" id="btn-copy-code">Copy</button>
@@ -2136,12 +2151,19 @@ let _myItems = {}; // thread_id -> [items]
 function renderMsgAttachments(attachments) {
   // Same guard as the staff inbox: a malformed attachments value must not
   // throw and kill the whole message list.
+  // Audit fix storage:stored-html-svg-inbox-link: attachment URLs are
+  // rendered as TEXT LINKS ONLY, never auto-loaded as <img> — a
+  // third-party URL that slipped past the allowlist (or a future
+  // allowlist change) must not trigger a fetch, tracking pixel, or IP
+  // leak just because staff opened the inbox. The URL itself is still
+  // allowlisted by safeAttachmentUrl, so only the site's own storage
+  // origin ever reaches an href.
   if (!Array.isArray(attachments) || !attachments.length) return '';
   return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">
     ${attachments.filter(a => a && typeof a === 'object').map(a => {
       const url = safeAttachmentUrl(a.url);
       if (!url) return '';
-      return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"><img src="${escapeHtml(url)}" alt="${escapeHtml(a.name || 'attachment')}" style="width:56px;height:56px;object-fit:cover;border-radius:5px;border:1px solid var(--border);"></a>`;
+      return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.name || 'attachment')}</a>`;
     }).join('')}
   </div>`;
 }

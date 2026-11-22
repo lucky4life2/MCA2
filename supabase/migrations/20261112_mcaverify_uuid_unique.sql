@@ -1,0 +1,23 @@
+-- MCAVerify UUID uniqueness (2026-11-12): one Minecraft UUID, one account.
+--
+-- Completes VER-M3 (plugin bug review, MCAVerify 1.0.3). The plugin now
+-- refuses to verify a UUID already linked to another account, but the
+-- database is the real backstop: without a unique index, two profiles can
+-- still end up holding the same minecraft_uuid (e.g. a stale UUID left on
+-- an old profile by the website's unlink, which clears username + verified
+-- flags but not the UUID columns), and the join gate then picks one
+-- arbitrarily (limit 1, no ORDER BY).
+--
+-- The Bedrock UUID already has this index (20261108 migration). This adds
+-- the matching one for the Java UUID, case-insensitively like the gate
+-- lookups (they compare lower()).
+--
+-- APPLY WITH CARE: if any UUID is already on two profiles, this fails.
+-- Find them first:
+--   select lower(minecraft_uuid) as uuid, array_agg(id)
+--   from public.profiles where minecraft_uuid is not null
+--   group by lower(minecraft_uuid) having count(*) > 1;
+-- and clear the stale copy (the profile whose username/verified flags are
+-- already cleared) before running this.
+CREATE UNIQUE INDEX IF NOT EXISTS profiles_minecraft_uuid_lower_key
+  ON public.profiles (lower(minecraft_uuid));

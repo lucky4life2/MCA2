@@ -4,7 +4,7 @@ import { supabase } from './supabase.js';
 // Step-by-step account creation: account first, then "how you play",
 // then done. Minecraft verification is NOT part of this wizard — it
 // unlocks on the account page only after the member has paid, and the
-// MCAVerify plugin's join gate is what keeps the server locked until
+// MCA plugin's join gate is what keeps the server locked until
 // then. Reuses the same server calls as login.html (signup-with-email,
 // verify-signup-code, resend-signup-code), so the wizard is a new front
 // door, not a second auth system.
@@ -35,12 +35,18 @@ let _user = null;
 const titleEl = document.getElementById('onboard-title');
 const subtitleEl = document.getElementById('onboard-subtitle');
 
-function showStep(name) {
+function showStep(name, dir) {
   // 'verify' is a sub-state of the Account progress step.
   const progressName = name === 'verify' ? 'account' : name;
-  document.querySelectorAll('.onboard-step').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.onboard-step').forEach(el => el.classList.remove('active', 'mca-dir-back'));
   const panel = document.getElementById('step-' + name);
-  if (panel) panel.classList.add('active');
+  if (panel) {
+    // Directional slide: forward enters from the right (default), back
+    // enters from the left. Set the direction class before .active so the
+    // panel's animation picks it up on this activation.
+    if (dir === 'back') panel.classList.add('mca-dir-back');
+    panel.classList.add('active');
+  }
   const meta = STEP_META[name];
   if (meta) { titleEl.textContent = meta.title; subtitleEl.textContent = meta.subtitle; }
   document.querySelectorAll('.onboard-progress-step').forEach(el => {
@@ -74,36 +80,57 @@ document.getElementById('back-to-signin').addEventListener('click', () => {
   window.location.href = 'login.html';
 });
 document.getElementById('back-from-path').addEventListener('click', () => {
-  showStep('account');
+  showStep('account', 'back');
 });
 document.getElementById('btn-path-continue').addEventListener('click', () => {
   if (!_path) {
     const err = document.getElementById('path-error');
     err.style.display = 'block';
+    window.mcaShakeField(document.querySelector('.onboard-paths'));
     return;
   }
   showStep('done');
 });
 
-// ── DOB selects: month + year only (option 3). The signup edge function
-// still expects a full DOB date, so we send the first of the month
-// (YYYY-MM-01) — age validation and the age band still compute from it.
-// Year range covers the school-club age band (13–19): a 19-year-old can
-// have been born in thisYear-20 (e.g. December), and a 13-year-old in
-// thisYear-13.
+// ── DOB selects: month + day + year (full date, same as login.html).
+// The signup edge function expects a full DOB date; buildDob() returns
+// '' for a blank or impossible combination (e.g. Feb 30) via the same
+// round-trip check login.html uses, so the age band computes from an
+// exact birthday instead of the first of the month.
+// Year range covers the school-club age band (5–19): a 19-year-old can
+// have been born in thisYear-20 (e.g. December), and a 5-year-old in
+// thisYear-5. Under-13s land in coppa_restricted until a parent approves
+// (see the account-page age gate); the year list has to include them or
+// they cannot sign up at all. The youngest year (thisYear-5) is the
+// elementary-school floor — raise it if MCA ever sets a minimum age.
 const dobMonthEl = document.getElementById('signup-dob-month');
+const dobDayEl = document.getElementById('signup-dob-day');
 const dobYearEl = document.getElementById('signup-dob-year');
+if (dobDayEl) {
+  for (let d = 1; d <= 31; d++) {
+    const v = String(d).padStart(2, '0');
+    dobDayEl.insertAdjacentHTML('beforeend', `<option value="${v}">${d}</option>`);
+  }
+}
 if (dobYearEl) {
   const thisYear = new Date().getFullYear();
-  for (let y = thisYear - 13; y >= thisYear - 20; y--) {
+  for (let y = thisYear - 5; y >= thisYear - 20; y--) {
     dobYearEl.insertAdjacentHTML('beforeend', `<option value="${y}">${y}</option>`);
   }
 }
+// Combines the three selects into "YYYY-MM-DD", or returns '' if any is
+// blank or the combination isn't a real calendar date (e.g. Feb 30) —
+// Date normalizes overflow instead of erroring, so round-tripping through
+// it and comparing the parts back is what actually catches that.
 function buildDob() {
   const m = dobMonthEl ? dobMonthEl.value : '';
+  const d = dobDayEl ? dobDayEl.value : '';
   const y = dobYearEl ? dobYearEl.value : '';
-  if (!m || !y) return '';
-  return `${y}-${m}-01`;
+  if (!m || !d || !y) return '';
+  const iso = `${y}-${m}-${d}`;
+  const dt = new Date(`${iso}T00:00:00Z`);
+  if (dt.getUTCFullYear() !== Number(y) || dt.getUTCMonth() + 1 !== Number(m) || dt.getUTCDate() !== Number(d)) return '';
+  return iso;
 }
 const todayIso = new Date().toISOString().slice(0, 10);
 
@@ -171,8 +198,7 @@ function showAccountError(message) {
   // would write into a hidden panel and the member would never see it.
   showEmailForm();
   const errEl = document.getElementById('signup-error');
-  errEl.textContent = message;
-  errEl.style.display = 'block';
+  window.mcaShowError(errEl, message);
 }
 
 // ── OAuth (redirects back here, then resumes at Done — or the path
@@ -212,28 +238,22 @@ document.getElementById('btn-email-signup').addEventListener('click', async () =
   errEl.style.display = 'none';
   if (!requireSignupConsent()) return;
   if (!/^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(email)) {
-    errEl.textContent = 'Please enter a valid email address.';
-    errEl.style.display = 'block'; return;
+    window.mcaShowError(errEl, 'Please enter a valid email address.', document.getElementById('signup-email')); return;
   }
   if (!dob) {
-    errEl.textContent = 'Please enter your date of birth.';
-    errEl.style.display = 'block'; return;
+    window.mcaShowError(errEl, 'Please enter your date of birth.', dobMonthEl); return;
   }
   if (dob > todayIso) {
-    errEl.textContent = 'Please enter a valid date of birth.';
-    errEl.style.display = 'block'; return;
+    window.mcaShowError(errEl, 'Please enter a valid date of birth.', dobYearEl); return;
   }
   if (password.length < 8) {
-    errEl.textContent = 'Password must be at least 8 characters.';
-    errEl.style.display = 'block'; return;
+    window.mcaShowError(errEl, 'Password must be at least 8 characters.', document.getElementById('signup-password')); return;
   }
   if (!/[A-Z]/.test(password)) {
-    errEl.textContent = 'Password must contain at least one uppercase letter.';
-    errEl.style.display = 'block'; return;
+    window.mcaShowError(errEl, 'Password must contain at least one uppercase letter.', document.getElementById('signup-password')); return;
   }
   if (!/[a-z]/.test(password)) {
-    errEl.textContent = 'Password must contain at least one lowercase letter.';
-    errEl.style.display = 'block'; return;
+    window.mcaShowError(errEl, 'Password must contain at least one lowercase letter.', document.getElementById('signup-password')); return;
   }
   const turnstileToken = (window.turnstile && turnstileWidgetId !== null)
     ? window.turnstile.getResponse(turnstileWidgetId)
@@ -263,8 +283,7 @@ document.getElementById('btn-email-signup').addEventListener('click', async () =
   btn.textContent = 'Create Account'; btn.disabled = false;
   if (!res.ok || json.error) {
     if (window.turnstile && turnstileWidgetId !== null) window.turnstile.reset(turnstileWidgetId);
-    errEl.textContent = json.error || 'Sign up failed.';
-    errEl.style.display = 'block'; return;
+    window.mcaShowError(errEl, json.error || 'Sign up failed.', document.getElementById('signup-email')); return;
   }
   _pendingSignupEmail = email;
   _pendingSignupUserId = json.userId;
@@ -281,8 +300,7 @@ document.getElementById('btn-verify-signup').addEventListener('click', async () 
   const btn = document.getElementById('btn-verify-signup');
   errEl.style.display = 'none';
   if (!code) {
-    errEl.textContent = 'Enter the code from your email.';
-    errEl.style.display = 'block'; return;
+    window.mcaShowError(errEl, 'Enter the code from your email.', document.getElementById('signup-code')); return;
   }
   btn.textContent = 'Verifying…'; btn.disabled = true;
   const SUPABASE_URL = supabase.supabaseUrl;
@@ -295,8 +313,7 @@ document.getElementById('btn-verify-signup').addEventListener('click', async () 
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok || json.error) {
-      errEl.textContent = json.error || 'Invalid or expired code.';
-      errEl.style.display = 'block';
+      window.mcaShowError(errEl, json.error || 'Invalid or expired code.', document.getElementById('signup-code'));
       btn.textContent = 'Verify & Continue'; btn.disabled = false;
       return;
     }
@@ -379,7 +396,7 @@ async function backfillUsername() {
 
 
 // ── Back links ──────────────────────────────────────────────────
-document.getElementById('back-from-verify').addEventListener('click', () => showStep('account'));
+document.getElementById('back-from-verify').addEventListener('click', () => showStep('account', 'back'));
 
 // ── Done ────────────────────────────────────────────────────────
 document.getElementById('btn-done-account').addEventListener('click', () => {

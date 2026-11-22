@@ -55,16 +55,26 @@
 
     .btn { font-size: 12px; font-weight: 600; letter-spacing: .5px; padding: 9px 18px; border-radius: 4px; cursor: pointer; transition: background .15s, color .15s, border-color .15s; border: none; }
     .btn-primary { background: var(--blue); color: #fff; }
-    .btn-primary:hover { background: var(--blue-dark); }
+    @media (hover: hover) {
+      .btn-primary:hover { background: var(--blue-dark); }
+    }
     .btn-primary:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
     .btn-outline { background: transparent; color: var(--blue); border: 1px solid var(--border); }
-    .btn-outline:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+    @media (hover: hover) {
+      .btn-outline:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+    }
     .btn-discord { background: #5865F2; color: #fff; display: inline-flex; align-items: center; gap: 7px; }
-    .btn-discord:hover { background: #4752c4; }
+    @media (hover: hover) {
+      .btn-discord:hover { background: #4752c4; }
+    }
     .btn-google { background: #fff; color: #3c4043; border: 1px solid var(--border); display: inline-flex; align-items: center; gap: 7px; }
-    .btn-google:hover { background: #f7f8f8; border-color: #c9ccd1; }
+    @media (hover: hover) {
+      .btn-google:hover { background: #f7f8f8; border-color: #c9ccd1; }
+    }
     .btn-danger { background: transparent; color: #c0392b; border: 1px solid var(--border); }
-    .btn-danger:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
+    @media (hover: hover) {
+      .btn-danger:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
+    }
 
     /* Minecraft verify */
     .mc-status-row { display: flex; align-items: center; gap: 12px; margin-bottom: 1.25rem; }
@@ -74,7 +84,9 @@
     .mc-code { font-family: monospace; font-size: 1.1rem; font-weight: 700; color: var(--blue); letter-spacing: 2px; }
     .mc-code-command { font-family: monospace; font-size: 13px; color: var(--mid); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 8px 12px; margin: 0.5rem 0 1rem; display: block; }
     .btn-copy { background: transparent; border: 1px solid var(--border); color: var(--muted); font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: 3px; cursor: pointer; transition: all .15s; white-space: nowrap; }
-    .btn-copy:hover { border-color: var(--blue); color: var(--blue); }
+    @media (hover: hover) {
+      .btn-copy:hover { border-color: var(--blue); color: var(--blue); }
+    }
     .btn-copy.copied { border-color: var(--green); color: var(--green-text); }
 
     /* Connected accounts row */
@@ -182,7 +194,9 @@
     .modal-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
     .modal-title { font-family: 'Times New Roman', serif; font-size: 1.1rem; color: var(--blue); font-weight: normal; }
     .modal-close { background: none; border: none; font-size: 18px; color: var(--muted); cursor: pointer; padding: 0 4px; line-height: 1; }
-    .modal-close:hover { color: var(--black); }
+    @media (hover: hover) {
+      .modal-close:hover { color: var(--black); }
+    }
     .modal-body { padding: 1.5rem; }
     .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
 

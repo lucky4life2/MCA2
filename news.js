@@ -1,5 +1,5 @@
 // news.js — ES module, loaded via <script type="module" src="news.js">
-import { supabase } from './supabase.js';
+import { supabase, signedUrlForPublished, resolvePrivateBucketImagesInMarkdown } from './supabase.js';
 
 // ── Escaping ─────────────────────────────────────────────────
 // Article fields are author-supplied and land in innerHTML, so everything
@@ -27,6 +27,12 @@ function safeUrl(url) {
 // ── Markdown → HTML ───────────────────────────────────────────
 function renderMarkdown(md) {
   if (!md) return '';
+  // Reference-style images/links: `[photo-1]: <url>` definitions are
+  // collected and stripped; `![alt][photo-1]` / `[text][photo-1]` resolve
+  // against them. Body photos are inserted this way so the typing box
+  // shows a short readable line instead of a long storage path.
+  const refDefs = {};
+  md = md.replace(/^\[([^\]]+)\]:[ \t]*(\S+)[ \t]*$/gm, (m, ref, url) => { refDefs[ref.trim().toLowerCase()] = url; return ''; });
   let html = md
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
     .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
@@ -43,7 +49,16 @@ function renderMarkdown(md) {
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     // Images must be matched before links: `![alt](url)` also matches the
     // link pattern, so running links first turned every markdown image into
-    // a stray "!" followed by a link and no image ever rendered.
+    // a stray "!" followed by a link and no image ever rendered. Same for
+    // the reference forms: `![alt][ref]` before `[text][ref]`.
+    .replace(/!\[([^\]]*)\]\[([^\]]+)\]/g, (m, alt, ref) => {
+      const u = safeUrl(refDefs[ref.trim().toLowerCase()] || '');
+      return u ? `<img src="${u}" alt="${alt}" style="max-width:100%;border-radius:4px;">` : alt;
+    })
+    .replace(/\[([^\]]+)\]\[([^\]]+)\]/g, (m, text, ref) => {
+      const u = safeUrl(refDefs[ref.trim().toLowerCase()] || '');
+      return u ? `<a href="${u}" target="_blank" rel="noopener noreferrer">${text}</a>` : text;
+    })
     .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m, alt, url) => {
       const u = safeUrl(url);
       return u ? `<img src="${u}" alt="${alt}" style="max-width:100%;border-radius:4px;">` : '';
@@ -220,7 +235,7 @@ async function shareArticle(article) {
 }
 
 // ── Article modal ─────────────────────────────────────────────
-function openArticleModal(article) {
+async function openArticleModal(article) {
   let overlay = document.getElementById('news-article-overlay');
   if (!overlay) {
     overlay = document.createElement('div');
@@ -235,11 +250,18 @@ function openArticleModal(article) {
 
   const cat = article.category || 'General';
   const byline = formatByline(article);
+  // news-images is a private bucket: the stored image_url is a storage
+  // path (or a legacy public URL). Mint a signed URL for the hero image
+  // and for any inline photos embedded in the body markdown. The modal
+  // only ever opens published rows, so the publication gate passes
+  // here; a failed mint renders no hero image.
+  const heroUrl = await signedUrlForPublished('news-images', article.image_url, { status: article.status });
+  const bodyMd = await resolvePrivateBucketImagesInMarkdown('news-images', article.body, { status: article.status });
   overlay.innerHTML = `
     <div style="background:var(--white);border-radius:8px;border:1px solid var(--border);
       width:100%;max-width:720px;overflow:hidden;box-shadow:0 20px 60px rgba(10,15,30,.25);
       margin:auto;position:relative;">
-      ${safeUrl(article.image_url) ? `<div style="height:280px;background:url('${encodeURI(safeUrl(article.image_url)).replace(/['"\\]/g, encodeURIComponent)}') center/cover no-repeat;"></div>` : ''}
+      ${safeUrl(heroUrl) ? `<div style="height:280px;background:url('${encodeURI(safeUrl(heroUrl)).replace(/['"\\]/g, encodeURIComponent)}') center/cover no-repeat;"></div>` : ''}
       <button id="news-modal-close" style="position:absolute;top:16px;right:16px;
         background:rgba(10,15,30,.5);color:#fff;border:none;border-radius:50%;
         width:32px;height:32px;cursor:pointer;font-size:16px;
@@ -253,7 +275,7 @@ function openArticleModal(article) {
         <h1 style="font-family:'Times New Roman',serif;font-size:clamp(1.5rem,4vw,2.25rem);
           color:var(--blue);font-weight:700;line-height:1.2;margin-bottom:1.5rem;">${esc(article.title)}</h1>
         <div class="news-article-body" style="font-size:15px;line-height:1.8;color:var(--black);">
-          ${renderMarkdown(article.body)}
+          ${renderMarkdown(bodyMd)}
         </div>
         ${article.slug ? `
         <div style="margin-top:2rem;padding-top:1.25rem;border-top:1px solid var(--border);display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">

@@ -1,4 +1,4 @@
-import { supabase, requireAal2 } from './supabase.js';
+import { supabase, requireAal2, signedUrlForPublished } from './supabase.js';
 
 // ── Delegated actions (strict CSP) ────────────────────────────────
 // Inline handler attributes are blocked by the strict script-src policy,
@@ -242,7 +242,13 @@ window.loadIntoEditor = async (id) => {
   _pendingFile = null;
   _currentFileUrl  = d.file_url  || null;
   _currentFileName = d.file_name || null;
-  const _safeCurrentFileUrl = safeUrl(_currentFileUrl);
+  // archive-files is a private bucket: the stored value is a storage path
+  // (or a legacy public URL), so the "current file" link needs a signed
+  // URL. The viewer here is the author/manager previewing their own
+  // document, so the publication gate is bypassed for preview.
+  const _safeCurrentFileUrl = _currentFileUrl
+    ? safeUrl(await signedUrlForPublished(BUCKET, _currentFileUrl, { isAuthorOrApprover: true }))
+    : '';
   document.getElementById('ap-file-current').innerHTML = _currentFileUrl
     ? (_safeCurrentFileUrl
       ? `Current: <a href="${esc(_safeCurrentFileUrl)}" target="_blank" rel="noopener">${esc(_currentFileName) || 'view file'}</a>`
@@ -265,10 +271,20 @@ async function uploadFileIfNeeded() {
   if (_pendingFile.size > 10 * 1024 * 1024) throw new Error('That file is over 10 MB. Please choose a smaller file.');
   const ext = (_pendingFile.name.split('.').pop() || '').toLowerCase();
   const path = `${_user.id}/${Date.now()}-${slugify(_pendingFile.name.replace(/\.[^.]+$/, ''))}.${ext}`;
-  const { error } = await supabase.storage.from(BUCKET).upload(path, _pendingFile);
+  // The storage RLS policy allowlists mimetypes (application/pdf, image/*),
+  // but the recorded mimetype comes from the browser File's type, which is
+  // empty when the file arrives without one — and then the policy rejects
+  // the insert with "new row violates row-level security policy". Send the
+  // type explicitly from the extension so the upload no longer depends on
+  // the browser's MIME sniffing.
+  const contentType = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', pdf: 'application/pdf' }[ext] || _pendingFile.type || 'application/octet-stream';
+  const { error } = await supabase.storage.from(BUCKET).upload(path, _pendingFile, { contentType });
   if (error) throw error;
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  return { url: data.publicUrl, name: _pendingFile.name };
+  // The bucket is private: store the storage PATH, not a public URL.
+  // Render sites mint a short-lived signed URL from the path
+  // (signedUrlForPublished in supabase.js); a public URL would 404
+  // once the bucket is private.
+  return { url: path, name: _pendingFile.name };
 }
 
 // Double-clicking Save used to re-upload the file and insert a second
@@ -355,10 +371,32 @@ window.quickUnpublish = async (id) => {
   toast('Moved back to drafts');
   await loadDocs();
 };
+// Audit fix publishing:delete-leaves-storage-objects: resolve a stored file
+// value to its archive-files bucket path so deleting the document retracts
+// the object too. Stored values are either a bare storage path (new uploads)
+// or a legacy full public/signed URL; anything else is not our object.
+function archiveFileStoragePath(stored) {
+  const raw = String(stored ?? '').trim();
+  if (!raw) return null;
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(raw) && !raw.startsWith('//')) return raw.replace(/^\/+/, '');
+  const marker = '/storage/v1/object/public/archive-files/';
+  const signed = '/storage/v1/object/sign/archive-files/';
+  const i = raw.indexOf(marker) >= 0 ? raw.indexOf(marker) + marker.length : raw.indexOf(signed) >= 0 ? raw.indexOf(signed) + signed.length : -1;
+  if (i < 0) return null;
+  const path = raw.slice(i).split('?')[0];
+  try { return decodeURIComponent(path); } catch { return path; }
+}
+
 window.deleteDoc = async (id) => {
   if (!(await mcaConfirm({ title: 'Delete document?', message: 'Delete this document? This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
+  const { data: doc } = await supabase.from('archive_documents').select('file_url').eq('id', id).maybeSingle();
   const { error } = await supabase.from('archive_documents').delete().eq('id', id);
   if (error) { toast('Error: '+error.message, true); return; }
+  const path = archiveFileStoragePath(doc?.file_url);
+  if (path) {
+    const { error: rmErr } = await supabase.storage.from(BUCKET).remove([path]);
+    if (rmErr) console.warn('Could not remove deleted document file:', rmErr.message);
+  }
   if (_editingId === id) clearEditor();
   toast('Document deleted');
   await loadDocs();
@@ -416,13 +454,13 @@ function updateCharCounts() {
 document.getElementById('ap-summary').addEventListener('input', updateCharCounts);
 document.getElementById('ap-body').addEventListener('input', () => { updatePreview(); updateCharCounts(); });
 
-document.getElementById('btn-clear-editor').addEventListener('click', () => {
-  if (document.getElementById('ap-title').value && !confirm('Clear the editor? Unsaved changes will be lost.')) return;
+document.getElementById('btn-clear-editor').addEventListener('click', async () => {
+  if (document.getElementById('ap-title').value && !(await mcaConfirm({ title: 'Clear the editor?', message: 'Unsaved changes will be lost.', confirmText: 'Clear' }))) return;
   clearEditor();
 });
 document.getElementById('btn-save-draft').addEventListener('click', () => saveDoc('draft'));
-document.getElementById('btn-publish').addEventListener('click', () => {
-  if (!confirm('Publish this document? It will be visible to everyone in the Archive.')) return;
+document.getElementById('btn-publish').addEventListener('click', async () => {
+  if (!(await mcaConfirm({ title: 'Publish this document?', message: 'It will be visible to everyone in the Archive.', confirmText: 'Publish' }))) return;
   saveDoc('published');
 });
 

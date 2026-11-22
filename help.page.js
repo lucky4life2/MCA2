@@ -156,13 +156,17 @@ window.toggleFaq = (id) => {
   const answer = item.querySelector('.faq-answer');
   const isOpen = item.classList.contains('open');
   const trigger = item.querySelector('.faq-question');
+  // Where interpolate-size is supported the CSS transitions height: 0 to
+  // height: auto directly, so no measurement is needed. Older browsers
+  // keep the previous max-height approach (inline scrollHeight).
+  const smoothHeight = typeof CSS !== 'undefined' && CSS.supports && CSS.supports('interpolate-size', 'allow-keywords');
   if (isOpen) {
-    answer.style.maxHeight = null;
+    if (!smoothHeight) answer.style.maxHeight = null;
     item.classList.remove('open');
     if (trigger) trigger.setAttribute('aria-expanded', 'false');
   } else {
     item.classList.add('open');
-    answer.style.maxHeight = answer.scrollHeight + 'px';
+    if (!smoothHeight) answer.style.maxHeight = answer.scrollHeight + 'px';
     if (trigger) trigger.setAttribute('aria-expanded', 'true');
   }
 };

@@ -89,7 +89,7 @@
       // Account status is checked BEFORE the staff bypass (VER-M6): a
       // frozen, terminated, or deactivated account stays blocked even if
       // it holds can_bypass_membership. The bypass only applies to an
-      // account in good standing. Mirrors the MCAVerify 1.0.3 join gate,
+      // account in good standing. Mirrors the MCA plugin 1.0.0 join gate,
       // which checks accountOk() before the bypass.
       if (!['active', 'pending_deletion'].includes(s.account_status)) {
         const [title, text] = ACCOUNT_MESSAGES[s.account_status]

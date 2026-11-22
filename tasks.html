@@ -28,11 +28,17 @@
 <style>
   .btn { font-size: 11px; font-weight: 600; letter-spacing: .5px; padding: 6px 14px; border-radius: 3px; cursor: pointer; transition: background .15s, color .15s, border-color .15s; border: none; white-space: nowrap; }
   .btn-primary { background: var(--blue); color: #fff; }
-  .btn-primary:hover { background: var(--blue-dark); }
+  @media (hover: hover) {
+    .btn-primary:hover { background: var(--blue-dark); }
+  }
   .btn-danger { background: transparent; color: #c0392b; border: 1px solid var(--border); }
-  .btn-danger:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
+  @media (hover: hover) {
+    .btn-danger:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
+  }
   .btn-outline { background: transparent; color: var(--blue); border: 1px solid var(--border); }
-  .btn-outline:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+  @media (hover: hover) {
+    .btn-outline:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+  }
   .btn-outline.active { background: var(--blue); color: #fff; border-color: var(--blue); }
   .form-input { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-family: 'Open Sans', sans-serif; font-size: 13px; background: var(--white); color: var(--black); box-sizing: border-box; }
   .form-input:focus { outline: none; border-color: var(--blue); }
@@ -57,7 +63,9 @@
   .tk-view-toggle { display: flex; gap: 6px; }
   .tk-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1.75rem; }
   .tk-legend-chip { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--muted); padding: 5px 10px 5px 8px; border-radius: 20px; border: 1px solid var(--border); cursor: pointer; background: var(--white); transition: border-color .15s, color .15s; }
-  .tk-legend-chip:hover { color: var(--black); }
+  @media (hover: hover) {
+    .tk-legend-chip:hover { color: var(--black); }
+  }
   .tk-legend-chip.active { border-color: var(--blue); color: var(--blue); }
   .tk-swatch { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.15); flex-shrink: 0; }
   .tk-project-select { min-width: 180px; }
@@ -72,20 +80,28 @@
   .tp-head-name { font-weight: 700; color: var(--blue); font-size: 14px; margin-right: auto; }
   .tp-head-actions { display: flex; gap: 6px; align-items: center; }
   .tp-head-actions button { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 12px; }
-  .tp-head-actions button:hover { color: var(--blue); }
+  @media (hover: hover) {
+    .tp-head-actions button:hover { color: var(--blue); }
+  }
   .tp-collapse-btn { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 12px; padding: 2px 4px; line-height: 1; }
-  .tp-collapse-btn:hover { color: var(--blue); }
+  @media (hover: hover) {
+    .tp-collapse-btn:hover { color: var(--blue); }
+  }
 
   .tk-collapsed-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1.75rem; }
   .tk-collapsed-chip { display: flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--white); cursor: pointer; transition: border-color .15s, color .15s; }
-  .tk-collapsed-chip:hover { border-color: var(--blue); }
+  @media (hover: hover) {
+    .tk-collapsed-chip:hover { border-color: var(--blue); }
+  }
   .tk-collapsed-caret { font-size: 9px; color: var(--muted); }
   .tk-collapsed-name { font-weight: 700; color: var(--blue); font-size: 12px; }
   .tk-collapsed-count { font-size: 10px; font-weight: 700; color: var(--muted); background: var(--bg); border-radius: 10px; padding: 1px 7px; }
   .tp-sort { font-size: 11px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--white); color: var(--black); }
 
   .t-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--border); cursor: pointer; position: relative; }
-  .t-row:hover { background: var(--bg); }
+  @media (hover: hover) {
+    .t-row:hover { background: var(--bg); }
+  }
   .t-color-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(0,0,0,.15); }
   .t-title { flex: 1; font-size: 13px; font-weight: 600; color: var(--black); }
   .t-title.done { text-decoration: line-through; color: var(--muted); }
@@ -101,7 +117,9 @@
   /* Grid view */
   .tk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
   .tk-card { border-radius: 8px; padding: 12px 14px; cursor: pointer; border: 1px solid rgba(0,0,0,.08); box-shadow: 0 1px 3px rgba(10,15,30,.08); transition: transform .12s, box-shadow .12s; display: flex; flex-direction: column; gap: 8px; min-height: 108px; }
-  .tk-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(10,15,30,.16); }
+  @media (hover: hover) {
+    .tk-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(10,15,30,.16); }
+  }
   .tk-card-title { font-size: 13px; font-weight: 700; line-height: 1.35; }
   .tk-card-title.done { text-decoration: line-through; opacity: .7; }
   .tk-card-foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
@@ -144,10 +162,14 @@
   .tag-mgr-row:first-child { border-top: none; }
   .tag-mgr-actions { display: flex; gap: 2px; }
   .tag-mgr-actions button { background: none; border: none; cursor: pointer; font-size: 14px; padding: 2px 5px; }
-  .tag-mgr-actions button:hover { opacity: .7; }
+  @media (hover: hover) {
+    .tag-mgr-actions button:hover { opacity: .7; }
+  }
   .tk-tagpick-actions { display: flex; align-items: center; gap: 1px; margin-left: 2px; }
   .tk-tagpick-actions button { background: none; border: none; cursor: pointer; font-size: 11px; padding: 0 2px; line-height: 1; opacity: .55; }
-  .tk-tagpick-actions button:hover { opacity: 1; }
+  @media (hover: hover) {
+    .tk-tagpick-actions button:hover { opacity: 1; }
+  }
   .tk-tag-edit-row { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 20px; border: 2px solid var(--blue); background: var(--bg); }
   .tk-tag-edit-row input[type="color"] { width: 24px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; background: none; flex-shrink: 0; }
   .tk-tag-edit-row input[type="text"] { font-size: 11px; font-weight: 600; border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; width: 90px; }
@@ -317,7 +339,7 @@
         <label class="form-label" id="tk-comments-label">Comments</label>
         <div id="tk-comments"></div>
         <div style="display:flex;gap:8px;margin-top:8px;">
-          <input type="text" id="tk-comment-input" class="form-input" placeholder="Add a comment...">
+          <input type="text" id="tk-comment-input" class="form-input" placeholder="Add a comment..." enterkeyhint="send">
           <button class="btn btn-outline" id="tk-comment-add" style="font-size:12px;white-space:nowrap;">Post</button>
         </div>
       </div>

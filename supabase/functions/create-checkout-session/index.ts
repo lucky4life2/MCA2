@@ -237,7 +237,16 @@ Deno.serve(async (req: Request) => {
     }
     const isSubscription = product.product_type === 'subscription';
     isSubscription ? (hasSubscription = true) : (hasGoods = true);
-    const requestedQty = Math.max(1, Math.min(10, Math.floor(Number(item.qty) || 1)));
+    // Spending cap (club decision): at most 10 of one item per order.
+    // This REJECTS a quantity over 10 instead of silently clamping it
+    // (B6 fix 2026-11-15) — silently shipping 10 when the member asked
+    // for 11 hides that they got fewer than they paid attention to, and
+    // the cap is a block, not a suggestion. A missing/invalid qty still
+    // defaults to 1, as before.
+    const requestedQty = Math.max(1, Math.floor(Number(item.qty) || 1));
+    if (!isSubscription && requestedQty > 10) {
+      return json({ error: `You can buy at most 10 of "${product.name}" in one order.` }, 400);
+    }
 
     // Stock is only tracked for physical goods, never for a subscription
     // seat. A null inventory means the product doesn't track stock at
@@ -311,10 +320,37 @@ Deno.serve(async (req: Request) => {
   // purchase would silently overwrite the membership year.
   const { data: profile, error: profileError } = await admin
     .from('profiles')
-    .select('membership_status, membership_current_period_end, stripe_customer_id, date_of_birth, age_band')
+    .select('membership_status, membership_current_period_end, stripe_customer_id, date_of_birth, age_band, account_status')
     .eq('id', user.id)
     .single();
   if (profileError) return json({ error: 'Could not verify your membership status.' }, 500);
+
+  // Audit fix auth:frozen-terminated-shop-checkout-no-status-gate: a
+  // frozen or terminated account must not be able to start checkout at
+  // all. This gate sits upstream of BOTH fulfilment paths below — the
+  // real Stripe session creation and the TEST_CHECKOUT_MODE path — so
+  // neither can mint a session (or a test order / test membership) for
+  // such an account. The webhook re-checks at fulfilment as defence in
+  // depth, in case a session created before the freeze is paid later.
+  if (profile?.account_status === 'frozen' || profile?.account_status === 'terminated') {
+    console.error(`Checkout refused: account is ${profile.account_status}`, { userId: user.id });
+    return json({ error: 'This account is not eligible for checkout.' }, 403);
+  }
+
+  // Under-13 fix (2026-11-18): a coppa_restricted account — a child under
+  // 13 whose parent has not approved the account yet — must not be able
+  // to buy anything, membership or otherwise. The website UI already
+  // keeps restricted accounts out of the shop (nav.js redirects them to
+  // the account page), but this endpoint can be called directly, so the
+  // gate has to live here. Without it, a child could pay with a parent's
+  // card before any parent has approved the account, and a declined
+  // account would be left holding a paid membership it can never use.
+  // Same placement as the frozen/terminated gate above: upstream of both
+  // fulfilment paths.
+  if (profile?.account_status === 'coppa_restricted') {
+    console.error('Checkout refused: account is coppa_restricted (parental consent pending)', { userId: user.id });
+    return json({ error: 'Your account needs a parent or guardian to approve it before you can check out. Ask them to check their email for the approval link.' }, 403);
+  }
 
   if (hasSubscription) {
     const periodEnd = profile?.membership_current_period_end ? new Date(profile.membership_current_period_end) : null;

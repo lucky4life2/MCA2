@@ -28,11 +28,27 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ── Core navigation ──────────────────────────────────────────
-  function goTo(index) {
+  // Direction classes drive the directional slide animation in style.css:
+  // forward (next / auto-advance / dot to the right) enters from the right,
+  // backward from the left. `viaSwipe` swaps in the spring easing for
+  // flick-triggered changes. Classes are cleared at the start of every
+  // navigation so only the slide activated by this call is affected.
+  function goTo(index, viaSwipe) {
+    const target = (index + slides.length) % slides.length;
+    let dir = null;
+    if (target !== current) {
+      if (target === 0 && current === slides.length - 1) dir = 'next';
+      else if (target === slides.length - 1 && current === 0) dir = 'prev';
+      else dir = target > current ? 'next' : 'prev';
+    }
+    container.classList.remove('mca-dir-next', 'mca-dir-prev', 'mca-swipe');
+    if (dir) container.classList.add(dir === 'next' ? 'mca-dir-next' : 'mca-dir-prev');
+    if (viaSwipe) container.classList.add('mca-swipe');
+
     slides[current].classList.remove('active');
     updateDot(current, false);
 
-    current = (index + slides.length) % slides.length;
+    current = target;
 
     slides[current].classList.add('active');
     updateDot(current, true);
@@ -44,8 +60,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (dots[index]) dots[index].classList.toggle('active', on);
   }
 
-  function next() { goTo(current + 1); }
-  function prev() { goTo(current - 1); }
+  function next(viaSwipe) { goTo(current + 1, viaSwipe); }
+  function prev(viaSwipe) { goTo(current - 1, viaSwipe); }
 
   // ── Auto-play ────────────────────────────────────────────────
   function startTimer() { timer = setInterval(next, DELAY); }
@@ -81,14 +97,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'ArrowRight') { stopTimer(); next(); startTimer(); }
   });
 
-  // ── Touch / swipe support ────────────────────────────────────
+  // ── Touch / swipe support (velocity-aware flicks) ────────────────
+  // A fast flick advances the slideshow even over a short distance; a slow
+  // drag still needs the 40px threshold. Velocity is px/ms over the whole
+  // gesture: a 25px flick in 40ms (~0.6 px/ms) counts, a 25px slow drag
+  // doesn't. Flick-triggered changes get the spring easing (viaSwipe).
   let touchStartX = 0;
-  container.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; }, { passive: true });
+  let touchStartT = 0;
+  container.addEventListener('touchstart', e => {
+    touchStartX = e.touches[0].clientX;
+    touchStartT = performance.now();
+  }, { passive: true });
   container.addEventListener('touchend',   e => {
-    const diff = touchStartX - e.changedTouches[0].clientX;
-    if (Math.abs(diff) > 40) {          // minimum swipe distance
+    const endX = e.changedTouches[0].clientX;
+    const dist = touchStartX - endX; // >0 = swiped left = next slide
+    const dt = Math.max(performance.now() - touchStartT, 1);
+    const flick = Math.abs(dist) / dt > 0.5; // >0.5 px/ms counts as a flick
+    if (flick || Math.abs(dist) > 40) {          // minimum swipe distance
       stopTimer();
-      diff > 0 ? next() : prev();
+      dist > 0 ? next(true) : prev(true);
       startTimer();
     }
   });

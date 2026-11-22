@@ -715,16 +715,23 @@ async function injectNav() {
   // Dark mode toggle — handles both desktop (#nav-theme-toggle) and mobile (.nav-theme-toggle-mobile)
   document.querySelectorAll('#nav-theme-toggle, .nav-theme-toggle-mobile').forEach(btn => {
     btn.addEventListener('click', () => {
-      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      // Kill transitions for the instant of the switch (forced reflow
+      // between adding the class and flipping the theme), so no element's
+      // color/background transition plays and the theme changes cleanly.
+      const root = document.documentElement;
+      root.classList.add('mca-no-transition');
+      void root.offsetWidth; // force reflow so the class takes effect first
+      const isDark = root.getAttribute('data-theme') === 'dark';
       if (isDark) {
-        document.documentElement.removeAttribute('data-theme');
+        root.removeAttribute('data-theme');
         localStorage.setItem('mca_theme', 'light');
         applyLogoTheme(false);
       } else {
-        document.documentElement.setAttribute('data-theme', 'dark');
+        root.setAttribute('data-theme', 'dark');
         localStorage.setItem('mca_theme', 'dark');
         applyLogoTheme(true);
       }
+      requestAnimationFrame(() => root.classList.remove('mca-no-transition'));
     });
   });
 
@@ -1290,7 +1297,9 @@ function renderRolePreviewBanner(preview, mod) {
         font-size: 12px; font-weight: 700;
         padding: 4px 10px; cursor: pointer;
       }
-      #role-preview-banner .rpb-exit:hover { background: rgba(255,255,255,.3); }
+      @media (hover: hover) {
+        #role-preview-banner .rpb-exit:hover { background: rgba(255,255,255,.3); }
+      }
     `;
     document.head.appendChild(style);
   }
@@ -1359,6 +1368,31 @@ if ('serviceWorker' in navigator) {
 // Site-wide helpers: back-to-top button, password visibility toggles,
 // accessible confirmation modal, footer Discord-invite copy. nav.js loads
 // before every page script, so window.mcaConfirm is available to them.
+
+// ── Shake-on-error + error display (UI animation hack 3) ──────────────
+// nav.js loads before every page script, so these are available to the
+// login/onboarding forms. mcaShowError writes the message, shows the
+// element, and shakes the field at fault (validation / credential / code
+// errors only — network or server-availability failures show the message
+// with no shake, since no field is wrong). Callers that pass no field get
+// the first input in the error's panel. The shake class is removed on
+// animationend so the same field can shake again on the next bad submit.
+window.mcaShakeField = function (el) {
+  if (!el || !el.classList) return;
+  el.classList.remove('mca-shake');
+  void el.offsetWidth; // restart the animation even if it just played
+  el.classList.add('mca-shake');
+  el.addEventListener('animationend', () => el.classList.remove('mca-shake'), { once: true });
+};
+window.mcaShowError = function (errEl, message, inputEl) {
+  if (!errEl) return;
+  errEl.textContent = message;
+  errEl.style.display = 'block';
+  const field = inputEl
+    || errEl.closest('.login-panel, .onboard-step, form')?.querySelector('input, select')
+    || errEl.parentElement?.querySelector('input, select');
+  window.mcaShakeField(field);
+};
 
 // Back-to-top: appears after scrolling, keyboard-focusable, honors
 // reduced motion, and sits clear of the cookie banner.

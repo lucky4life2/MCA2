@@ -14,7 +14,7 @@
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:url" content="https://minecraftclubofamerica.me/economy.html">
-  <meta property="og:type" content="website">>
+  <meta property="og:type" content="website">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600&display=swap">
@@ -38,12 +38,18 @@
     .form-success { font-size: 12px; color: #2d7d2f; margin-top: 6px; display: none; }
     .btn { font-size: 12px; font-weight: 600; letter-spacing: .5px; padding: 9px 18px; border-radius: 4px; cursor: pointer; border: none; font-family: inherit; }
     .btn-primary { background: var(--blue); color: #fff; }
-    .btn-primary:hover { background: var(--blue-dark); }
+    @media (hover: hover) {
+      .btn-primary:hover { background: var(--blue-dark); }
+    }
     .btn-primary:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
     .btn-outline { background: transparent; color: var(--blue); border: 1px solid var(--border); text-decoration: none; display: inline-block; }
-    .btn-outline:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+    @media (hover: hover) {
+      .btn-outline:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+    }
     .btn-danger { background: transparent; color: #c0392b; border: 1px solid var(--border); }
-    .btn-danger:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
+    @media (hover: hover) {
+      .btn-danger:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
+    }
     .econ-subform { display: none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
   </style>
 </head>
@@ -134,7 +140,7 @@
         </div>
         <div class="form-group">
           <label class="form-label" for="pay-amount">Amount in Marks</label>
-          <input type="number" min="0.01" step="0.01" id="pay-amount" class="form-input" placeholder="0.00">
+          <input type="number" min="0.01" step="0.01" id="pay-amount" class="form-input" placeholder="0.00" inputmode="decimal">
         </div>
         <div class="form-group">
           <label class="form-label" for="pay-memo">Memo (optional)</label>

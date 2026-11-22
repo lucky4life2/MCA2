@@ -103,9 +103,22 @@
     .onboard-progress-step.current .onboard-progress-label { color: var(--blue); }
     .onboard-progress-step.done .onboard-progress-label { color: var(--green-text); }
 
-    /* Step panels */
+    /* Step panels — directional slides instead of fades: moving forward
+       (account -> verify -> path -> done) the new panel slides in from the
+       right; going back it slides in from the left. showStep() in
+       onboarding.page.js sets .mca-dir-back on the panel before activating
+       it; without that class the forward animation applies. */
     .onboard-step { display: none; }
-    .onboard-step.active { display: block; }
+    .onboard-step.active { display: block; animation: mca-onboard-in 0.3s ease both; }
+    .onboard-step.mca-dir-back.active { animation-name: mca-onboard-in-back; }
+    @keyframes mca-onboard-in {
+      from { opacity: 0; transform: translateX(24px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes mca-onboard-in-back {
+      from { opacity: 0; transform: translateX(-24px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
 
     /* Path picker cards */
     .onboard-paths {
@@ -122,7 +135,9 @@
       transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
       font-family: 'Open Sans', sans-serif;
     }
-    .onboard-path-card:hover { border-color: var(--blue); box-shadow: 0 2px 12px rgba(24,68,158,0.10); }
+    @media (hover: hover) {
+      .onboard-path-card:hover { border-color: var(--blue); box-shadow: 0 2px 12px rgba(24,68,158,0.10); }
+    }
     .onboard-path-card.selected {
       border-color: var(--blue); background: #eef3fc;
       box-shadow: 0 2px 12px rgba(24,68,158,0.12);
@@ -176,35 +191,47 @@
       width: 100%; background: #5865F2; color: #fff;
       font-size: 13px; font-weight: 600;
       padding: 11px 0; border: none; border-radius: 4px;
-      cursor: pointer; transition: background 0.15s;
+      cursor: pointer; transition: background 0.15s, transform 0.1s ease;
       display: flex; align-items: center; justify-content: center; gap: 8px;
       margin-bottom: 4px;
     }
-    .onboard-btn-discord:hover { background: #4752c4; }
+    @media (hover: hover) {
+      .onboard-btn-discord:hover { background: #4752c4; }
+    }
+    .onboard-btn-discord:active { transform: scale(0.97); }
     .onboard-btn-google {
       width: 100%; background: #fff; color: #3c4043;
       font-size: 13px; font-weight: 600;
       padding: 11px 0; border: 1px solid var(--border); border-radius: 4px;
-      cursor: pointer; transition: background 0.15s, border-color 0.15s;
+      cursor: pointer; transition: background 0.15s, border-color 0.15s, transform 0.1s ease;
       display: flex; align-items: center; justify-content: center; gap: 8px;
       margin-bottom: 4px;
     }
-    .onboard-btn-google:hover { background: #f7f8f8; border-color: #c9ccd1; }
+    @media (hover: hover) {
+      .onboard-btn-google:hover { background: #f7f8f8; border-color: #c9ccd1; }
+    }
+    .onboard-btn-google:active { transform: scale(0.97); }
     .onboard-btn-primary {
       width: 100%; background: var(--blue); color: #fff;
       font-size: 13px; font-weight: 600;
       padding: 11px 0; border: none; border-radius: 4px;
-      cursor: pointer; transition: background 0.15s; margin-top: 4px;
+      cursor: pointer; transition: background 0.15s, transform 0.1s ease; margin-top: 4px;
     }
-    .onboard-btn-primary:hover { background: var(--blue-dark); }
+    @media (hover: hover) {
+      .onboard-btn-primary:hover { background: var(--blue-dark); }
+    }
+    .onboard-btn-primary:active { transform: scale(0.97); }
     .onboard-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
     .onboard-btn-outline {
       width: 100%; background: var(--white); color: var(--blue);
       font-size: 13px; font-weight: 600;
       padding: 11px 0; border: 1px solid var(--blue); border-radius: 4px;
-      cursor: pointer; transition: background 0.15s; margin-top: 8px;
+      cursor: pointer; transition: background 0.15s, transform 0.1s ease; margin-top: 8px;
     }
-    .onboard-btn-outline:hover { background: #eef3fc; }
+    @media (hover: hover) {
+      .onboard-btn-outline:hover { background: #eef3fc; }
+    }
+    .onboard-btn-outline:active { transform: scale(0.97); }
     .onboard-error {
       font-size: 12px; color: #c0392b;
       margin-top: 8px; display: none;
@@ -221,7 +248,9 @@
       background: none; border: none; width: 100%;
       font-family: 'Open Sans', sans-serif;
     }
-    .onboard-back-link:hover { color: var(--blue); }
+    @media (hover: hover) {
+      .onboard-back-link:hover { color: var(--blue); }
+    }
     .onboard-hint {
       font-size: 11px; color: var(--muted);
       margin-top: 4px; line-height: 1.5;
@@ -238,13 +267,17 @@
       font-size: 12px; color: var(--muted); line-height: 1.5; cursor: pointer;
     }
     .onboard-consent a { color: var(--blue); text-decoration: none; }
-    .onboard-consent a:hover { text-decoration: underline; }
+    @media (hover: hover) {
+      .onboard-consent a:hover { text-decoration: underline; }
+    }
     .onboard-oauth-note {
       font-size: 11px; color: var(--muted); line-height: 1.5;
       text-align: center; margin: 10px 0 2px;
     }
     .onboard-oauth-note a { color: var(--blue); text-decoration: none; }
-    .onboard-oauth-note a:hover { text-decoration: underline; }
+    @media (hover: hover) {
+      .onboard-oauth-note a:hover { text-decoration: underline; }
+    }
 
     /* Done step */
     .onboard-done-icon {
@@ -279,7 +312,9 @@
     }
     .onboard-next-step strong { color: var(--black); }
     .onboard-next-step a { color: var(--blue); text-decoration: none; }
-    .onboard-next-step a:hover { text-decoration: underline; }
+    @media (hover: hover) {
+      .onboard-next-step a:hover { text-decoration: underline; }
+    }
 
     .onboard-card-footer {
       padding: 1rem 2rem;
@@ -292,7 +327,9 @@
     .onboard-card-footer-text a {
       color: var(--blue); text-decoration: none; font-weight: 600;
     }
-    .onboard-card-footer-text a:hover { text-decoration: underline; }
+    @media (hover: hover) {
+      .onboard-card-footer-text a:hover { text-decoration: underline; }
+    }
   </style>
 </head>
 <body>
@@ -374,7 +411,7 @@
           <div class="onboard-divider"><span class="onboard-divider-text">or</span></div>
           <div class="onboard-consent">
             <input type="checkbox" id="signup-consent">
-            <label for="signup-consent">I agree to the <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</label>
+            <label for="signup-consent">I agree to the <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>. If I'm under 13, I understand a parent or guardian must approve my account before I can use it.</label>
           </div>
           <div class="onboard-error" id="signup-consent-error">Please accept the Terms of Service and Privacy Policy to continue.</div>
           <button class="onboard-btn-primary" id="btn-show-email-form" style="margin-top:4px;">Continue with email</button>
@@ -403,17 +440,21 @@
                 <option value="07">July</option><option value="08">August</option><option value="09">September</option>
                 <option value="10">October</option><option value="11">November</option><option value="12">December</option>
               </select>
+              <select id="signup-dob-day" class="onboard-form-input" autocomplete="bday-day" style="flex:0 0 90px;">
+                <option value="">Day</option>
+              </select>
               <select id="signup-dob-year" class="onboard-form-input" autocomplete="bday-year" style="flex:0 0 120px;">
                 <option value="">Year</option>
               </select>
             </div>
-            <div class="onboard-hint">Month and year only — we use them to apply age-appropriate protections.</div>
+            <div class="onboard-hint">We ask for your birthday so we can apply the right protections for your age. If you're under 13, a parent or guardian will need to approve your account before you can use it — we'll email them a link to review and approve. Your birthday can't be changed once you enter it.</div>
           </div>
           <div class="onboard-form-group">
             <label class="onboard-form-label" for="signup-club">Your Club</label>
             <select id="signup-club" class="onboard-form-input">
               <option value="">I'm not in a club yet</option>
             </select>
+            <div class="onboard-hint">You can join MCA without being part of a school chapter.</div>
           </div>
           <div class="onboard-error" id="signup-error"></div>
           <p class="onboard-oauth-note" style="margin-bottom:10px;">We collect your email address, date of birth, and optional club choice to create and protect your account. Date of birth is used only to apply age-appropriate protections — see the <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>
@@ -431,10 +472,10 @@
           <div style="text-align:center;padding:0.5rem 0 1rem;">
             <div style="font-size:2rem;margin-bottom:0.5rem;">✉️</div>
             <div style="font-family:'Times New Roman',serif;font-size:1.2rem;color:var(--blue);">Check your email</div>
-            <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-top:0.5rem;">We sent a 6-digit code to <strong id="verify-email-display" style="color:var(--black);"></strong>. Enter it below to activate your account.</p>
+            <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-top:0.5rem;">We sent a 6-digit email verification code to <strong id="verify-email-display" style="color:var(--black);"></strong>. Enter it below, here on the signup page, to activate your account.</p>
           </div>
           <div class="onboard-form-group">
-            <label class="onboard-form-label" for="signup-code">Verification Code</label>
+            <label class="onboard-form-label" for="signup-code">Email Verification Code</label>
             <input type="text" id="signup-code" class="onboard-form-input" placeholder="123456" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
           </div>
           <div class="onboard-error" id="confirm-error"></div>
@@ -451,15 +492,15 @@
           <div class="onboard-next-steps">
             <div class="onboard-next-step">
               <span class="onboard-next-step-num">1</span>
-              <span><strong>Go to My Account</strong> — your account is ready. Head there to manage your profile and club.</span>
+              <span><strong>Go to My Account</strong>: Your free website account is ready.</span>
             </div>
             <div class="onboard-next-step">
               <span class="onboard-next-step-num">2</span>
-              <span><strong>Get your membership</strong> — membership is a one-time $12 for a full year, and it's what unlocks the server. <a href="shop.html">Get it in the shop</a>.</span>
+              <span><strong>Get your membership</strong>: Purchase one full year of membership in the shop for a one-time payment of $12. Membership does not renew automatically. <a href="shop.html">Get it in the shop</a>.</span>
             </div>
             <div class="onboard-next-step">
               <span class="onboard-next-step-num">3</span>
-              <span><strong>Link your Minecraft name</strong> — once you're a member, enter your Minecraft name on <a href="account.html">your account page</a>, grab your code, and run <strong>/mcaverify</strong> in-game. The server stays locked until you've paid.</span>
+              <span><strong>Verify your Minecraft account</strong>: Enter your Minecraft name on <a href="account.html">your account page</a> and get your Minecraft verification code. Join the server and run <strong>/mcaverify</strong> in-game. Paid membership and verification are required to play.</span>
             </div>
           </div>
           <button class="onboard-btn-primary" id="btn-done-account">Go to My Account</button>
