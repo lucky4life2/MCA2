@@ -156,8 +156,165 @@ document.addEventListener('keydown', (e) => {
     try { localStorage.setItem(cartKey(), JSON.stringify(items)); }
     catch (e) { alert('Your browser is blocking local storage, so the cart could not be saved.'); }
     updateFloatCart();
-    if (window._mcaUpdateCartBadge) window._mcaUpdateCartBadge();
+    // The nav cart badge is the shop's own floating-cart button
+    // (updateFloatCart above); the old window._mcaUpdateCartBadge() call
+    // here pointed at a function that never existed anywhere in the repo,
+    // so the badge never updated from shop actions. Removed, not defined:
+    // there is no nav badge to update.
+    // Server-side cart (stress-test item 19): the localStorage cart is
+    // now only a cache — the `carts` row is the source of truth, so the
+    // same account sees the same cart on a second phone. Fire-and-forget:
+    // a failed sync must never block adding to the cart.
+    saveServerCart(items);
   }
+
+  // ── Server-side cart (item 19) + persistent checkout intent (item 1)
+  // A cart is identified by its contents, not by the click that started
+  // checkout: sorted "productId:qty" pairs, so the same goods in a
+  // different order are the same cart, and a changed quantity is not.
+  function cartHash(items) {
+    return (items || []).map(i => `${i.id}:${Math.max(1, Math.floor(Number(i.qty) || 1))}`).sort().join('|');
+  }
+  function intentKey() { return 'mca_checkout_intent_' + _userId; }
+  // ONE idempotency key per cart/intent, persisted in localStorage (not
+  // sessionStorage — sessionStorage is per-tab, and the whole point is
+  // that a retry, a refresh, a second tab, or back→cancel→checkout again
+  // reuses the SAME key and gets the SAME Stripe session back instead of
+  // a second payable one). A new key is minted only when the cart
+  // changes or the stored key is older than 24h (Stripe sessions expire
+  // after ~24h by default). Cleared on checkout success.
+  function getCheckoutIntentKey(items) {
+    const hash = cartHash(items);
+    try {
+      const stored = JSON.parse(localStorage.getItem(intentKey()) || 'null');
+      if (stored && stored.cartHash === hash && stored.key
+        && Date.now() - new Date(stored.createdAt).getTime() < 24 * 60 * 60 * 1000) {
+        return stored.key;
+      }
+    } catch (e) { /* corrupt entry: mint a fresh key below */ }
+    const key = (crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    try { localStorage.setItem(intentKey(), JSON.stringify({ key, cartHash: hash, createdAt: new Date().toISOString() })); } catch (e) {}
+    return key;
+  }
+  function clearCheckoutIntent() { try { localStorage.removeItem(intentKey()); } catch (e) {} }
+  // Push the local cart to the server row. Best-effort: the local cart
+  // still works when the network or the row is unavailable.
+  async function saveServerCart(items) {
+    if (!_userId) return;
+    try {
+      await supabase.from('carts').upsert({
+        user_id: _userId,
+        items: (items || []).map(i => ({ id: i.id, name: i.name, price: i.price, image_url: i.image_url || null, product_type: i.product_type || null, billing_cycle: i.billing_cycle || null, qty: i.qty || 1 })),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+    } catch (e) { /* local cache survives; next sync retries */ }
+  }
+  // Mark the server cart as checked out (success return): empties it and
+  // stamps last_checkout_at so another device can tell "paid elsewhere"
+  // from "emptied on purpose" when it refetches an empty cart.
+  async function clearServerCartAfterCheckout() {
+    if (!_userId) return;
+    try {
+      await supabase.from('carts').upsert({
+        user_id: _userId, items: [], updated_at: new Date().toISOString(),
+        last_checkout_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+    } catch (e) { /* local cart is already cleared; server row retries on next save */ }
+  }
+  async function fetchServerCart() {
+    if (!_userId) return null;
+    try {
+      const { data, error } = await withTimeout(
+        supabase.from('carts').select('items, last_checkout_at').eq('user_id', _userId).maybeSingle(), 6000);
+      if (error) return null;
+      return data || null;
+    } catch (e) { return null; }
+  }
+  // Adopt the server cart as the source of truth. Returns true when the
+  // local cart was replaced (caller re-renders). Server wins on conflict:
+  // it is the only copy both devices can see. The one exception is a
+  // server cart emptied by a checkout on another device (last_checkout_at
+  // within 24h) while this device still holds items — then the local cart
+  // is cleared and the user is told why, instead of silently vanishing.
+  async function syncCartFromServer({ silent = false } = {}) {
+    if (!_userId) return false;
+    const server = await fetchServerCart();
+    if (!server) {
+      // No server row yet (first visit since the migration): push the
+      // local cart up so the other device can see it.
+      const local = getCart();
+      if (local.length) await saveServerCart(local);
+      return false;
+    }
+    const serverItems = Array.isArray(server.items) ? server.items : [];
+    const local = getCart();
+    if (!serverItems.length && local.length) {
+      const checkedOutAt = server.last_checkout_at ? new Date(server.last_checkout_at).getTime() : NaN;
+      if (Number.isFinite(checkedOutAt) && Date.now() - checkedOutAt < 24 * 60 * 60 * 1000) {
+        saveCart([]);
+        renderCartDrawer();
+        if (!silent) alert('Your cart was checked out on another device, so it has been cleared here.');
+        return true;
+      }
+      // Emptied on purpose (or an old checkout): adopt the empty cart.
+      saveCart([]);
+      renderCartDrawer();
+      return true;
+    }
+    if (cartHash(serverItems) !== cartHash(local)) {
+      try { localStorage.setItem(cartKey(), JSON.stringify(serverItems)); } catch (e) {}
+      updateFloatCart();
+      renderCartDrawer();
+      return true;
+    }
+    return false;
+  }
+  // Stale-cart check before creating a checkout session (item 19): if
+  // the server cart no longer matches this tab — paid or changed on
+  // another device — refuse the checkout and show the current cart
+  // instead of charging for goods that are already bought.
+  async function cartIsStaleForCheckout() {
+    const server = await fetchServerCart();
+    if (!server) return false; // server unreachable: local cart stands
+    const serverItems = Array.isArray(server.items) ? server.items : [];
+    const local = getCart();
+    if (!serverItems.length && local.length) {
+      const checkedOutAt = server.last_checkout_at ? new Date(server.last_checkout_at).getTime() : NaN;
+      if (Number.isFinite(checkedOutAt) && Date.now() - checkedOutAt < 24 * 60 * 60 * 1000) {
+        saveCart([]);
+        renderCartDrawer();
+        alert('These items were already checked out on another device, so this checkout was stopped. Your cart has been cleared here.');
+        return true;
+      }
+      saveCart([]);
+      renderCartDrawer();
+      alert('Your cart changed on another device. Please review it and try again.');
+      return true;
+    }
+    if (cartHash(serverItems) !== cartHash(local)) {
+      await syncCartFromServer({ silent: true });
+      alert('Your cart changed on another device. Please review the updated cart and try again.');
+      return true;
+    }
+    return false;
+  }
+  // Same-browser tabs sync through the storage event; a tab that sat
+  // open syncs again when it comes back into focus (the other device
+  // may have changed the cart while this tab was in the background).
+  // Throttled to one refetch per 30s so focus flapping never hammers
+  // the database.
+  let _lastCartSyncAt = 0;
+  window.addEventListener('storage', (e) => {
+    if (_userId && e.key === cartKey()) { updateFloatCart(); renderCartDrawer(); }
+  });
+  async function refetchCartOnFocus() {
+    if (!_userId || document.hidden) return;
+    if (Date.now() - _lastCartSyncAt < 30000) return;
+    _lastCartSyncAt = Date.now();
+    await syncCartFromServer({ silent: true });
+  }
+  window.addEventListener('focus', refetchCartOnFocus);
+  document.addEventListener('visibilitychange', refetchCartOnFocus);
   // A membership is a single seat — quantity is meaningless
   // for it, and letting it climb meant a second "Buy Membership" click
   // checked out as qty 2, i.e. double the charge for one membership.
@@ -237,7 +394,16 @@ document.addEventListener('keydown', (e) => {
     const prevText = btn.textContent;
     btn.disabled = true; btn.textContent = 'Redirecting to checkout...';
     try {
-      const url = await createCheckoutSession(items.map(i => ({ id: i.id, qty: isSubscription(i) ? 1 : (i.qty || 1) })));
+      // Stale-cart check (item 19): never start a checkout for goods
+      // another device already paid for. Reuses the persisted intent key
+      // (item 1) so a retry after a timeout, a refresh, or a second tab
+      // returns the original Stripe session instead of a second one.
+      // NOTE: createCheckoutSession(items, key) needs the supabase.js
+      // patch in the coordinator's merge (see branch report) — until it
+      // lands, the extra argument is ignored and the server-side intent
+      // dedup in create-checkout-session still protects the checkout.
+      if (await cartIsStaleForCheckout()) { btn.disabled = false; btn.textContent = prevText; return; }
+      const url = await createCheckoutSession(items.map(i => ({ id: i.id, qty: isSubscription(i) ? 1 : (i.qty || 1) })), getCheckoutIntentKey(items));
       window.location.href = url;
     } catch (err) {
       alert(err.message || 'Could not start checkout.');
@@ -400,11 +566,22 @@ document.addEventListener('keydown', (e) => {
       _checkoutHandled = true;
       if (_checkoutReturn === 'success' && _userId) {
         saveCart([]);
+        // The intent is spent: a later cart is a new intent with a new
+        // key. The server cart is cleared too, so the other device sees
+        // the checkout instead of a stale payable cart.
+        clearCheckoutIntent();
+        clearServerCartAfterCheckout();
         alert('Payment received! Your order or membership will activate once payment is confirmed — it may take a minute to update on your account page.');
       } else if (_checkoutReturn === 'cancel') {
         alert('Checkout was canceled — your cart is still here whenever you\'re ready.');
       }
     }
+    // Server cart is the source of truth across devices: adopt it before
+    // drawing the grid, so a cart built on another phone shows up here.
+    // Skipped on a success return: the local cart was just cleared and
+    // the server clear is still in flight, so a sync here would resurrect
+    // the paid items from the not-yet-cleared server row.
+    if (_userId && _checkoutReturn !== 'success') { try { await syncCartFromServer({ silent: true }); } catch (e) {} }
     // Membership state decides how the membership product is rendered, so
     // it is resolved before the grid is drawn rather than after.
     try { _membership = await withTimeout(getMembership(), 6000); }
