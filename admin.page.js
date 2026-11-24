@@ -1,4 +1,4 @@
-import { supabase, isAdmin, isOwner, startRolePreview, getMyRolePreview, requireAal2, optimizeImageFile } from './supabase.js';
+import { supabase, isAdmin, isOwner, startRolePreview, getMyRolePreview, requireAal2, optimizeImageFile, uploadFileResilient, cleanupUploadedPaths } from './supabase.js';
 
 // ── Delegated actions (strict CSP) ────────────────────────────────
 // Inline handler attributes are blocked by the strict script-src policy,
@@ -1197,9 +1197,12 @@ document.getElementById('am2-file').addEventListener('change', e => {
 async function uploadArchiveFileIfNeeded(userId) {
   if (!_archivePendingFile) return { url: _archiveCurrentFileUrl, name: _archiveCurrentFileName };
   const ext = (_archivePendingFile.name.split('.').pop() || '').toLowerCase();
-  const path = `${userId}/${Date.now()}-${slugify(_archivePendingFile.name.replace(/\.[^.]+$/, ''))}.${ext}`;
-  const { error } = await supabase.storage.from(ARCHIVE_BUCKET).upload(path, _archivePendingFile);
-  if (error) throw error;
+  // Stress-test 4: resilient upload — 30s timeout + one retry on network
+  // errors, so a stalled connection fails with a toast instead of hanging
+  // the Save button forever. A fresh path per attempt: retries can never
+  // collide with or overwrite an earlier attempt.
+  const makePath = () => `${userId}/${Date.now()}-${slugify(_archivePendingFile.name.replace(/\.[^.]+$/, ''))}.${ext}`;
+  const { path } = await uploadFileResilient(ARCHIVE_BUCKET, makePath, _archivePendingFile);
   // The bucket is private: store the storage PATH, not a public URL.
   // Render sites mint a short-lived signed URL from the path
   // (signedUrlForPublished in supabase.js); a public URL would 404
@@ -1958,9 +1961,19 @@ async function pmUploadPendingImages(productIdHint) {
     // Product photos are optimized before upload (resized, converted, EXIF stripped).
     const file = await optimizeImageFile(img.file);
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-    const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
-    const { error } = await supabase.storage.from('shop-images').upload(path, file);
-    if (error) throw error;
+    // Stress-test 4: resilient upload — 30s timeout + one retry on network
+    // errors. On failure, photos uploaded earlier in this batch are
+    // unreferenced (the product row is never saved after this throws),
+    // so retract them now; _pmImages still holds the File objects, so
+    // retrying the save re-uploads them.
+    const makePath = () => `${folder}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+    let path;
+    try {
+      ({ path } = await uploadFileResilient('shop-images', makePath, file));
+    } catch (err) {
+      await cleanupUploadedPaths('shop-images', uploaded.map(u => u.path));
+      throw err;
+    }
     const { data } = supabase.storage.from('shop-images').getPublicUrl(path);
     uploaded.push({ url: data.publicUrl, path, name: file.name, size: file.size });
   }
@@ -2708,11 +2721,21 @@ async function uploadMsgAttachments(files) {
   const optimizedFiles = [];
   for (const file of files) optimizedFiles.push(await optimizeImageFile(file));
   const uploaded = [];
+  const uploadedPaths = [];
   for (const file of optimizedFiles) {
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-    const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
-    const { error } = await supabase.storage.from('message-attachments').upload(path, file);
-    if (error) throw error;
+    // Stress-test 4: resilient upload — 30s timeout + one retry on network
+    // errors. On failure, retract files uploaded earlier in this batch:
+    // the message is never sent after this throws, so they would be orphaned.
+    const makePath = () => `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+    let path;
+    try {
+      ({ path } = await uploadFileResilient('message-attachments', makePath, file));
+    } catch (err) {
+      await cleanupUploadedPaths('message-attachments', uploadedPaths);
+      throw err;
+    }
+    uploadedPaths.push(path);
     const { data } = supabase.storage.from('message-attachments').getPublicUrl(path);
     uploaded.push({ url: data.publicUrl, name: file.name, size: file.size });
   }
