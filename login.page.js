@@ -423,12 +423,20 @@
     }
     const SUPABASE_URL = supabase.supabaseUrl;
     const ANON_KEY = supabase.supabaseKey;
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/request-password-reset`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
-      body: JSON.stringify({ email }),
-    });
-    const json = await res.json();
+    let res, json;
+    try {
+      res = await fetch(`${SUPABASE_URL}/functions/v1/request-password-reset`, {
+        signal: AbortSignal.timeout(15000),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
+        body: JSON.stringify({ email }),
+      });
+      json = await res.json();
+    } catch (e) {
+      // Stress-test 17: without a timeout a stalled request hung here with
+      // no feedback; without the try/catch the abort was an unhandled rejection.
+      window.mcaShowError(errEl, 'Could not reach the server. Please try again.', document.getElementById('forgot-email')); return;
+    }
     if (!res.ok || json.error) {
       window.mcaShowError(errEl, json.error || 'Could not send reset code.', document.getElementById('forgot-email')); return;
     }
@@ -457,12 +465,20 @@
 
     const SUPABASE_URL = supabase.supabaseUrl;
     const ANON_KEY = supabase.supabaseKey;
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/reset-password-with-code`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
-      body: JSON.stringify({ email: _pendingResetEmail, code, newPassword: newPass }),
-    });
-    const json = await res.json();
+    let res, json;
+    try {
+      res = await fetch(`${SUPABASE_URL}/functions/v1/reset-password-with-code`, {
+        signal: AbortSignal.timeout(15000),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
+        body: JSON.stringify({ email: _pendingResetEmail, code, newPassword: newPass }),
+      });
+      json = await res.json();
+    } catch (e) {
+      // Stress-test 17: without a timeout a stalled request hung here with
+      // no feedback; without the try/catch the abort was an unhandled rejection.
+      window.mcaShowError(errEl, 'Could not reach the server. Please try again.', document.getElementById('forgot-code')); return;
+    }
     if (!res.ok || json.error) {
       window.mcaShowError(errEl, json.error || 'Invalid or expired code.', document.getElementById('forgot-code')); return;
     }
@@ -607,6 +623,7 @@
     let res, json;
     try {
       res = await fetch(`${SUPABASE_URL}/functions/v1/signup-with-email`, {
+        signal: AbortSignal.timeout(15000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
         body: JSON.stringify({ email, password, turnstileToken, dateOfBirth: dob }),
@@ -658,6 +675,7 @@
     // left the button disabled on "Verifying…" with no way back but a reload.
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/verify-signup-code`, {
+        signal: AbortSignal.timeout(15000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
         body: JSON.stringify({ userId: _pendingSignupUserId, code }),
@@ -728,6 +746,7 @@
       const SUPABASE_URL = supabase.supabaseUrl;
       const ANON_KEY = supabase.supabaseKey;
       const res = await fetch(`${SUPABASE_URL}/functions/v1/resend-signup-code`, {
+        signal: AbortSignal.timeout(15000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
         body: JSON.stringify({ userId: _pendingSignupUserId }),
