@@ -317,6 +317,75 @@ async function purchasedLines(sessionId: string): Promise<
   return lines;
 }
 
+// Cart hash shared with create-checkout-session (which stamps it into
+// the session metadata and the checkout_intents row): SHA-256 hex of the
+// sorted "product_id:qty" pairs. The same goods in a different order hash
+// the same; a changed quantity or a different product does not.
+async function cartHashForLines(lines: { product_id: string | null; quantity: number }[]): Promise<string> {
+  const canonical = lines
+    .filter((l) => l.product_id)
+    .map((l) => `${l.product_id}:${Math.max(1, Math.floor(Number(l.quantity) || 1))}`)
+    .sort()
+    .join('|');
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Duplicate GOODS payment (stress-test item 1, 2026-11-23): the mirror of
+// the duplicate-membership refund below. Two distinct Checkout Sessions
+// for the same goods cart can both be paid (retry / second tab / second
+// phone); the second fulfilment must not become a second paid order with
+// stock taken twice. If an earlier PAID goods order exists for the same
+// user with the same cart hash, refund this payment in Stripe, mark this
+// order refunded, and return before any stock is decremented — the
+// first order keeps the stock and the fulfilment. Only identical carts
+// within 24h count as duplicates: buying the same item again tomorrow
+// is a legitimate second order, not a double charge. Same narrow race
+// as the membership re-read (two webhooks landing in the same instant
+// can both pass the check); the 24h window keeps the blast radius to
+// one accidental duplicate, and staff are alerted either way.
+async function refundDuplicateGoodsOrder(
+  userId: string,
+  sessionId: string,
+  cartHash: string,
+  paymentIntentId: string | null,
+): Promise<boolean> {
+  const windowStart = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data: earlier, error } = await admin
+    .from('orders')
+    .select('id, stripe_checkout_session_id, created_at')
+    .eq('user_id', userId)
+    .eq('kind', 'goods')
+    .eq('cart_hash', cartHash)
+    .eq('status', 'paid')
+    .neq('stripe_checkout_session_id', sessionId)
+    .gte('created_at', windowStart)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.error('Could not check for an earlier duplicate goods order:', error.message);
+    return false;
+  }
+  if (!earlier) return false;
+  alertStaff('handleCompletedSession', 'Duplicate goods payment: an earlier paid order already covers this exact cart. Grant skipped; duplicate payment queued for refund.', { userId, sessionId, earlierOrderId: earlier.id, earlierSessionId: earlier.stripe_checkout_session_id });
+  if (paymentIntentId) {
+    try {
+      await stripe.refunds.create({ payment_intent: paymentIntentId });
+    } catch (refundError) {
+      alertStaff('handleCompletedSession', 'Duplicate goods refund FAILED in Stripe; refund by hand in the Stripe dashboard.', { userId, sessionId, paymentIntentId, refundError: refundError instanceof Error ? refundError.message : String(refundError) });
+    }
+  } else {
+    alertStaff('handleCompletedSession', 'Duplicate goods payment has no payment_intent on the session; refund by hand in the Stripe dashboard.', { userId, sessionId });
+  }
+  const { error: markError } = await admin
+    .from('orders')
+    .update({ status: 'refunded' })
+    .eq('stripe_checkout_session_id', sessionId);
+  if (markError) console.error('Failed to mark duplicate goods order refunded:', markError.message);
+  return true;
+}
+
 async function handleCompletedSession(session: Stripe.Checkout.Session) {
   const userId = session.client_reference_id || session.metadata?.user_id;
   if (!userId) {
@@ -355,6 +424,13 @@ async function handleCompletedSession(session: Stripe.Checkout.Session) {
     alertStaff('handleCompletedSession', 'Paid checkout fulfilled for a frozen/terminated account; order recorded but no membership will be granted.', { userId, sessionId: session.id, isMembership });
   }
 
+  // Cart hash: prefer the value create-checkout-session stamped into
+  // the session metadata; recompute from the paid lines for sessions
+  // created before that change (or by any other path).
+  const cartHash = typeof session.metadata?.cart_hash === 'string' && session.metadata.cart_hash
+    ? session.metadata.cart_hash
+    : await cartHashForLines(lines);
+
   // Audit fix shop:checkout:daily-order-cap-outstanding-sessions: the
   // 3-orders-per-day cap is checked at session creation only, so
   // several sessions created under the cap can all be paid. Recount
@@ -391,6 +467,7 @@ async function handleCompletedSession(session: Stripe.Checkout.Session) {
         currency: session.currency ?? 'usd',
         status: 'held_daily_cap',
         line_items: lines,
+        cart_hash: cartHash,
         customer_email: session.customer_details?.email ?? session.customer_email ?? null,
         shipping,
       });
@@ -413,12 +490,24 @@ async function handleCompletedSession(session: Stripe.Checkout.Session) {
     currency: session.currency ?? 'usd',
     status: 'paid',
     line_items: lines,
+    cart_hash: cartHash,
     customer_email: session.customer_details?.email ?? session.customer_email ?? null,
     shipping,
   });
 
   const alreadyRecorded = !!orderError && (orderError as { code?: string }).code === '23505';
   if (orderError && !alreadyRecorded) console.error('Failed to record order:', orderError.message);
+
+  // Duplicate goods (item 1): a second paid session for the same cart
+  // is refunded here, BEFORE stock is decremented, so the duplicate
+  // never takes stock and never looks like a second fulfilled order.
+  // A replayed delivery of the same session hits 23505 above and never
+  // reaches this check; a genuinely different session for a different
+  // cart (different hash) passes through untouched.
+  if (!orderError && !isMembership) {
+    const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : null;
+    if (await refundDuplicateGoodsOrder(userId, session.id, cartHash, paymentIntentId)) return;
+  }
 
   if (!orderError && !isMembership) {
     const stockItems = lines

@@ -76,13 +76,27 @@ project for hygiene.
   creation (supabase.js → create-checkout-session → Stripe). A retried or
   double-clicked checkout now returns the original Stripe session instead
   of creating a second one.
-- Residual path, NOT fixed: two different browser tabs generate different
-  keys, so two sessions for one cart are still possible (mitigated by the
-  checkout-button disable and the 10/5min rate limit). A webhook guard
-  that refuses a second active subscription for the same user would close
-  it, but it needs care around legitimate re-subscription after expiry,
-  so it is a follow-up decision, not a change made here. No live payment
-  or refund action was taken or is proposed.
+- Residual path, FIXED 2026-11-23 (stress-test items 1 + 19, PR branch
+  fix-stress-checkout-cart): two different browser tabs used to generate
+  different keys, so two sessions for one cart were still possible. Now
+  three layers close it: (1) the shop persists ONE idempotency key per
+  cart in localStorage (`mca_checkout_intent_<userId>`, keyed by the
+  cart's contents, reused across retry/refresh/second tab/back→cancel→
+  checkout again); (2) `create-checkout-session` dedups server-side on a
+  SHA-256 cart hash (`checkout_intents` table, migration
+  20261123_checkout_idempotency_cart.sql) and returns the still-open
+  session instead of creating a second one — this also covers a second
+  phone or a cleared cache, where the client key cannot help; (3) the
+  webhook refunds a second paid goods session for the same cart within
+  24h (mirroring the duplicate-membership refund) instead of recording
+  a second paid order. A genuinely different cart, or the same cart
+  bought again after 24h, still checks out normally. The cart itself
+  moved to the server-side `carts` table, so a cart paid on one phone
+  clears on the other instead of inviting a second checkout. Still
+  unproven live: no real Stripe charge has exercised any of this yet
+  (Stripe is not connected); the 24h duplicate window and the
+  near-simultaneous-webhook race (same caveat as the membership
+  re-read) remain. No live payment or refund action was taken.
 
 ## 17. Uptime monitoring — proposal, NOT provisioned
 

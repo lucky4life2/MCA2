@@ -46,6 +46,150 @@ export function withTimeout(promise, ms = 8000) {
   return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out — having trouble reaching the server.')), ms))]);
 }
 
+// ── Resilient storage uploads + orphan sweep (stress-test item 4) ──
+// Uploads are single-shot PUTs with no native timeout or resume, so a
+// stalled connection (airplane mode, blackholed TCP) used to hang the
+// Save button forever. These helpers bound every upload at 30s, retry
+// once on network-type failures, and make sure a failed attempt can
+// never leave a stray object behind.
+//
+// Design notes:
+// - makePath() is called fresh on EVERY attempt, so each attempt gets a
+//   unique timestamped path — a retry can never collide with, or
+//   overwrite, an earlier attempt (same invariant the call sites already
+//   relied on), and no `upsert` is needed.
+// - Only THROWN errors are retried, and only network/timeout ones: a
+//   returned { error } is a server verdict (RLS denial, too large, bad
+//   type) that retrying cannot fix.
+// - withTimeout does not cancel the underlying PUT, so an attempt that
+//   timed out may still land server-side afterwards. Nothing ever
+//   references a failed attempt's path (callers only learn the path on
+//   success), so the helper best-effort removes attempted paths on
+//   failure — and any path whose removal can't be confirmed is recorded
+//   as an orphan for the sweep below.
+export const UPLOAD_TIMEOUT_MS = 30000;
+export const UPLOAD_MAX_ATTEMPTS = 2; // initial attempt + one retry
+
+function isNetworkError(err) {
+  if (!err) return false;
+  if (err.name === 'AbortError' || err.name === 'TypeError') return true;
+  const msg = String(err.message || err);
+  return /timed out|failed to fetch|network ?error|network request failed|load failed/i.test(msg);
+}
+
+/**
+ * Uploads `file` to `bucket`, returning { path, data } for the attempt
+ * that succeeded. Each attempt is capped at UPLOAD_TIMEOUT_MS (30s) and
+ * a network/timeout failure is retried once with a fresh unique path.
+ * Throws the last error, with `.attemptedPaths` listing every path tried.
+ */
+export async function uploadFileResilient(bucket, makePath, file, options = {}) {
+  const attemptedPaths = [];
+  let lastErr = null;
+  for (let attempt = 0; attempt < UPLOAD_MAX_ATTEMPTS; attempt++) {
+    const path = makePath();
+    attemptedPaths.push(path);
+    try {
+      const { data, error } = await withTimeout(
+        supabase.storage.from(bucket).upload(path, file, options),
+        options.timeoutMs || UPLOAD_TIMEOUT_MS
+      );
+      if (error) { lastErr = error; break; } // server verdict — don't retry
+      // Success: earlier attempts may have timed out but landed late.
+      // Retract those stale paths; anything unconfirmed goes on the
+      // orphan queue for the next sweep.
+      const stale = attemptedPaths.slice(0, -1);
+      if (stale.length) await cleanupUploadedPaths(bucket, stale);
+      return { path, data };
+    } catch (err) {
+      lastErr = err;
+      if (!isNetworkError(err)) break;
+    }
+  }
+  // Final failure: nothing references any attempted path yet, so try to
+  // retract them. A timeout leaves open that the PUT is still in flight
+  // and lands after the removal, so timed-out paths are ALSO recorded as
+  // orphans — the sweep's remove is idempotent, so re-removing a path
+  // that is already gone is a harmless no-op.
+  await cleanupUploadedPaths(bucket, attemptedPaths);
+  if (isNetworkError(lastErr)) attemptedPaths.forEach(p => recordOrphanUpload(bucket, p));
+  const err = lastErr instanceof Error ? lastErr : new Error(String(lastErr?.message || lastErr || 'Upload failed.'));
+  err.attemptedPaths = attemptedPaths;
+  throw err;
+}
+
+/**
+ * Best-effort removal of storage objects that were uploaded but never
+ * referenced by a saved row (e.g. a batch that failed halfway). Returns
+ * { removed, orphaned }: paths whose removal could not be confirmed are
+ * recorded for the orphan sweep and listed as `orphaned`. Never throws.
+ */
+export async function cleanupUploadedPaths(bucket, paths) {
+  const list = [...new Set((paths || []).filter(Boolean))];
+  if (!list.length) return { removed: [], orphaned: [] };
+  try {
+    const { error } = await supabase.storage.from(bucket).remove(list);
+    if (error) throw error;
+    return { removed: list, orphaned: [] };
+  } catch (e) {
+    console.warn(`cleanupUploadedPaths(${bucket}) failed:`, e?.message || e);
+    list.forEach(p => recordOrphanUpload(bucket, p));
+    return { removed: [], orphaned: list };
+  }
+}
+
+// ── Orphaned-upload queue ─────────────────────────────────────────
+// A failed upload can leave an object in storage with no row pointing
+// at it (timed-out PUT that lands late, batch failure before the row is
+// saved, remove that failed). There is no server-side sweeper, so the
+// client keeps a small localStorage queue of suspect paths and retries
+// their removal on the next signed-in page load (nav.js calls
+// sweepRecordedOrphans() after auth resolves). Removal is idempotent,
+// so queueing a path that is already gone is harmless.
+const ORPHAN_QUEUE_KEY = 'mca_orphan_uploads';
+const ORPHAN_QUEUE_MAX = 100;
+const ORPHAN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+export function recordOrphanUpload(bucket, path) {
+  if (!bucket || !path) return;
+  try {
+    const raw = localStorage.getItem(ORPHAN_QUEUE_KEY);
+    const queue = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(queue) && !queue.some(e => e?.bucket === bucket && e?.path === path)) {
+      queue.push({ bucket, path, at: Date.now() });
+      while (queue.length > ORPHAN_QUEUE_MAX) queue.shift();
+      localStorage.setItem(ORPHAN_QUEUE_KEY, JSON.stringify(queue));
+    }
+  } catch (e) { /* storage unavailable — the orphan simply stays */ }
+}
+
+/** Removes every queued orphaned object. Never throws. Entries older
+ *  than 7 days are dropped without retrying; entries whose removal
+ *  fails stay queued for the next sweep. */
+export async function sweepRecordedOrphans() {
+  let queue;
+  try {
+    queue = JSON.parse(localStorage.getItem(ORPHAN_QUEUE_KEY) || '[]');
+    if (!Array.isArray(queue)) queue = [];
+  } catch { return { swept: 0, remaining: 0 }; }
+  if (!queue.length) return { swept: 0, remaining: 0 };
+  const now = Date.now();
+  const fresh = queue.filter(e => e?.bucket && e?.path && now - (e.at || 0) < ORPHAN_MAX_AGE_MS);
+  const remaining = [];
+  let swept = 0;
+  for (const entry of fresh) {
+    try {
+      const { error } = await supabase.storage.from(entry.bucket).remove([entry.path]);
+      if (error) throw error;
+      swept++;
+    } catch (e) {
+      remaining.push(entry);
+    }
+  }
+  try { localStorage.setItem(ORPHAN_QUEUE_KEY, JSON.stringify(remaining)); } catch {}
+  return { swept, remaining: remaining.length };
+}
+
 // ── Auth helpers ─────────────────────────────────────────────
 
 /** Returns the current session user, or null */
@@ -244,6 +388,16 @@ export async function signOut() {
 }
 
 /**
+ * Sign out everywhere (stress-test item 19): revokes the refresh tokens
+ * for every session on every device, not just this browser. Same role
+ * preview cleanup as signOut() first, for the same reason.
+ */
+export async function signOutGlobal() {
+  await endRolePreview();
+  await supabase.auth.signOut({ scope: 'global' });
+}
+
+/**
  * Guards a protected page against the AAL1-only bypass: a session is
  * live (and passes a plain getSession()/getUser() check) as soon as the
  * password step succeeds, before any enrolled TOTP factor is verified.
@@ -271,17 +425,17 @@ export async function requireAal2(returnPath) {
  * redirect the browser to. items: [{ id, qty }]. Throws on any failure
  * (not signed in, empty cart, Stripe/Edge Function error).
  */
-export async function createCheckoutSession(items) {
+export async function createCheckoutSession(items, idempotencyKey) {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
   if (!token) throw new Error('You must be signed in to check out.');
-  // One idempotency key per checkout click: the Edge Function passes it
-  // to Stripe, so a retried or double-clicked checkout returns the original
-  // session instead of creating a second one. Two different tabs still get
-  // different keys (residual path — see docs/pass3-protection.md).
-  const idempotencyKey = (crypto?.randomUUID
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  // One idempotency key per checkout intent: the shop persists one key per
+  // cart (localStorage mca_checkout_intent_<userId>) and passes it here so
+  // a retry/refresh/second tab returns the original Stripe session.
+  // A caller that passes nothing keeps the old per-click behaviour.
+  const key = typeof idempotencyKey === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(idempotencyKey)
+    ? idempotencyKey
+    : (crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const res = await fetch(`${SUPABASE_URL}/functions/v1/create-checkout-session`, {
     method: 'POST',
     signal: AbortSignal.timeout(15000),
@@ -290,7 +444,7 @@ export async function createCheckoutSession(items) {
       apikey: SUPABASE_KEY,
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ items, idempotencyKey }),
+    body: JSON.stringify({ items, idempotencyKey: key }),
   });
   const result = await res.json().catch(() => ({}));
   if (!res.ok || !result.url) throw new Error(result.error || 'Could not start checkout.');
@@ -474,7 +628,13 @@ export async function signedUrlForPublished(bucket, storedUrl, { status, isAutho
   const parsed = parseStoredStorageValue(bucket, storedUrl);
   if (parsed.kind === 'empty') return null;
   if (parsed.kind === 'external') return String(storedUrl).trim();
-  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(parsed.path, SIGNED_URL_TTL_SECONDS);
+  // Bounded at 8s so a stalled connection fails fast into the caller's
+  // "no file/image" render instead of hanging the page (stress-test 17).
+  // A timeout is still just a null here — callers never show the raw path.
+  const { data, error } = await withTimeout(
+    supabase.storage.from(bucket).createSignedUrl(parsed.path, SIGNED_URL_TTL_SECONDS),
+    8000
+  ).catch(err => ({ data: null, error: err }));
   if (error || !data?.signedUrl) {
     console.error(`signedUrlForPublished(${bucket}) error:`, error?.message || 'no signed URL returned');
     return null;

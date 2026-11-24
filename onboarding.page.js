@@ -14,10 +14,23 @@ const params = new URLSearchParams(window.location.search);
 const PATH_KEY = 'mca_onboard_path';
 const STEP_KEY = 'mca_onboard_step';
 
-// The path is kept in sessionStorage only — there is no profiles column
-// for it, so the account page reads it back from here (same tab) to
-// pre-fill the Java/Bedrock choice when the member links Minecraft after
-// paying. Nothing else in the wizard writes to the profile.
+// Item 14: the path and step used to live in sessionStorage only
+// (per-tab, gone on close), so a new tab after verification silently
+// skipped the path picker. They now live in localStorage; sessionStorage
+// is still read as a fallback for values stored before this change.
+// The path is kept in browser storage only — there is no profiles column
+// for it, so the account page reads it back from here to pre-fill the
+// Java/Bedrock choice when the member links Minecraft after paying.
+function storageGet(key) {
+  try {
+    const v = localStorage.getItem(key);
+    if (v !== null) return v;
+  } catch (e) {}
+  try { return sessionStorage.getItem(key); } catch (e) { return null; }
+}
+function storageSet(key, value) {
+  try { localStorage.setItem(key, value); } catch (e) {}
+}
 const STEPS = ['account', 'path', 'done'];
 const STEP_META = {
   account:   { title: 'Create your account', subtitle: 'This is your MCA login. One account works for the website, the shop, and the server.' },
@@ -30,6 +43,40 @@ let _path = null;          // 'java' | 'bedrock' | 'both'
 let _pendingSignupEmail = null;
 let _pendingSignupUserId = null;
 let _user = null;
+
+// Item 14: same pending-signup persistence as login.page.js — the
+// verify panel is restored from localStorage when the member returns
+// mid-verify, instead of dead-ending on a 409. See login.page.js for
+// the full explanation; the helpers are duplicated here because the
+// two pages do not share a module.
+const PENDING_SIGNUP_KEY = 'mca_pending_signup';
+const SIGNUP_CODE_TTL_MS = 15 * 60 * 1000; // matches signup-with-email
+function savePendingSignup(userId, email) {
+  try {
+    localStorage.setItem(PENDING_SIGNUP_KEY, JSON.stringify({
+      userId, email, expiresAt: Date.now() + SIGNUP_CODE_TTL_MS,
+    }));
+  } catch (e) {}
+}
+function loadPendingSignup() {
+  try {
+    const raw = localStorage.getItem(PENDING_SIGNUP_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.userId || !parsed.email || !parsed.expiresAt
+      || Date.now() >= parsed.expiresAt) {
+      localStorage.removeItem(PENDING_SIGNUP_KEY);
+      return null;
+    }
+    return parsed;
+  } catch (e) {
+    try { localStorage.removeItem(PENDING_SIGNUP_KEY); } catch (_) {}
+    return null;
+  }
+}
+function clearPendingSignup() {
+  try { localStorage.removeItem(PENDING_SIGNUP_KEY); } catch (e) {}
+}
 
 // ── Step navigation ─────────────────────────────────────────────
 const titleEl = document.getElementById('onboard-title');
@@ -58,7 +105,7 @@ function showStep(name, dir) {
     const dot = el.querySelector('.onboard-progress-dot');
     if (dot) dot.textContent = idx < cur ? '✓' : String(idx + 1);
   });
-  try { sessionStorage.setItem(STEP_KEY, name); } catch (e) {}
+  try { storageSet(STEP_KEY, name); } catch (e) {}
   window.scrollTo({ top: 0, behavior: 'smooth' });
   titleEl.focus({ preventScroll: true });
 }
@@ -71,7 +118,7 @@ function selectPath(p) {
   pathCards.forEach(c => c.classList.toggle('selected', c.dataset.path === p));
   document.getElementById('path-error').style.display = 'none';
   pathContinueBtn.disabled = false;
-  try { sessionStorage.setItem(PATH_KEY, p); } catch (e) {}
+  try { storageSet(PATH_KEY, p); } catch (e) {}
 }
 pathCards.forEach(c => c.addEventListener('click', () => selectPath(c.dataset.path)));
 // "Back to sign in" lives on the account step now (step 1); the path
@@ -225,7 +272,17 @@ async function googleLogin() { await oauthLogin('google'); }
   const oauthError = params.get('error_description') || params.get('error')
     || hashParams.get('error_description') || hashParams.get('error');
   if (!oauthError) return;
-  showAccountError(decodeURIComponent(oauthError.replace(/\+/g, ' ')));
+  const decoded = decodeURIComponent(oauthError.replace(/\+/g, ' '));
+  const errorCode = params.get('error_code') || hashParams.get('error_code') || '';
+  // Item 8: same existing-email handling as login.page.js — a Google/
+  // Discord sign-in with an email that already has a password account
+  // errors here instead of creating a second account.
+  if (errorCode === 'identity_already_exists'
+    || /already (been )?registered|already exists|identity.*already|user already/i.test(decoded)) {
+    showAccountError('An account with this email already exists — sign in with your password, then link Google/Discord from your account page.');
+  } else {
+    showAccountError(decoded);
+  }
   history.replaceState(null, '', window.location.pathname + window.location.search.replace(/[?&](error|error_description|error_code)=[^&]*/g, '').replace(/^&/, '?'));
 })();
 
@@ -269,6 +326,7 @@ document.getElementById('btn-email-signup').addEventListener('click', async () =
   let res, json;
   try {
     res = await fetch(`${SUPABASE_URL}/functions/v1/signup-with-email`, {
+      signal: AbortSignal.timeout(15000),
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
       body: JSON.stringify({ email, password, turnstileToken, dateOfBirth: dob }),
@@ -283,10 +341,24 @@ document.getElementById('btn-email-signup').addEventListener('click', async () =
   btn.textContent = 'Create Account'; btn.disabled = false;
   if (!res.ok || json.error) {
     if (window.turnstile && turnstileWidgetId !== null) window.turnstile.reset(turnstileWidgetId);
+    // The address already has an unconfirmed signup with a live code
+    // (item 14): reopen the verify panel for it instead of a dead-end
+    // "already exists" — the code in the inbox still works.
+    if (json.needsVerification && json.userId) {
+      _pendingSignupEmail = email;
+      _pendingSignupUserId = json.userId;
+      savePendingSignup(json.userId, email);
+      document.getElementById('verify-email-display').textContent = email;
+      document.getElementById('signup-code').value = '';
+      document.getElementById('confirm-error').style.display = 'none';
+      showStep('verify');
+      return;
+    }
     window.mcaShowError(errEl, json.error || 'Sign up failed.', document.getElementById('signup-email')); return;
   }
   _pendingSignupEmail = email;
   _pendingSignupUserId = json.userId;
+  savePendingSignup(json.userId, email);
   document.getElementById('verify-email-display').textContent = email;
   document.getElementById('signup-code').value = '';
   document.getElementById('confirm-error').style.display = 'none';
@@ -307,6 +379,7 @@ document.getElementById('btn-verify-signup').addEventListener('click', async () 
   const ANON_KEY = supabase.supabaseKey;
   try {
     const res = await fetch(`${SUPABASE_URL}/functions/v1/verify-signup-code`, {
+      signal: AbortSignal.timeout(15000),
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
       body: JSON.stringify({ userId: _pendingSignupUserId, code }),
@@ -324,6 +397,7 @@ document.getElementById('btn-verify-signup').addEventListener('click', async () 
       return;
     }
     await supabase.auth.setSession({ access_token: json.access_token, refresh_token: json.refresh_token });
+    clearPendingSignup(); // verified — the pending signup is done
     await backfillUsername();
     const { data: { user } } = await supabase.auth.getUser();
     _user = user;
@@ -350,6 +424,7 @@ document.getElementById('confirm-resend').addEventListener('click', async e => {
     const SUPABASE_URL = supabase.supabaseUrl;
     const ANON_KEY = supabase.supabaseKey;
     const res = await fetch(`${SUPABASE_URL}/functions/v1/resend-signup-code`, {
+      signal: AbortSignal.timeout(15000),
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
       body: JSON.stringify({ userId: _pendingSignupUserId }),
@@ -396,7 +471,12 @@ async function backfillUsername() {
 
 
 // ── Back links ──────────────────────────────────────────────────
-document.getElementById('back-from-verify').addEventListener('click', () => showStep('account', 'back'));
+document.getElementById('back-from-verify').addEventListener('click', () => {
+  _pendingSignupEmail = null;
+  _pendingSignupUserId = null;
+  clearPendingSignup(); // deliberately abandoning the pending signup
+  showStep('account', 'back');
+});
 
 // ── Done ────────────────────────────────────────────────────────
 document.getElementById('btn-done-account').addEventListener('click', () => {
@@ -405,11 +485,12 @@ document.getElementById('btn-done-account').addEventListener('click', () => {
 
 // ── Resume / entry ──────────────────────────────────────────────
 (async function init() {
-  try { _path = sessionStorage.getItem(PATH_KEY); } catch (e) {}
+  try { _path = storageGet(PATH_KEY); } catch (e) {}
   if (_path) selectPath(_path);
 
   const { data: { session } } = await supabase.auth.getSession();
   if (session) {
+    clearPendingSignup(); // signed in means verified — no pending signup left
     const { data: { user } } = await supabase.auth.getUser();
     _user = user;
     // Signed in means the account already exists, so the wizard is
@@ -417,17 +498,29 @@ document.getElementById('btn-done-account').addEventListener('click', () => {
     // picker (e.g. they verified their email and then refreshed). Let
     // them finish picking how they play, then Done.
     let step = 'done';
-    try { step = sessionStorage.getItem(STEP_KEY) || 'done'; } catch (e) {}
+    try { step = storageGet(STEP_KEY) || 'done'; } catch (e) {}
     if (step === 'path') { showStep('path'); return; }
     showStep('done');
     return;
   }
-  // Fresh visit: start at the account step. A stored step from an
-  // earlier visit only matters if it's the account step itself (the
-  // email form); anything else funnels back to account, since the
-  // account has to exist before the path picker means anything.
+  // Fresh visit: a stored pending signup (item 14) means the member left
+  // mid-verify — reopen the verify panel for it instead of forcing a
+  // fresh signup that would 409. Otherwise start at the account step. A
+  // stored step from an earlier visit only matters if it's the account
+  // step itself (the email form); anything else funnels back to account,
+  // since the account has to exist before the path picker means anything.
+  const pending = loadPendingSignup();
+  if (pending) {
+    _pendingSignupUserId = pending.userId;
+    _pendingSignupEmail = pending.email;
+    document.getElementById('verify-email-display').textContent = pending.email;
+    document.getElementById('signup-code').value = '';
+    document.getElementById('confirm-error').style.display = 'none';
+    showStep('verify');
+    return;
+  }
   let step = 'account';
-  try { step = sessionStorage.getItem(STEP_KEY) || 'account'; } catch (e) {}
+  try { step = storageGet(STEP_KEY) || 'account'; } catch (e) {}
   if (step !== 'account') step = 'account';
   showStep(step);
 })();
