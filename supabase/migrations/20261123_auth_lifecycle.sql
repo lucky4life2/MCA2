@@ -126,6 +126,7 @@ end;
 $function$;
 
 -- ── cancel_own_account_deletion (item 18) ────────────────────────
+drop function if exists public.cancel_own_account_deletion();
 create or replace function public.cancel_own_account_deletion()
 returns boolean
 language plpgsql
@@ -154,6 +155,7 @@ $function$;
 -- deletion grace period (or after a self-deactivation) has changed
 -- their mind, so flip them back to active. coppa_restricted is
 -- deliberately untouched — only verifiable parental consent clears it.
+drop function if exists public.reactivate_own_account();
 create or replace function public.reactivate_own_account()
 returns boolean
 language plpgsql
@@ -252,6 +254,7 @@ $function$;
 -- referenced member — civic history or any other FK — is anonymized
 -- in place instead. Each user runs in its own subtransaction, so a
 -- failure is reported for that user only and the batch continues.
+drop function if exists private.purge_scheduled_deletions();
 create or replace function private.purge_scheduled_deletions()
 returns table (user_id uuid, action text, note text)
 language plpgsql
