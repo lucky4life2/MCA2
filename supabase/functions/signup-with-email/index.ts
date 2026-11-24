@@ -92,6 +92,10 @@ Deno.serve(async (req) => {
 
     // Reclaim an abandoned signup on this address: only if it was NEVER
     // confirmed, NEVER signed in, has no OAuth identity, and its code expired.
+    // If the same abandoned signup still has a LIVE code, remember its id:
+    // the 409 below then carries needsVerification + userId so the browser
+    // can reopen the verify panel for it instead of dead-ending (item 14).
+    let liveCodeUserId: string | undefined = undefined;
     const { data: priorProfile } = await adminClient
       .from('profiles')
       .select('id, pending_email_expires')
@@ -113,6 +117,8 @@ Deno.serve(async (req) => {
           if (delErr) {
             return new Response(JSON.stringify({ error: 'Could not free the previous incomplete signup. Please try again.' }), { status: 500, headers: CORS });
           }
+        } else if (neverConfirmed && neverSignedIn && noOauthIdentity) {
+          liveCodeUserId = prior.id;
         }
       }
     }
@@ -126,6 +132,12 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: GENERIC }), { status: 500, headers: CORS });
     }
     if (inUse) {
+      // Unconfirmed signup with a live code: hand the browser the userId
+      // so it can reopen the verify panel (item 14). The code itself is
+      // still required to verify, so the id alone grants nothing.
+      if (liveCodeUserId) {
+        return new Response(JSON.stringify({ error: 'An account with that email already exists.', needsVerification: true, userId: liveCodeUserId }), { status: 409, headers: CORS });
+      }
       return new Response(JSON.stringify({ error: 'An account with that email already exists.' }), { status: 409, headers: CORS });
     }
 
