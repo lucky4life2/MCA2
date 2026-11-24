@@ -57,22 +57,44 @@
 -- only (the pg_cron job runs as postgres and needs no grant).
 
 -- ── email_in_use (item 8) ───────────────────────────────────────
-create or replace function public.email_in_use(p_email text, p_exclude_user_id uuid)
+-- Live (2026-11-23, verified verbatim from pg_proc on live + TEST,
+-- which agree byte-for-byte) reconciled with the repo's btrim trimming.
+-- Kept from live: plpgsql, service_role-only gate, unexpired
+-- profiles.pending_email in-use check, DEFAULT NULL on
+-- p_exclude_user_id, search_path 'public' (body is schema-qualified:
+-- auth.users / public.profiles, so 'public' is sufficient).
+-- Added from the repo: btrim() on both sides of every email compare.
+-- DROP + CREATE (not CREATE OR REPLACE): the existing function carries
+-- a parameter default that CREATE OR REPLACE cannot remove (42P13).
+drop function if exists public.email_in_use(text, uuid);
+
+create function public.email_in_use(p_email text, p_exclude_user_id uuid default null::uuid)
 returns boolean
-language sql
-stable
+language plpgsql
 security definer
-set search_path to 'auth', 'public'
+set search_path to 'public'
 as $function$
-  select exists (
-    select 1 from auth.users u
-    where lower(btrim(u.email)) = lower(btrim(p_email))
-      and (p_exclude_user_id is null or u.id <> p_exclude_user_id)
+begin
+  if current_setting('role') != 'service_role' then
+    raise exception 'Forbidden';
+  end if;
+
+  return exists (
+    select 1 from auth.users
+    where lower(btrim(email)) = lower(btrim(p_email))
+      and (p_exclude_user_id is null or id != p_exclude_user_id)
   ) or exists (
-    select 1 from public.profiles p
-    where lower(btrim(p.email)) = lower(btrim(p_email))
-      and (p_exclude_user_id is null or p.id <> p_exclude_user_id)
+    select 1 from public.profiles
+    where lower(btrim(email)) = lower(btrim(p_email))
+      and (p_exclude_user_id is null or id != p_exclude_user_id)
+  ) or exists (
+    select 1 from public.profiles
+    where pending_email is not null
+      and lower(btrim(pending_email)) = lower(btrim(p_email))
+      and (p_exclude_user_id is null or id != p_exclude_user_id)
+      and pending_email_expires > now()
   );
+end;
 $function$;
 
 -- ── schedule_own_account_deletion (item 18, audit_04 verbatim) ───
@@ -317,48 +339,18 @@ begin
   if current_user not in ('authenticated', 'anon') then
     return new;
   end if;
-
   v_is_self  := auth.uid() = old.id;
-  v_is_staff := private.get_my_role() = any(array['admin','owner'])
-                or public.user_has_permission('can_manage_users')
+  v_is_staff := public.user_has_permission('can_manage_users')
                 or public.user_has_permission('can_manage_minecraft');
-
-  -- Never client-writable, by anyone: real credentials/tokens (always
-  -- issued and consumed server-side) and fields every RPC that touches them
-  -- already exists specifically to gate.
-  if new.password_reset_token    is distinct from old.password_reset_token
-  or new.password_reset_expires  is distinct from old.password_reset_expires
-  or new.password_reset_attempts is distinct from old.password_reset_attempts
-  or new.pending_email           is distinct from old.pending_email
-  or new.pending_email_token     is distinct from old.pending_email_token
-  or new.pending_email_expires   is distinct from old.pending_email_expires
-  or new.pending_email_attempts  is distinct from old.pending_email_attempts
-  or new.role                    is distinct from old.role
-  or new.email_access_revoked    is distinct from old.email_access_revoked
-  or new.minecraft_uuid          is distinct from old.minecraft_uuid
-  or new.email                   is distinct from old.email
-  or new.email_unsub_token       is distinct from old.email_unsub_token
-  then
-    raise exception 'profiles: that field can only be changed by the server';
-  end if;
-
-
-  -- Self-service account lifecycle (Strix finding 7, 2026-10-27): the row
+  -- self-service account lifecycle (strix finding 7, 2026-10-27): the row
   -- owner may move their own account into 'deactivated' (via
   -- deactivate_own_account) or 'pending_deletion' (via
-  -- schedule_own_account_deletion). Those RPCs run as the caller, so
-  -- without this carve-out the trigger below rejects their updates and
-  -- both self-service flows fail. The carve-out is deliberately narrow:
-  --   * only the owner (v_is_self), never staff on someone else's row;
-  --   * only INTO deactivated / pending_deletion, only FROM active (or
-  --     from deactivated into pending_deletion) — a frozen or terminated
-  --     row cannot be moved by its owner at all, and no transition OUT
-  --     of deactivated / pending_deletion is allowed here;
-  --   * only account_status and its two timestamp companions may change
-  --     in the same statement — every other server-only field in the
-  --     block below still raises.
-  -- frozen / terminated stay staff/server-only: nothing here lets a
-  -- client write those values, in either direction.
+  -- schedule_own_account_deletion). narrow carve-out: only the owner
+  -- (v_is_self), only into deactivated / pending_deletion, only from
+  -- active (or from deactivated into pending_deletion) -- frozen /
+  -- terminated stay staff/server-only, and no transition out of
+  -- deactivated / pending_deletion is allowed here. only account_status
+  -- and its two timestamp companions may change in the same statement.
   if new.account_status          is distinct from old.account_status
   or new.deletion_scheduled_at   is distinct from old.deletion_scheduled_at
   or new.deactivated_at          is distinct from old.deactivated_at
@@ -386,9 +378,6 @@ begin
       raise exception 'profiles: that field can only be changed by the server';
     end if;
   end if;
-
-  -- The remaining server-only fields from the original block (account_status
-  -- and its timestamps are handled by the carve-out above).
   if new.password_reset_token    is distinct from old.password_reset_token
   or new.password_reset_expires  is distinct from old.password_reset_expires
   or new.password_reset_attempts is distinct from old.password_reset_attempts
@@ -404,11 +393,6 @@ begin
   then
     raise exception 'profiles: that field can only be changed by the server';
   end if;
-
-  -- Membership is money: it is written by the Stripe webhook (service_role)
-  -- or by admin_set_membership() (SECURITY DEFINER, gated on
-  -- can_manage_memberships), never by a client update — not even a staff
-  -- one, which would otherwise be an unaudited way around that RPC.
   if new.membership_status             is distinct from old.membership_status
   or new.membership_source             is distinct from old.membership_source
   or new.membership_current_period_end is distinct from old.membership_current_period_end
@@ -417,43 +401,41 @@ begin
   then
     raise exception 'profiles: membership and billing fields can only be changed by the server';
   end if;
-
-  -- mc_verify_code / mc_verify_expires: only the row owner may set these
-  -- (a self-chosen verification nonce -- not a privilege by itself).
+  if (new.mc_verify_code is distinct from old.mc_verify_code and new.mc_verify_code is not null)
+  or (new.mc_verify_expires is distinct from old.mc_verify_expires and new.mc_verify_expires is not null)
+  then
+    raise exception 'profiles: set the minecraft verification code with set_mc_verify_code()';
+  end if;
   if (new.mc_verify_code is distinct from old.mc_verify_code
       or new.mc_verify_expires is distinct from old.mc_verify_expires)
-     and not v_is_self
+     and not (v_is_self or v_is_staff)
   then
-    raise exception 'profiles: mc_verify_code can only be set by its owner';
+    raise exception 'profiles: mc_verify_code can only be cleared by its owner or staff';
   end if;
-
-  -- minecraft_verified: staff may flip this on someone else's row (the
-  -- admin approve/revoke Minecraft-link buttons); nobody may set it on
-  -- their own row directly.
   if new.minecraft_verified is distinct from old.minecraft_verified and not v_is_staff then
     raise exception 'profiles: minecraft_verified can only be changed by staff';
   end if;
-
-  -- discord_id / google_id: self may only clear (unlink) their own link,
-  -- never set it to an arbitrary value directly.
   if new.discord_id is distinct from old.discord_id and new.discord_id is not null then
     raise exception 'profiles: discord_id can only be cleared, not set, directly';
   end if;
   if new.google_id is distinct from old.google_id and new.google_id is not null then
     raise exception 'profiles: google_id can only be cleared, not set, directly';
   end if;
-
   -- profile_version (item 19): a server-maintained optimistic-concurrency
   -- counter, bumped by the profiles_version_bump trigger on every update.
-  -- A client must never set it — except for the trigger's own +1, which
+  -- A client must never set it -- except for the trigger's own +1, which
   -- the guard has to tolerate regardless of which trigger fires first
   -- (bump-then-guard sees old+1; guard-then-bump sees it unchanged).
+  -- Ported verbatim from the staged migration; everything above is the
+  -- live trigger body as read from pg_proc on 2026-11-23 (live and TEST
+  -- agree byte-for-byte). Deliberately NOT restored: the dropped
+  -- get_my_role() admin/owner term in v_is_staff, the old mc_verify_code
+  -- owner-set behaviour.
   if new.profile_version is distinct from old.profile_version
      and new.profile_version is distinct from old.profile_version + 1
   then
     raise exception 'profiles: profile_version can only be changed by the server';
   end if;
-
   return new;
 end;
 $function$;
