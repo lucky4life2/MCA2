@@ -326,6 +326,7 @@ document.getElementById('btn-email-signup').addEventListener('click', async () =
   let res, json;
   try {
     res = await fetch(`${SUPABASE_URL}/functions/v1/signup-with-email`, {
+      signal: AbortSignal.timeout(15000),
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
       body: JSON.stringify({ email, password, turnstileToken, dateOfBirth: dob }),
@@ -378,6 +379,7 @@ document.getElementById('btn-verify-signup').addEventListener('click', async () 
   const ANON_KEY = supabase.supabaseKey;
   try {
     const res = await fetch(`${SUPABASE_URL}/functions/v1/verify-signup-code`, {
+      signal: AbortSignal.timeout(15000),
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
       body: JSON.stringify({ userId: _pendingSignupUserId, code }),
@@ -422,6 +424,7 @@ document.getElementById('confirm-resend').addEventListener('click', async e => {
     const SUPABASE_URL = supabase.supabaseUrl;
     const ANON_KEY = supabase.supabaseKey;
     const res = await fetch(`${SUPABASE_URL}/functions/v1/resend-signup-code`, {
+      signal: AbortSignal.timeout(15000),
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
       body: JSON.stringify({ userId: _pendingSignupUserId }),
