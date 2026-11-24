@@ -244,6 +244,16 @@ export async function signOut() {
 }
 
 /**
+ * Sign out everywhere (stress-test item 19): revokes the refresh tokens
+ * for every session on every device, not just this browser. Same role
+ * preview cleanup as signOut() first, for the same reason.
+ */
+export async function signOutGlobal() {
+  await endRolePreview();
+  await supabase.auth.signOut({ scope: 'global' });
+}
+
+/**
  * Guards a protected page against the AAL1-only bypass: a session is
  * live (and passes a plain getSession()/getUser() check) as soon as the
  * password step succeeds, before any enrolled TOTP factor is verified.
