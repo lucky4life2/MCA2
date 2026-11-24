@@ -38,6 +38,7 @@ function wireOneTime() {
     document.getElementById('pc-decline').disabled = true;
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/confirm-parental-consent`, {
+        signal: AbortSignal.timeout(15000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, token, decision }),
@@ -67,13 +68,20 @@ function wireOneTime() {
 
 // ── Permanent parent portal ──────────────────────────────────────
 async function portalCall(action) {
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/parent-portal`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, portalToken: ptoken, action }),
-  });
-  const json = await res.json().catch(() => ({}));
-  return { ok: res.ok, json };
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/parent-portal`, {
+      signal: AbortSignal.timeout(15000),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, portalToken: ptoken, action }),
+    });
+    const json = await res.json().catch(() => ({}));
+    return { ok: res.ok, json };
+  } catch {
+    // Stress-test 17: a stalled or failed portal call used to throw past
+    // the callers; treat it as a failed call so they show their error state.
+    return { ok: false, json: {} };
+  }
 }
 
 const STATUS_LABEL = {

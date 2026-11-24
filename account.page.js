@@ -1,4 +1,4 @@
-import { supabase, signOut, createBillingPortalSession, optimizeImageFile } from './supabase.js';
+import { supabase, signOut, signOutGlobal, createBillingPortalSession, optimizeImageFile, uploadFileResilient, cleanupUploadedPaths } from './supabase.js';
 
 // ── Delegated actions (strict CSP) ────────────────────────────────
 // Inline handler attributes are blocked by the strict script-src policy,
@@ -431,7 +431,7 @@ function showRecoveryBanner() {
 // failed for every signed-in user and _profile silently fell back to {} —
 // which is why the membership section always read "Not a Member", even for
 // an admin-granted member.
-const PROFILE_COLUMNS = [
+const PROFILE_COLUMNS_LIST = [
   'id', 'display_name', 'username', 'email', 'role', 'account_status',
   'age_band', 'deletion_scheduled_at', 'discord_id', 'google_id',
   'minecraft_username', 'minecraft_verified',
@@ -439,14 +439,35 @@ const PROFILE_COLUMNS = [
   'news_email_opt_in',
   'task_email_opt_in', 'public_listing_opt_in',
   'membership_status', 'membership_source', 'membership_current_period_end',
-].join(', ');
+  // Item 19: optimistic-concurrency counter, bumped by a DB trigger on
+  // every profiles update. Read here, matched on save — never written
+  // by the client (see the profile_version rule in
+  // private.profiles_guard_columns()).
+  'profile_version',
+];
+const PROFILE_COLUMNS = PROFILE_COLUMNS_LIST.join(', ');
+// Pre-migration fallback (see loadProfile): the profile_version column
+// arrives with migration 20261123_auth_lifecycle.sql. Until it lands,
+// loads and saves run without it so the page keeps working; the
+// concurrency check activates itself once the migration is applied.
+const PROFILE_COLUMNS_WITHOUT_VERSION = PROFILE_COLUMNS_LIST.filter(c => c !== 'profile_version').join(', ');
 
 async function loadProfile() {
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('profiles')
     .select(PROFILE_COLUMNS)
     .eq('id', _user.id)
     .single();
+  if (error && /profile_version/i.test(error.message || '')) {
+    // The profile_version column does not exist yet — the migration has
+    // not landed. Retry without it: the page works, optimistic
+    // concurrency simply stays off until the migration is applied.
+    ({ data, error } = await supabase
+      .from('profiles')
+      .select(PROFILE_COLUMNS_WITHOUT_VERSION)
+      .eq('id', _user.id)
+      .single());
+  }
   if (error) console.error('Could not load your profile:', error.message);
   _profile = data || {};
 }
@@ -898,16 +919,22 @@ function renderDeletionBanner() {
   }
   const scheduledAt = new Date(_profile.deletion_scheduled_at);
   const deleteAt = new Date(scheduledAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+  // Item 14: a corrupt timestamp used to render "NaN days left" /
+  // "Invalid Date" (Math.max(0, NaN) is NaN). Guard it like the
+  // membership dates above: unknown date, no day count.
+  const validDate = !isNaN(scheduledAt.getTime()) && !isNaN(deleteAt.getTime());
   const msLeft = deleteAt.getTime() - Date.now();
   const daysLeft = Math.max(0, Math.ceil(msLeft / (24 * 60 * 60 * 1000)));
-  const dateStr = deleteAt.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  const dateStr = validDate
+    ? deleteAt.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+    : 'an unknown date';
+  const daysText = validDate ? ` (${daysLeft} day${daysLeft === 1 ? '' : 's'} left)` : '';
 
   wrap.innerHTML = `
     <div class="deletion-banner">
       <div class="deletion-banner-title">Account Scheduled for Deletion</div>
       <div class="deletion-banner-text">
-        Your account and all its data will be <strong>permanently deleted on ${dateStr}</strong>
-        (${daysLeft} day${daysLeft === 1 ? '' : 's'} left). Cancel anytime before then to keep your account.
+        Your account and all its data will be <strong>permanently deleted on ${dateStr}</strong>${daysText}. Cancel anytime before then to keep your account.
       </div>
       <div class="form-error" id="cancel-del-error" style="display:none;"></div>
       <div>
@@ -1410,11 +1437,13 @@ function renderMinecraft() {
   });
 
   // Pre-check the versions from the How-you-play path picked during
-  // onboarding (same tab — sessionStorage), if there is one. The member
-  // can still change the boxes here; this just saves them re-picking.
-  // No path saved means both start unchecked and the member picks.
+  // onboarding (localStorage now — sessionStorage is only a fallback
+  // for paths saved before item 14 moved it), if there is one. The
+  // member can still change the boxes here; this just saves them
+  // re-picking. No path saved means both start unchecked and the member
+  // picks.
   let savedPath = null;
-  try { savedPath = sessionStorage.getItem('mca_onboard_path'); } catch (e) {}
+  try { savedPath = localStorage.getItem('mca_onboard_path') || sessionStorage.getItem('mca_onboard_path'); } catch (e) {}
   if (savedPath === 'java' || savedPath === 'both') mcJavaEl.checked = true;
   if (savedPath === 'bedrock' || savedPath === 'both') mcBedrockEl.checked = true;
   mcSyncBedrock();
@@ -1797,14 +1826,69 @@ document.getElementById('btn-save-profile').addEventListener('click', async () =
   }
 
   const directoryOptIn = document.getElementById('field-directory-opt-in').checked;
-  const { error } = await supabase.from('profiles').update({ display_name, username, public_listing_opt_in: directoryOptIn }).eq('id', _user.id);
+  // Item 19: optimistic concurrency — profile_version is bumped by a DB
+  // trigger on every profiles update, so saving with a stale version
+  // matches zero rows instead of silently overwriting another device's
+  // edit. The client never writes profile_version itself; maybeSingle()
+  // (not single()) is what makes zero rows a clean no-error null.
+  const saveProfile = async (version) => {
+    // Pre-migration fallback: no profile_version column yet (version is
+    // null when loadProfile fell back) — plain update with no concurrency
+    // match; the check activates itself once the migration lands.
+    if (version == null) {
+      return supabase.from('profiles')
+        .update({ display_name, username, public_listing_opt_in: directoryOptIn })
+        .eq('id', _user.id)
+        .select('id')
+        .maybeSingle();
+    }
+    return supabase.from('profiles')
+      .update({ display_name, username, public_listing_opt_in: directoryOptIn })
+      .eq('id', _user.id)
+      .eq('profile_version', version ?? 0)
+      .select('profile_version')
+      .maybeSingle();
+  };
+  let { data: saved, error } = await saveProfile(_profile.profile_version);
+  if (!error && !saved) {
+    // Zero rows: the profile changed since this page loaded. Reload and
+    // compare — if only the version moved (e.g. an email toggle or an
+    // unlink on this same page bumped it), the fields being saved are
+    // untouched and one retry with the fresh version is safe. If the
+    // fields themselves changed, stop and show the current values.
+    await loadProfile();
+    if ((_profile.display_name || '') === display_name
+      && (_profile.username || '') === username
+      && !!_profile.public_listing_opt_in === directoryOptIn) {
+      ({ data: saved, error } = await saveProfile(_profile.profile_version));
+    }
+    if (!error && !saved) {
+      document.getElementById('field-display-name').value = _profile.display_name || '';
+      document.getElementById('field-username').value = _profile.username || '';
+      document.getElementById('field-directory-opt-in').checked = !!_profile.public_listing_opt_in;
+      document.getElementById('account-hero-name').textContent = _profile.display_name || _profile.username || _user.email?.split('@')[0];
+      errEl.textContent = 'This profile was changed on another device. The current values are shown above — review them and save again if you still want your changes.';
+      errEl.style.display = 'block'; return;
+    }
+  }
   if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
   _profile.display_name = display_name;
   _profile.username = username;
   _profile.public_listing_opt_in = directoryOptIn;
+  if (saved && saved.profile_version != null) _profile.profile_version = saved.profile_version;
   document.getElementById('account-hero-name').textContent = display_name || username || _user.email?.split('@')[0];
   succEl.textContent = 'Saved.'; succEl.style.display = 'block';
   setTimeout(() => succEl.style.display = 'none', 3000);
+});
+
+// ── Sign out of all devices (item 19) ───────────────────────────
+// Global sign-out revokes every refresh token on every device, not
+// just this browser. Confirm first — it signs the member out of their
+// phone and any other session too — then back to the login page.
+document.getElementById('btn-sign-out-all').addEventListener('click', async () => {
+  if (!confirm('Sign out of all devices? This will sign you out everywhere, including your phone and any other browser.')) return;
+  await signOutGlobal();
+  window.location.replace('login.html');
 });
 
 // ── Password change ───────────────────────────────────────────
@@ -2174,11 +2258,21 @@ async function uploadMsgAttachments(files) {
   const optimizedFiles = [];
   for (const file of files) optimizedFiles.push(await optimizeImageFile(file));
   const uploaded = [];
+  const uploadedPaths = [];
   for (const file of optimizedFiles) {
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-    const path = `${_user.id}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
-    const { error } = await supabase.storage.from('message-attachments').upload(path, file);
-    if (error) throw error;
+    // Stress-test 4: resilient upload — 30s timeout + one retry on network
+    // errors. On failure, retract files uploaded earlier in this batch:
+    // the message is never sent after this throws, so they would be orphaned.
+    const makePath = () => `${_user.id}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+    let path;
+    try {
+      ({ path } = await uploadFileResilient('message-attachments', makePath, file));
+    } catch (err) {
+      await cleanupUploadedPaths('message-attachments', uploadedPaths);
+      throw err;
+    }
+    uploadedPaths.push(path);
     const { data } = supabase.storage.from('message-attachments').getPublicUrl(path);
     uploaded.push({ url: data.publicUrl, name: file.name, size: file.size });
   }

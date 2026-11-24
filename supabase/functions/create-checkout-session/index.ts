@@ -136,6 +136,20 @@ function ageAtPurchase(dob: string | null): number | null {
   return age < 0 ? null : age;
 }
 
+// Cart hash shared with stripe-webhook (which recomputes it from the
+// paid Stripe lines) and with the checkout_intents table: SHA-256 hex of
+// the sorted "product_id:qty" pairs. The same goods in a different order
+// hash the same; a changed quantity or a different product does not.
+async function cartHashForLines(lines: { product_id: string | null; quantity: number }[]): Promise<string> {
+  const canonical = lines
+    .filter((l) => l.product_id)
+    .map((l) => `${l.product_id}:${Math.max(1, Math.floor(Number(l.quantity) || 1))}`)
+    .sort()
+    .join('|');
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 Deno.serve(async (req: Request) => {
   const cors = corsHeadersFor(req);
   function json(body: unknown, status = 200): Response {
@@ -386,12 +400,56 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // ── Checkout-intent dedup (stress-test item 1, 2026-11-23) ───────
+  // The client persists ONE idempotency key per cart (shop.page.js), but
+  // a key the client never sends — a second phone, a cleared cache, an
+  // old client — still mints a second payable session. So the server
+  // dedups on the cart itself: cart_hash is a SHA-256 of the sorted
+  // "product_id:qty" pairs (the same string the webhook recomputes from
+  // the paid lines), and checkout_intents holds one row per (user, cart
+  // hash). A recent row whose Stripe session is still open means "return
+  // that session's URL", not "create a second session". The stored key
+  // is also reused as the Stripe idempotency key, so even if the DB
+  // lookup misses, Stripe itself returns the original session for a
+  // same-key retry. Rows older than 24h are ignored (Stripe sessions
+  // expire after ~24h by default); a changed cart is a different hash
+  // and a different intent, so a legitimate second order still works.
+  const cartHashValue = await cartHashForLines(mockLines);
+  const { data: existingIntent } = await admin
+    .from('checkout_intents')
+    .select('idempotency_key, stripe_session_id, created_at')
+    .eq('user_id', user.id)
+    .eq('cart_hash', cartHashValue)
+    .maybeSingle();
+  const intentIsRecent = !!existingIntent?.created_at &&
+    Date.now() - new Date(existingIntent.created_at).getTime() < 24 * 60 * 60 * 1000;
+  // Prefer the stored key: the client's per-click key is only a fallback.
+  const effectiveIdempotencyKey = existingIntent?.idempotency_key ?? idempotencyKey;
+  if (stripeConfigured && intentIsRecent && existingIntent?.stripe_session_id) {
+    try {
+      const existingSession = await stripe.checkout.sessions.retrieve(existingIntent.stripe_session_id);
+      if (existingSession.status === 'open' && existingSession.url) {
+        return json({ url: existingSession.url });
+      }
+    } catch {
+      // Session gone (expired/paid/voided): fall through and create a
+      // fresh one; the upsert below overwrites this intent row.
+    }
+  }
+  if (!stripeConfigured && intentIsRecent && existingIntent?.stripe_session_id?.startsWith('test_')) {
+    // TEST_CHECKOUT_MODE (Gap C): the test path used to mint a fresh fake
+    // session — and a fresh order + a fresh membership grant — on every
+    // call. A recent test intent replays the same success redirect with
+    // no second order, mirroring the real-Stripe dedup above.
+    const originForTest = returnOrigin(req);
+    return json({ url: `${originForTest}/shop.html?checkout=success` });
+  }
+
   // Club decision (2026-11-02): max 3 orders per member per day.
   // Orders are only recorded on completed payment, so every row counts.
   // Fail closed: an error checking recent orders blocks checkout rather
   // than silently skipping the limit.
-  const todayStart = new Date().toISOString().slice(0, 10) + 'T00:00:00Z';
-  const { count: ordersToday, error: ordersTodayError } = await admin
+  const todayStart = new Date().toISOString().slice(0, 10) + 'T00:00:00Z';  const { count: ordersToday, error: ordersTodayError } = await admin
     .from('orders')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id)
@@ -428,6 +486,7 @@ Deno.serve(async (req: Request) => {
       currency: 'usd',
       status: 'paid',
       line_items: mockLines,
+      cart_hash: cartHashValue,
       customer_email: user.email ?? null,
       shipping: null,
     });
@@ -435,6 +494,15 @@ Deno.serve(async (req: Request) => {
       console.error('TEST_CHECKOUT_MODE: failed to record mock order:', orderError.message);
       return json({ error: 'Could not complete the test checkout.' }, 500);
     }
+    // Record the test intent so a second call for the same cart replays
+    // the success redirect instead of recording a second test order.
+    await admin.from('checkout_intents').upsert({
+      user_id: user.id,
+      cart_hash: cartHashValue,
+      idempotency_key: effectiveIdempotencyKey ?? `test_${crypto.randomUUID()}`,
+      stripe_session_id: fakeSessionId,
+      created_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,cart_hash' });
 
     if (!hasSubscription) {
       const stockItems = mockLines
@@ -480,7 +548,9 @@ Deno.serve(async (req: Request) => {
     const params: Stripe.Checkout.SessionCreateParams = {
       mode: 'payment',
       client_reference_id: user.id,
-      metadata: hasSubscription ? { user_id: user.id, membership: 'true' } : { user_id: user.id },
+      // cart_hash rides in metadata so the webhook can recognise a second
+      // paid session for the same cart as a duplicate (goods refund).
+      metadata: hasSubscription ? { user_id: user.id, membership: 'true', cart_hash: cartHashValue } : { user_id: user.id, cart_hash: cartHashValue },
       line_items: lineItems,
       success_url: `${origin}/shop.html?checkout=success`,
       cancel_url: `${origin}/shop.html?checkout=cancel`,
@@ -495,7 +565,18 @@ Deno.serve(async (req: Request) => {
       params.phone_number_collection = { enabled: true };
     }
 
-    const session = await stripe.checkout.sessions.create(params, idempotencyKey ? { idempotencyKey } : undefined);
+    const session = await stripe.checkout.sessions.create(params, effectiveIdempotencyKey ? { idempotencyKey: effectiveIdempotencyKey } : undefined);
+    // Persist the intent: the next call for this exact cart returns this
+    // session's URL instead of creating a second payable session.
+    // The stored key is what makes a same-key Stripe retry return the
+    // original session even if the DB lookup above ever misses.
+    await admin.from('checkout_intents').upsert({
+      user_id: user.id,
+      cart_hash: cartHashValue,
+      idempotency_key: effectiveIdempotencyKey ?? session.id,
+      stripe_session_id: session.id,
+      created_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,cart_hash' });
     return json({ url: session.url });
   } catch (err) {
     console.error('Stripe checkout session creation failed:', err);

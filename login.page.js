@@ -37,7 +37,20 @@
     if (!oauthError) return;
     const errEl = document.getElementById('signin-error');
     if (!errEl) return;
-    window.mcaShowError(errEl, decodeURIComponent(oauthError.replace(/\+/g, ' ')));
+    const decoded = decodeURIComponent(oauthError.replace(/\+/g, ' '));
+    const errorCode = params.get('error_code') || hashParams.get('error_code') || '';
+    // Item 8: Google/Discord sign-in with an email that already has a
+    // password account comes back here as an OAuth error (exact wording
+    // depends on the Supabase project's identity-linking setting). Turn
+    // it into directions instead of a raw provider error — the fix is to
+    // sign in with the password, then link the provider on the account
+    // page (Connected Accounts), not to create a second account.
+    if (errorCode === 'identity_already_exists'
+      || /already (been )?registered|already exists|identity.*already|user already/i.test(decoded)) {
+      window.mcaShowError(errEl, 'An account with this email already exists — sign in with your password, then link Google/Discord from your account page.');
+    } else {
+      window.mcaShowError(errEl, decoded);
+    }
     // Clean the error out of the URL so a refresh doesn't keep re-showing it.
     history.replaceState(null, '', window.location.pathname + window.location.search.replace(/[?&](error|error_description|error_code)=[^&]*/g, '').replace(/^&/, '?'));
   })();
@@ -110,6 +123,69 @@
 
   // Handle ?tab=signup in URL (e.g. from an old "Create account" link)
   if (params.get('tab') === 'signup') window.location.href = 'onboarding.html';
+
+  // ── Pending signup persistence (item 14) ──────────────────────
+  // The email-code verify step used to live only in _pendingSignupUserId
+  // (in-memory): a refresh or closed tab during verify left the account
+  // created server-side but the verify panel unreachable, and re-signup
+  // 409'd until the 15-minute code expired. Persist {userId, email,
+  // expiresAt} in localStorage on signup success and restore the panel
+  // from it on return; clear on verify success, on expiry, and on
+  // back-to-sign-in.
+  const PENDING_SIGNUP_KEY = 'mca_pending_signup';
+  const SIGNUP_CODE_TTL_MS = 15 * 60 * 1000; // matches signup-with-email
+  function savePendingSignup(userId, email) {
+    try {
+      localStorage.setItem(PENDING_SIGNUP_KEY, JSON.stringify({
+        userId, email, expiresAt: Date.now() + SIGNUP_CODE_TTL_MS,
+      }));
+    } catch (e) {}
+  }
+  function loadPendingSignup() {
+    try {
+      const raw = localStorage.getItem(PENDING_SIGNUP_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || !parsed.userId || !parsed.email || !parsed.expiresAt
+        || Date.now() >= parsed.expiresAt) {
+        localStorage.removeItem(PENDING_SIGNUP_KEY);
+        return null;
+      }
+      return parsed;
+    } catch (e) {
+      try { localStorage.removeItem(PENDING_SIGNUP_KEY); } catch (_) {}
+      return null;
+    }
+  }
+  function clearPendingSignup() {
+    try { localStorage.removeItem(PENDING_SIGNUP_KEY); } catch (e) {}
+  }
+  // Show the code-entry panel for a pending signup. Shared by the
+  // restore-on-return path and the needsVerification branches below, so
+  // all three open exactly the same panel.
+  function showConfirmPanel(email) {
+    _pendingSignupEmail = email || _pendingSignupEmail;
+    document.getElementById('signup-code').value = '';
+    document.getElementById('confirm-error').style.display = 'none';
+    tabs.forEach(t => t.classList.remove('active'));
+    panels.forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-confirm').classList.add('active');
+    document.getElementById('login-tabs').style.display = 'none';
+    document.getElementById('login-card-footer').style.display = 'none';
+    cardTitle.textContent = 'Almost there';
+  }
+
+  // Return visit during email-code verify (item 14): a stored pending
+  // signup reopens the verify panel instead of forcing a fresh signup
+  // that would 409. Only when signed out — a live session means the
+  // account is already verified and the page redirects away above.
+  if (!session) {
+    const pending = loadPendingSignup();
+    if (pending) {
+      _pendingSignupUserId = pending.userId;
+      showConfirmPanel(pending.email);
+    }
+  }
 
   // ── Terms/Privacy consent (Create Account tab only) ─────────────
   const signupConsent      = document.getElementById('signup-consent');
@@ -255,14 +331,8 @@
         // that's likely still valid.
         if (json.needsVerification && json.userId) {
           _pendingSignupUserId = json.userId;
-          document.getElementById('signup-code').value = '';
-          document.getElementById('confirm-error').style.display = 'none';
-          tabs.forEach(t => t.classList.remove('active'));
-          panels.forEach(p => p.classList.remove('active'));
-          document.getElementById('panel-confirm').classList.add('active');
-          document.getElementById('login-tabs').style.display = 'none';
-          document.getElementById('login-card-footer').style.display = 'none';
-          cardTitle.textContent = 'Almost there';
+          savePendingSignup(json.userId, identifier);
+          showConfirmPanel(identifier);
           btn.textContent = 'Sign In'; btn.disabled = false;
           return;
         }
@@ -353,12 +423,20 @@
     }
     const SUPABASE_URL = supabase.supabaseUrl;
     const ANON_KEY = supabase.supabaseKey;
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/request-password-reset`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
-      body: JSON.stringify({ email }),
-    });
-    const json = await res.json();
+    let res, json;
+    try {
+      res = await fetch(`${SUPABASE_URL}/functions/v1/request-password-reset`, {
+        signal: AbortSignal.timeout(15000),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
+        body: JSON.stringify({ email }),
+      });
+      json = await res.json();
+    } catch (e) {
+      // Stress-test 17: without a timeout a stalled request hung here with
+      // no feedback; without the try/catch the abort was an unhandled rejection.
+      window.mcaShowError(errEl, 'Could not reach the server. Please try again.', document.getElementById('forgot-email')); return;
+    }
     if (!res.ok || json.error) {
       window.mcaShowError(errEl, json.error || 'Could not send reset code.', document.getElementById('forgot-email')); return;
     }
@@ -387,12 +465,20 @@
 
     const SUPABASE_URL = supabase.supabaseUrl;
     const ANON_KEY = supabase.supabaseKey;
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/reset-password-with-code`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
-      body: JSON.stringify({ email: _pendingResetEmail, code, newPassword: newPass }),
-    });
-    const json = await res.json();
+    let res, json;
+    try {
+      res = await fetch(`${SUPABASE_URL}/functions/v1/reset-password-with-code`, {
+        signal: AbortSignal.timeout(15000),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
+        body: JSON.stringify({ email: _pendingResetEmail, code, newPassword: newPass }),
+      });
+      json = await res.json();
+    } catch (e) {
+      // Stress-test 17: without a timeout a stalled request hung here with
+      // no feedback; without the try/catch the abort was an unhandled rejection.
+      window.mcaShowError(errEl, 'Could not reach the server. Please try again.', document.getElementById('forgot-code')); return;
+    }
     if (!res.ok || json.error) {
       window.mcaShowError(errEl, json.error || 'Invalid or expired code.', document.getElementById('forgot-code')); return;
     }
@@ -537,6 +623,7 @@
     let res, json;
     try {
       res = await fetch(`${SUPABASE_URL}/functions/v1/signup-with-email`, {
+        signal: AbortSignal.timeout(15000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
         body: JSON.stringify({ email, password, turnstileToken, dateOfBirth: dob }),
@@ -553,19 +640,22 @@
     btn.textContent = 'Create Account'; btn.disabled = false;
     if (!res.ok || json.error) {
       if (window.turnstile) window.turnstile.reset();
+      // The address already has an unconfirmed signup with a live code
+      // (item 14): reopen the verify panel for it instead of a dead-end
+      // "already exists" — the code in the inbox still works.
+      if (json.needsVerification && json.userId) {
+        _pendingSignupUserId = json.userId;
+        savePendingSignup(json.userId, email);
+        showConfirmPanel(email);
+        return;
+      }
       window.mcaShowError(errEl, json.error || 'Sign up failed.', document.getElementById('signup-email')); return;
     }
     // Show code-entry confirmation panel
     _pendingSignupEmail = email;
     _pendingSignupUserId = json.userId;
-    document.getElementById('signup-code').value = '';
-    document.getElementById('confirm-error').style.display = 'none';
-    tabs.forEach(t => t.classList.remove('active'));
-    panels.forEach(p => p.classList.remove('active'));
-    document.getElementById('panel-confirm').classList.add('active');
-    document.getElementById('login-tabs').style.display = 'none';
-    document.getElementById('login-card-footer').style.display = 'none';
-    cardTitle.textContent = 'Almost there';
+    savePendingSignup(json.userId, email);
+    showConfirmPanel(email);
   });
 
   // ── Verify signup code ──────────────────────────────────────────
@@ -585,6 +675,7 @@
     // left the button disabled on "Verifying…" with no way back but a reload.
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/verify-signup-code`, {
+        signal: AbortSignal.timeout(15000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
         body: JSON.stringify({ userId: _pendingSignupUserId, code }),
@@ -603,6 +694,7 @@
       }
       // Set the session manually from the tokens returned
       await supabase.auth.setSession({ access_token: json.access_token, refresh_token: json.refresh_token });
+      clearPendingSignup(); // verified — the pending signup is done
       // Backfill a username if signup didn't set one: derive from the email
       // prefix so the account page shows a name instead of an email fragment.
       try {
@@ -654,6 +746,7 @@
       const SUPABASE_URL = supabase.supabaseUrl;
       const ANON_KEY = supabase.supabaseKey;
       const res = await fetch(`${SUPABASE_URL}/functions/v1/resend-signup-code`, {
+        signal: AbortSignal.timeout(15000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
         body: JSON.stringify({ userId: _pendingSignupUserId }),
@@ -682,6 +775,7 @@
     e.preventDefault();
     _pendingSignupEmail  = null;
     _pendingSignupUserId = null;
+    clearPendingSignup(); // deliberately abandoning the pending signup
     document.getElementById('login-tabs').style.display = '';
     document.getElementById('login-card-footer').style.display = '';
     switchTab('signin');

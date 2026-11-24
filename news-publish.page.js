@@ -1,4 +1,4 @@
-import { supabase, getMyRolePreview, requireAal2, optimizeImageFile, signedUrlForPublished, resolvePrivateBucketImagesInMarkdown } from './supabase.js';
+import { supabase, getMyRolePreview, requireAal2, optimizeImageFile, signedUrlForPublished, resolvePrivateBucketImagesInMarkdown, withTimeout, withRetry, uploadFileResilient, cleanupUploadedPaths } from './supabase.js';
 
 // ── Delegated actions (strict CSP) ────────────────────────────────
 // Inline handler attributes are blocked by the strict script-src policy,
@@ -15,6 +15,7 @@ const _ACTION_HANDLERS = {
   'quick-unpublish': (el, e) => window.quickUnpublish(el.dataset.id),
   'quick-publish': (el, e) => window.quickPublish(el.dataset.id),
   'delete-article': (el, e) => window.deleteArticle(el.dataset.id),
+  'retry-load-articles': (el, e) => loadArticles(),
 };
 
 document.addEventListener('click', (e) => {
@@ -191,40 +192,53 @@ function showState(which) {
 }
 
 // ── Load articles ─────────────────────────────────────────────
+// Stress-test 17: all three list queries are idempotent reads, so they get
+// withTimeout(8s) + one retry via withRetry. A failed load is recorded
+// in _articlesLoadError and rendered as an error + retry button — never as
+// the false-empty "No articles yet" the old code showed on any network
+// failure (the queries used to ignore `error` entirely and coerce null
+// to []). A fresh query builder is built inside each retry attempt:
+// re-awaiting the same builder would not reliably re-issue the request.
+let _articlesLoadError = null;
+
 async function loadArticles() {
-  // My articles (all statuses) — authored by me OR coauthored by me
-  // (coauthor lookup only once the migration exists)
-  let mine = null;
-  if (_coauthorsSupported) {
-    const res = await supabase
-      .from('news_articles').select('*')
-      .or(`author_id.eq.${_user.id},coauthor_ids.cs.{${_user.id}}`)
-      .order('created_at', { ascending: false });
-    mine = res.data;
-  } else {
-    const res = await supabase
-      .from('news_articles').select('*')
-      .eq('author_id', _user.id)
-      .order('created_at', { ascending: false });
-    mine = res.data;
-  }
-  _myArticles = mine || [];
-
-  // All published (any author)
-  const { data: all } = await supabase
-    .from('news_articles').select('id,title,category,author_name,published_at,status')
-    .eq('status', 'published')
-    .order('published_at', { ascending: false })
-    .limit(20);
-  _allArticles = all || [];
-
-  // Pending review (any author) — only approvers see/need this
-  if (_canApprove) {
-    const { data: pending } = await supabase
+  _articlesLoadError = null;
+  try {
+    // My articles (all statuses) — authored by me OR coauthored by me
+    // (coauthor lookup only once the migration exists)
+    const loadMine = () => _coauthorsSupported
+      ? supabase
+        .from('news_articles').select('*')
+        .or(`author_id.eq.${_user.id},coauthor_ids.cs.{${_user.id}}`)
+        .order('created_at', { ascending: false })
+      : supabase
+        .from('news_articles').select('*')
+        .eq('author_id', _user.id)
+        .order('created_at', { ascending: false });
+    // All published (any author)
+    const loadAll = () => supabase
+      .from('news_articles').select('id,title,category,author_name,published_at,status')
+      .eq('status', 'published')
+      .order('published_at', { ascending: false })
+      .limit(20);
+    // Pending review (any author) — only approvers see/need this
+    const loadPending = () => supabase
       .from('news_articles').select('id,title,summary,category,author_name,created_at,status')
       .eq('status', 'pending_review')
       .order('created_at', { ascending: true });
-    _pendingArticles = pending || [];
+    const [mineRes, allRes, pendingRes] = await Promise.all([
+      withRetry(() => withTimeout(loadMine(), 8000), 2),
+      withRetry(() => withTimeout(loadAll(), 8000), 2),
+      _canApprove ? withRetry(() => withTimeout(loadPending(), 8000), 2) : Promise.resolve(null),
+    ]);
+    if (mineRes.error) throw mineRes.error;
+    if (allRes.error) throw allRes.error;
+    if (pendingRes && pendingRes.error) throw pendingRes.error;
+    _myArticles = mineRes.data || [];
+    _allArticles = allRes.data || [];
+    if (_canApprove) _pendingArticles = pendingRes.data || [];
+  } catch (err) {
+    _articlesLoadError = err;
   }
 
   renderMyArticles();
@@ -232,11 +246,16 @@ async function loadArticles() {
   if (_canApprove) renderPendingReview();
 }
 
+function loadErrorHtml() {
+  return `<div style="padding:1.5rem;text-align:center;color:var(--muted);font-size:13px;">Couldn’t load articles — the connection may be down.<br><button class="btn btn-outline btn-sm" data-action="retry-load-articles" style="margin-top:10px;">Try again</button></div>`;
+}
+
 // ── Render pending review (approvers) ───────────────────────────
 function renderPendingReview() {
   const el = document.getElementById('pending-review-list');
   document.getElementById('pending-count').textContent =
     `${_pendingArticles.length} awaiting review`;
+  if (_articlesLoadError) { el.innerHTML = loadErrorHtml(); return; }
   if (!_pendingArticles.length) {
     el.innerHTML = `<div style="padding:1.5rem;text-align:center;color:var(--muted);font-size:13px;">Nothing waiting on you right now.</div>`;
     return;
@@ -294,6 +313,7 @@ window.rejectArticle = async (id) => {
 function renderMyArticles() {
   const el = document.getElementById('my-articles-list');
   document.getElementById('my-count').textContent = `${_myArticles.length} article${_myArticles.length !== 1 ? 's' : ''}`;
+  if (_articlesLoadError) { el.innerHTML = loadErrorHtml(); return; }
   if (!_myArticles.length) {
     el.innerHTML = `<div style="padding:1.5rem;text-align:center;color:var(--muted);font-size:13px;">No articles yet. Write your first one above!</div>`;
     return;
@@ -336,6 +356,7 @@ function renderMyArticles() {
 function renderAllArticles() {
   const el = document.getElementById('all-articles-list');
   document.getElementById('all-count').textContent = `${_allArticles.length} published`;
+  if (_articlesLoadError) { el.innerHTML = loadErrorHtml(); return; }
   if (!_allArticles.length) {
     el.innerHTML = `<div style="padding:1.5rem;text-align:center;color:var(--muted);font-size:13px;">No published articles yet.</div>`;
     return;
@@ -460,6 +481,35 @@ function clearEditor() {
   _editingId = null;
 }
 
+// ── Time-zone helpers (stress-test item 15) ───────────────────────
+// datetime-local inputs hold LOCAL wall-clock time, so filling one must
+// use local getters — toISOString() is UTC, and the old fill silently
+// shifted published_at by the viewer's UTC offset on every edit-save
+// (+7h in Denver, +6h in DST). The save path already parses the input
+// as local time and stores UTC, so local-in / local-out round-trips.
+function toLocalInputValue(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+// Short zone abbreviation for the viewer's zone, e.g. "MST" / "MDT".
+function viewerTzAbbr(d = new Date()) {
+  try {
+    const part = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(d).find(p => p.type === 'timeZoneName');
+    return part ? part.value : '';
+  } catch (e) { return ''; }
+}
+// Appends the local-time note to the existing hint under the Publish Date
+// input (once), so the author can see the value is local time and which
+// zone it is in.
+function notePublishDateLocalTime() {
+  const input = document.getElementById('np-published-at');
+  const hint = input?.parentElement?.querySelector('.form-hint');
+  if (!hint || hint.dataset.tzNoted) return;
+  hint.dataset.tzNoted = '1';
+  const abbr = viewerTzAbbr();
+  hint.textContent += abbr ? ` Times are local (${abbr}).` : ' Times are local.';
+}
+
 window.loadIntoEditor = async (id) => {
   const a = _myArticles.find(x => x.id === id);
   if (!a) return;
@@ -502,10 +552,11 @@ window.loadIntoEditor = async (id) => {
   setCoauthors(_coauthorsSupported ? await resolveCoauthorNames(a.coauthor_ids) : []);
   if (a.published_at) {
     const d = new Date(a.published_at);
-    document.getElementById('np-published-at').value = d.toISOString().slice(0, 16);
+    document.getElementById('np-published-at').value = toLocalInputValue(d);
   } else {
     document.getElementById('np-published-at').value = '';
   }
+  notePublishDateLocalTime();
   document.getElementById('editor-heading').textContent = 'Editing: ' + a.title;
   updateCharCounts();
   updatePreview();
@@ -554,9 +605,12 @@ async function uploadNewsImage(file) {
   // News photos are optimized before upload (resized, converted, EXIF stripped).
   file = await optimizeImageFile(file);
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-  const path = `${uploadFolder()}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
-  const { error } = await supabase.storage.from('news-images').upload(path, file);
-  if (error) throw error;
+  // Stress-test 4: resilient upload — 30s timeout + one retry on network
+  // errors, so a stalled connection fails with a toast instead of hanging
+  // the Save button forever. A fresh path per attempt: retries can never
+  // collide with or overwrite an earlier attempt.
+  const makePath = () => `${uploadFolder()}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+  const { path } = await uploadFileResilient('news-images', makePath, file);
   // The bucket is private: store the storage PATH, not a public URL.
   // Render sites mint a short-lived signed URL from the path
   // (signedUrlForPublished in supabase.js); a public URL would 404
@@ -901,13 +955,26 @@ async function saveArticle(forcedStatus) {
 // save only uploads the ones still pending.
 async function flushPendingUploads() {
   let ok = true;
+  // Photos uploaded before a failure are unreferenced (the save aborts),
+  // so they are retracted below and their editor entries restored to
+  // pending — retrying Save re-uploads them instead of saving dangling paths.
+  const uploadedThisFlush = [];
+  const uploadingEl = document.getElementById('np-image-uploading');
+  if (uploadingEl) uploadingEl.style.display = '';
   // Heroes first, in order.
   for (const entry of _heroImages) {
     if (!entry.file) continue;
+    const file = entry.file, prevValue = entry.value;
     try {
       entry.value = await uploadNewsImage(entry.file);
       URL.revokeObjectURL(entry.preview);
       entry.file = null; entry.preview = '';
+      uploadedThisFlush.push({ path: entry.value, restore: () => {
+        entry.file = file; entry.value = prevValue;
+        // The success path revoked the old object URL, so mint a fresh one
+        // or refreshHeroBox() would show an empty preview for the restored hero.
+        entry.preview = URL.createObjectURL(file);
+      } });
     } catch (err) {
       toast('Photo upload failed: ' + entry.file.name + ': ' + err.message + ' — article not saved.', true);
       ok = false;
@@ -936,6 +1003,16 @@ async function flushPendingUploads() {
         if (stripEntry) stripEntry.value = path;
         URL.revokeObjectURL(p.preview);
         _pendingBody.delete(token);
+        uploadedThisFlush.push({ path, restore: () => {
+          // Mint a fresh preview URL: the success path revoked the old one,
+          // and the thumbnail strip would otherwise show a dead object URL.
+          p.preview = URL.createObjectURL(p.file);
+          textarea.value = textarea.value.replace(`![${p.alt}][${ref}]`, `![Uploading ${token}…]()`);
+          textarea.value = textarea.value.replace(new RegExp(`^\\[${ref}\\]: .*\\n?`, 'm'), '');
+          _pendingBody.set(token, p);
+          const s = _articlePhotos.find(x => x.value === path);
+          if (s) s.value = p.preview;
+        } });
       } catch (err) {
         toast('Photo upload failed: ' + p.file.name + ': ' + err.message + ' — article not saved.', true);
         ok = false;
@@ -948,11 +1025,19 @@ async function flushPendingUploads() {
       textarea.value = textarea.value.replace(/^!\[Uploading [^\]]*…\]\(\)\n?/gm, '');
     }
   }
+  if (!ok && uploadedThisFlush.length) {
+    // Photos uploaded before the failure are unreferenced (the save was
+    // aborted) — retract them and restore the editor entries to pending
+    // so retrying Save re-uploads them instead of saving dangling paths.
+    await cleanupUploadedPaths('news-images', uploadedThisFlush.map(u => u.path));
+    uploadedThisFlush.forEach(u => u.restore());
+  }
   // Re-render either way: photos that did upload must stop showing
   // their (now revoked) object URLs and show the stored image instead.
   await refreshHeroBox();
   renderPhotoStrip();
   updatePreview(); updateCharCounts();
+  if (uploadingEl) uploadingEl.style.display = 'none';
   return ok;
 }
 
