@@ -1,4 +1,4 @@
-import { supabase, requireAal2, signedUrlForPublished } from './supabase.js';
+import { supabase, requireAal2, signedUrlForPublished, withTimeout, withRetry, uploadFileResilient } from './supabase.js';
 
 // ── Delegated actions (strict CSP) ────────────────────────────────
 // Inline handler attributes are blocked by the strict script-src policy,
@@ -13,6 +13,9 @@ const _ACTION_HANDLERS = {
   'quick-publish': (el, e) => window.quickPublish(el.dataset.id),
   'quick-unpublish': (el, e) => window.quickUnpublish(el.dataset.id),
   'delete-doc': (el, e) => window.deleteDoc(el.dataset.id),
+  // Stress-test 17: a failed list load renders an error + this retry
+  // instead of the misleading "No documents yet" empty state.
+  'retry-load-docs': (el, e) => loadDocs(),
 };
 
 document.addEventListener('click', (e) => {
@@ -119,7 +122,10 @@ async function init() {
 
   if (!hasAccess) { showState('denied'); return; }
 
-  const { data: profile } = await supabase.from('profiles').select('display_name,username').eq('id', _user.id).single();
+  const { data: profile } = await withTimeout(
+    supabase.from('profiles').select('display_name,username').eq('id', _user.id).single(),
+    8000
+  ).catch(() => ({ data: null }));
   _profile = profile;
   const name = profile?.display_name || profile?.username || _user.email;
   document.getElementById('ap-author-meta').textContent = `Publishing as ${name}`;
@@ -134,27 +140,51 @@ function showState(which) {
   document.getElementById('ap-main').style.display    = which === 'main'    ? '' : 'none';
 }
 
-async function loadDocs() {
-  const { data: mine } = await supabase
-    .from('archive_documents').select('*')
-    .eq('author_id', _user.id)
-    .order('created_at', { ascending: false });
-  _myDocs = mine || [];
+// Stress-test 17: both list queries are idempotent reads, so they get
+// withTimeout(8s) + one retry via withRetry. A failed load is recorded
+// in _docsLoadError and rendered as an error + retry button — never as
+// the false-empty "No documents yet" the old code showed on any network
+// failure (the queries used to ignore `error` entirely and coerce null
+// to []). A fresh query builder is built inside each retry attempt:
+// re-awaiting the same builder would not reliably re-issue the request.
+let _docsLoadError = null;
 
-  const { data: all } = await supabase
-    .from('archive_documents').select('id,title,category,author_name,published_at,status')
-    .eq('status', 'published')
-    .order('published_at', { ascending: false })
-    .limit(20);
-  _allDocs = all || [];
+async function loadDocs() {
+  _docsLoadError = null;
+  try {
+    const loadMine = () => supabase
+      .from('archive_documents').select('*')
+      .eq('author_id', _user.id)
+      .order('created_at', { ascending: false });
+    const loadAll = () => supabase
+      .from('archive_documents').select('id,title,category,author_name,published_at,status')
+      .eq('status', 'published')
+      .order('published_at', { ascending: false })
+      .limit(20);
+    const [mineRes, allRes] = await Promise.all([
+      withRetry(() => withTimeout(loadMine(), 8000), 2),
+      withRetry(() => withTimeout(loadAll(), 8000), 2),
+    ]);
+    if (mineRes.error) throw mineRes.error;
+    if (allRes.error) throw allRes.error;
+    _myDocs = mineRes.data || [];
+    _allDocs = allRes.data || [];
+  } catch (err) {
+    _docsLoadError = err;
+  }
 
   renderMyDocs();
   renderAllDocs();
 }
 
+function loadErrorHtml() {
+  return `<div style="padding:1.5rem;text-align:center;color:var(--muted);font-size:13px;">Couldn’t load documents — the connection may be down.<br><button class="btn btn-outline btn-sm" data-action="retry-load-docs" style="margin-top:10px;">Try again</button></div>`;
+}
+
 function renderMyDocs() {
   const el = document.getElementById('my-docs-list');
   document.getElementById('my-count').textContent = `${_myDocs.length} document${_myDocs.length !== 1 ? 's' : ''}`;
+  if (_docsLoadError) { el.innerHTML = loadErrorHtml(); return; }
   if (!_myDocs.length) {
     el.innerHTML = `<div style="padding:1.5rem;text-align:center;color:var(--muted);font-size:13px;">No documents yet. Add your first one above!</div>`;
     return;
@@ -183,6 +213,7 @@ function renderMyDocs() {
 function renderAllDocs() {
   const el = document.getElementById('all-docs-list');
   document.getElementById('all-count').textContent = `${_allDocs.length} published`;
+  if (_docsLoadError) { el.innerHTML = loadErrorHtml(); return; }
   if (!_allDocs.length) {
     el.innerHTML = `<div style="padding:1.5rem;text-align:center;color:var(--muted);font-size:13px;">No published documents yet.</div>`;
     return;
@@ -262,6 +293,20 @@ window.loadIntoEditor = async (id) => {
   toast('Document loaded into editor');
 };
 
+// Stress-test 4: a real uploading state. Shown while the file PUT is
+// in flight (bounded at 30s by uploadFileResilient, so it can never
+// stick forever), and the Save/Publish buttons are disabled for the
+// same window — the _savingDoc guard already blocks double-submit, this
+// is the visible half the user was missing.
+function setUploadingState(on) {
+  const el = document.getElementById('ap-uploading');
+  if (el) el.style.display = on ? '' : 'none';
+  ['btn-save-draft', 'btn-publish'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.disabled = on;
+  });
+}
+
 async function uploadFileIfNeeded() {
   if (!_pendingFile) return { url: _currentFileUrl, name: _currentFileName };
   // Archive docs previously had no size check at all. Mirror the 10 MB cap
@@ -270,7 +315,6 @@ async function uploadFileIfNeeded() {
   // legitimate club document is a policy call for Kyden, not a guess.
   if (_pendingFile.size > 10 * 1024 * 1024) throw new Error('That file is over 10 MB. Please choose a smaller file.');
   const ext = (_pendingFile.name.split('.').pop() || '').toLowerCase();
-  const path = `${_user.id}/${Date.now()}-${slugify(_pendingFile.name.replace(/\.[^.]+$/, ''))}.${ext}`;
   // The storage RLS policy allowlists mimetypes (application/pdf, image/*),
   // but the recorded mimetype comes from the browser File's type, which is
   // empty when the file arrives without one — and then the policy rejects
@@ -278,13 +322,23 @@ async function uploadFileIfNeeded() {
   // type explicitly from the extension so the upload no longer depends on
   // the browser's MIME sniffing.
   const contentType = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', pdf: 'application/pdf' }[ext] || _pendingFile.type || 'application/octet-stream';
-  const { error } = await supabase.storage.from(BUCKET).upload(path, _pendingFile, { contentType });
-  if (error) throw error;
-  // The bucket is private: store the storage PATH, not a public URL.
-  // Render sites mint a short-lived signed URL from the path
+  // Stress-test 4: the single-shot upload() used to hang forever on a
+  // stalled connection. uploadFileResilient caps each attempt at 30s,
+  // retries once on network failure with a fresh timestamped path, and
+  // best-effort retracts any attempt that failed (a timed-out PUT that
+  // lands late is queued as an orphan for the next sweep — see
+  // supabase.js). The bucket is private: store the storage PATH, not a
+  // public URL. Render sites mint a short-lived signed URL from the path
   // (signedUrlForPublished in supabase.js); a public URL would 404
   // once the bucket is private.
-  return { url: path, name: _pendingFile.name };
+  const makePath = () => `${_user.id}/${Date.now()}-${slugify(_pendingFile.name.replace(/\.[^.]+$/, ''))}.${ext}`;
+  setUploadingState(true);
+  try {
+    const { path } = await uploadFileResilient(BUCKET, makePath, _pendingFile, { contentType });
+    return { url: path, name: _pendingFile.name };
+  } finally {
+    setUploadingState(false);
+  }
 }
 
 // Double-clicking Save used to re-upload the file and insert a second
@@ -335,18 +389,22 @@ async function saveDocInner(forcedStatus) {
   };
 
   let error;
+  // Stress-test 17: the row write is bounded at 15s so a stalled
+  // connection fails with a toast instead of hanging the save. No retry:
+  // the insert is not idempotent (the slug carries a timestamp), so a
+  // retried write could double-create the document.
   if (id) {
     // Keep slug text in sync with the title on every save
     const existing = _myDocs.find(x => x.id === id);
     const oldSlug  = existing?.slug || '';
     const suffix   = oldSlug.includes('-') ? oldSlug.slice(oldSlug.lastIndexOf('-') + 1) : Date.now().toString(36);
     const slug     = slugify(title) + '-' + suffix;
-    ({ error } = await supabase.from('archive_documents').update({ ...payload, slug }).eq('id', id));
+    ({ error } = await withTimeout(supabase.from('archive_documents').update({ ...payload, slug }).eq('id', id), 15000));
   } else {
     const slug = slugify(title) + '-' + Date.now().toString(36);
-    ({ error } = await supabase.from('archive_documents').insert({
+    ({ error } = await withTimeout(supabase.from('archive_documents').insert({
       ...payload, slug, author_id: _user.id
-    }));
+    }), 15000));
   }
 
   if (error) { toast('Error: ' + error.message, true); return; }
@@ -358,15 +416,15 @@ async function saveDocInner(forcedStatus) {
 
 window.quickPublish = async (id) => {
   const doc = _myDocs.find(x => x.id === id);
-  const { error } = await supabase.from('archive_documents')
+  const { error } = await withTimeout(supabase.from('archive_documents')
     .update({ status: 'published', published_at: doc?.published_at || new Date().toISOString().slice(0,10) })
-    .eq('id', id);
+    .eq('id', id), 15000);
   if (error) { toast('Error: '+error.message, true); return; }
   toast('✓ Published!');
   await loadDocs();
 };
 window.quickUnpublish = async (id) => {
-  const { error } = await supabase.from('archive_documents').update({ status: 'draft' }).eq('id', id);
+  const { error } = await withTimeout(supabase.from('archive_documents').update({ status: 'draft' }).eq('id', id), 15000);
   if (error) { toast('Error: '+error.message, true); return; }
   toast('Moved back to drafts');
   await loadDocs();
@@ -389,8 +447,8 @@ function archiveFileStoragePath(stored) {
 
 window.deleteDoc = async (id) => {
   if (!(await mcaConfirm({ title: 'Delete document?', message: 'Delete this document? This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
-  const { data: doc } = await supabase.from('archive_documents').select('file_url').eq('id', id).maybeSingle();
-  const { error } = await supabase.from('archive_documents').delete().eq('id', id);
+  const { data: doc } = await withTimeout(supabase.from('archive_documents').select('file_url').eq('id', id).maybeSingle(), 8000).catch(() => ({ data: null }));
+  const { error } = await withTimeout(supabase.from('archive_documents').delete().eq('id', id), 15000);
   if (error) { toast('Error: '+error.message, true); return; }
   const path = archiveFileStoragePath(doc?.file_url);
   if (path) {

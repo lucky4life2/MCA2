@@ -646,6 +646,10 @@ async function injectNav() {
   // Init nav auth immediately (must run after nav is in DOM).
   initNavAuth(_mcaAuthResolve);
 
+  // Site-wide offline banner + orphaned-upload sweep (stress-test 17/4).
+  initOfflineBanner();
+  sweepOrphanUploadsOnce();
+
   // Update Discord/YouTube links once config resolves in the background.
   Promise.race([_configReady, new Promise(r => setTimeout(r, 1500))]).then(() => {
     document.querySelectorAll('a[data-discord]').forEach(a => { a.href = DISCORD_URL; });
@@ -1361,6 +1365,81 @@ function renderRolePreviewBanner(preview, mod) {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
+// ── Offline banner (stress-test item 17) ──────────────────────────
+// There was zero offline detection anywhere: going offline mid-session
+// produced no message at all — pages just spun or rendered empty lists
+// while the service worker served a stale shell with no explanation.
+// This banner is site-wide (nav.js loads on every page): it shows the
+// moment the browser reports offline, hides on reconnect, and offers a
+// reload. Fixed to the bottom so it never shifts the nav or page layout,
+// and stacked above the cookie banner via --cookie-banner-h when that
+// banner is visible.
+function initOfflineBanner() {
+  if (document.getElementById('mca-offline-banner')) return;
+
+  if (!document.getElementById('mca-offline-banner-style')) {
+    const style = document.createElement('style');
+    style.id = 'mca-offline-banner-style';
+    style.textContent = `
+      #mca-offline-banner {
+        position: fixed; left: 0; right: 0; bottom: var(--cookie-banner-h, 0px); z-index: 10001;
+        display: none; align-items: center; justify-content: center; gap: 12px;
+        flex-wrap: wrap;
+        padding: 10px 16px;
+        font-size: 13px; font-weight: 600;
+        color: #fff;
+        background: #7c4a03;
+      }
+      #mca-offline-banner .mob-retry {
+        background: rgba(255,255,255,.18);
+        border: 1px solid rgba(255,255,255,.5);
+        color: #fff; border-radius: 4px;
+        font-size: 12px; font-weight: 700;
+        padding: 4px 10px; cursor: pointer;
+      }
+      @media (hover: hover) {
+        #mca-offline-banner .mob-retry:hover { background: rgba(255,255,255,.3); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  const banner = document.createElement('div');
+  banner.id = 'mca-offline-banner';
+  banner.setAttribute('role', 'status');
+  banner.innerHTML = `
+    <span>You’re offline — pages may show old or missing content, and changes won’t save until you’re back online.</span>
+    <button type="button" class="mob-retry" id="mca-offline-retry">Retry</button>
+  `;
+  document.body.appendChild(banner);
+
+  const sync = () => { banner.style.display = navigator.onLine ? 'none' : 'flex'; };
+  window.addEventListener('online', sync);
+  window.addEventListener('offline', sync);
+  sync();
+
+  document.getElementById('mca-offline-retry').addEventListener('click', () => {
+    window.location.reload();
+  });
+}
+
+// Orphaned-upload sweep (stress-test item 4): a failed upload can leave
+// an object in storage with no row pointing at it. The queue lives in
+// localStorage (see recordOrphanUpload / sweepRecordedOrphans in
+// supabase.js); retry the removals once per signed-in page load. Private
+// buckets need auth for remove, so this only runs with a session — and
+// it never throws, so a sweep failure can't break page load.
+function sweepOrphanUploadsOnce() {
+  if (typeof window === 'undefined' || !window._mcaAuthReady) return;
+  window._mcaAuthReady.then(async ({ user }) => {
+    if (!user) return;
+    try {
+      const mod = await import('./supabase.js');
+      await mod.sweepRecordedOrphans();
+    } catch (e) {}
   });
 }
 
