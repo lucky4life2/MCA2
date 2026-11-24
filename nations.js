@@ -43,7 +43,7 @@ function renderGrid(nations) {
   if (!grid) return;
 
   if (nations.length === 0) {
-    grid.innerHTML = '<p style="grid-column:1/-1;color:var(--mid);font-size:14px;">No nations found.</p>';
+    grid.innerHTML = '<p style="grid-column:1/-1;color:var(--mid);font-size:14px;">No nations have been founded on the current server yet. Explore, found a town, and build it into a nation — be the first.</p>';
     return;
   }
 
@@ -100,6 +100,15 @@ function isEditableSeason(season) {
   const s = (season || '').trim().toLowerCase();
   if (!s) return true;                        // unassigned nations aren't archived
   if (!_currentServerNames.length) return true; // no current server marked — don't lock anyone out
+  return _currentServerNames.includes(s);
+}
+/* Only nations on the current server belong on this page — nations from
+   past servers are archival (see the History page). When no server is
+   marked current, show everything rather than an empty page. */
+function isCurrentSeason(season) {
+  const s = (season || '').trim().toLowerCase();
+  if (!s) return true;                        // unassigned nations aren't archival
+  if (!_currentServerNames.length) return true;
   return _currentServerNames.includes(s);
 }
 
@@ -304,6 +313,10 @@ window.applyFlagDetailClass = applyFlagDetailClass;
       body:       r.body       || '',
       fields:     [],
     }));
+    // Wait for the current-server lookup so past-server nations can be
+    // filtered out before anything renders.
+    await currentServersPromise;
+    _nations = _nations.filter(n => isCurrentSeason(n.season));
     renderGrid(_nations);
     renderSeasonFilter(_nations);
   } catch(e) {
