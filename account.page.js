@@ -1,4 +1,4 @@
-import { supabase, signOut, signOutGlobal, createBillingPortalSession, optimizeImageFile } from './supabase.js';
+import { supabase, signOut, signOutGlobal, createBillingPortalSession, optimizeImageFile, uploadFileResilient, cleanupUploadedPaths } from './supabase.js';
 
 // ── Delegated actions (strict CSP) ────────────────────────────────
 // Inline handler attributes are blocked by the strict script-src policy,
@@ -2230,11 +2230,21 @@ async function uploadMsgAttachments(files) {
   const optimizedFiles = [];
   for (const file of files) optimizedFiles.push(await optimizeImageFile(file));
   const uploaded = [];
+  const uploadedPaths = [];
   for (const file of optimizedFiles) {
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-    const path = `${_user.id}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
-    const { error } = await supabase.storage.from('message-attachments').upload(path, file);
-    if (error) throw error;
+    // Stress-test 4: resilient upload — 30s timeout + one retry on network
+    // errors. On failure, retract files uploaded earlier in this batch:
+    // the message is never sent after this throws, so they would be orphaned.
+    const makePath = () => `${_user.id}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+    let path;
+    try {
+      ({ path } = await uploadFileResilient('message-attachments', makePath, file));
+    } catch (err) {
+      await cleanupUploadedPaths('message-attachments', uploadedPaths);
+      throw err;
+    }
+    uploadedPaths.push(path);
     const { data } = supabase.storage.from('message-attachments').getPublicUrl(path);
     uploaded.push({ url: data.publicUrl, name: file.name, size: file.size });
   }
