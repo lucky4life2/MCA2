@@ -460,6 +460,35 @@ function clearEditor() {
   _editingId = null;
 }
 
+// ── Time-zone helpers (stress-test item 15) ───────────────────────
+// datetime-local inputs hold LOCAL wall-clock time, so filling one must
+// use local getters — toISOString() is UTC, and the old fill silently
+// shifted published_at by the viewer's UTC offset on every edit-save
+// (+7h in Denver, +6h in DST). The save path already parses the input
+// as local time and stores UTC, so local-in / local-out round-trips.
+function toLocalInputValue(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+// Short zone abbreviation for the viewer's zone, e.g. "MST" / "MDT".
+function viewerTzAbbr(d = new Date()) {
+  try {
+    const part = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(d).find(p => p.type === 'timeZoneName');
+    return part ? part.value : '';
+  } catch (e) { return ''; }
+}
+// Appends the local-time note to the existing hint under the Publish Date
+// input (once), so the author can see the value is local time and which
+// zone it is in.
+function notePublishDateLocalTime() {
+  const input = document.getElementById('np-published-at');
+  const hint = input?.parentElement?.querySelector('.form-hint');
+  if (!hint || hint.dataset.tzNoted) return;
+  hint.dataset.tzNoted = '1';
+  const abbr = viewerTzAbbr();
+  hint.textContent += abbr ? ` Times are local (${abbr}).` : ' Times are local.';
+}
+
 window.loadIntoEditor = async (id) => {
   const a = _myArticles.find(x => x.id === id);
   if (!a) return;
@@ -502,10 +531,11 @@ window.loadIntoEditor = async (id) => {
   setCoauthors(_coauthorsSupported ? await resolveCoauthorNames(a.coauthor_ids) : []);
   if (a.published_at) {
     const d = new Date(a.published_at);
-    document.getElementById('np-published-at').value = d.toISOString().slice(0, 16);
+    document.getElementById('np-published-at').value = toLocalInputValue(d);
   } else {
     document.getElementById('np-published-at').value = '';
   }
+  notePublishDateLocalTime();
   document.getElementById('editor-heading').textContent = 'Editing: ' + a.title;
   updateCharCounts();
   updatePreview();
