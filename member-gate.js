@@ -118,7 +118,7 @@
           if (viewOnly) return allow(banner('You are viewing public records. Membership ($12/year) is required to take part.',
             'Join MCA', 'shop.html'));
           return block(panel('Membership required',
-            'This page is for MCA members. Membership is $12/year and also unlocks the Minecraft server.',
+            'This page is for MCA members. Membership is $12/year. Legends to Nations is free to play right now — no membership is needed to join the server; membership will be part of playing later on.',
             [['Join MCA', 'shop.html', true], ['Learn more', 'help.html', false]]));
       }
     } catch (e) {
