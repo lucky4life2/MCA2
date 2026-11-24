@@ -857,6 +857,39 @@ document.getElementById('news-filter-status').addEventListener('change', functio
   renderNewsAdmin();
 });
 
+// ── Time-zone helpers (stress-test item 15) ───────────────────────
+// datetime-local inputs hold LOCAL wall-clock time, so filling one must
+// use local getters — toISOString() is UTC, and the old fill silently
+// shifted published_at by the viewer's UTC offset on every edit-save
+// (+7h in Denver, +6h in DST). The save path already parses the input
+// as local time and stores UTC, so local-in / local-out round-trips.
+function toLocalInputValue(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+// Short zone abbreviation for the viewer's zone, e.g. "MST" / "MDT".
+function viewerTzAbbr(d = new Date()) {
+  try {
+    const part = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(d).find(p => p.type === 'timeZoneName');
+    return part ? part.value : '';
+  } catch (e) { return ''; }
+}
+// One-line hint under a datetime-local input, created once, so the editor
+// can see the value is local time and which zone it is in.
+function noteLocalTimeInput(inputId, hintId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  let hint = document.getElementById(hintId);
+  if (!hint) {
+    hint = document.createElement('div');
+    hint.id = hintId;
+    hint.style.cssText = 'font-size:11px;color:var(--muted);margin-top:2px;';
+    input.insertAdjacentElement('afterend', hint);
+  }
+  const abbr = viewerTzAbbr();
+  hint.textContent = abbr ? `Local time (${abbr}) — saved as UTC.` : 'Local time — saved as UTC.';
+}
+
 // News CRUD
 function slugify(text) {
   return text.toLowerCase().replace(/[^\w\s-]/g,'').replace(/\s+/g,'-').replace(/-+/g,'-').slice(0,80);
@@ -870,10 +903,11 @@ function openNewsModal(article = null) {
   document.getElementById('nm2-author-name').value   = article?.author_name || '';
   if (article?.published_at) {
     const d = new Date(article.published_at);
-    document.getElementById('nm2-published-at').value = d.toISOString().slice(0, 16);
+    document.getElementById('nm2-published-at').value = toLocalInputValue(d);
   } else {
     document.getElementById('nm2-published-at').value = '';
   }
+  noteLocalTimeInput('nm2-published-at', 'nm2-published-at-tz');
   document.getElementById('nm2-summary').value       = article?.summary || '';
   document.getElementById('nm2-image').value         = article?.image_url || '';
   document.getElementById('nm2-body').value          = article?.body || '';
@@ -3009,6 +3043,15 @@ async function populateAuditTableFilter() {
   } catch (e) { /* non-fatal */ }
 }
 
+// "YYYY-MM-DD" (a local calendar date from <input type="date">) to the UTC
+// instant of that day's start (or end, 23:59:59) in the admin's local zone.
+// `new Date('YYYY-MM-DDT00:00:00')` parses as local time, so toISOString()
+// gives the correct UTC instant. Returns null for an invalid date.
+function localDayBoundIso(dateStr, endOfDay) {
+  const d = new Date(dateStr + (endOfDay ? 'T23:59:59' : 'T00:00:00'));
+  return isNaN(d) ? null : d.toISOString();
+}
+
 async function loadAuditLog(reset = true) {
   if (_auditLoading) return;
   _auditLoading = true;
@@ -3031,8 +3074,19 @@ async function loadAuditLog(reset = true) {
     if (_auditFilter.table)     q = q.eq('table_name', _auditFilter.table);
     if (_auditFilter.actorType) q = q.eq('actor_type', _auditFilter.actorType);
     if (_auditFilter.actor)     q = q.eq('actor_id', _auditFilter.actor);
-    if (_auditFilter.from)      q = q.gte('created_at', _auditFilter.from + 'T00:00:00');
-    if (_auditFilter.to)        q = q.lte('created_at', _auditFilter.to + 'T23:59:59');
+    // Audit date filters are <input type="date"> values — calendar dates in
+    // the admin's local zone. The old code sent bare "YYYY-MM-DDT00:00:00"
+    // strings, which Postgres casts in the DB session zone (UTC), so a
+    // Denver admin's "Nov 1" started at 17:00 local Oct 31. Convert the
+    // local day bounds to UTC instants first (stress-test item 15).
+    if (_auditFilter.from) {
+      const fromIso = localDayBoundIso(_auditFilter.from, false);
+      if (fromIso) q = q.gte('created_at', fromIso);
+    }
+    if (_auditFilter.to) {
+      const toIso = localDayBoundIso(_auditFilter.to, true);
+      if (toIso) q = q.lte('created_at', toIso);
+    }
     if (_auditFilter.search) {
     // .or() takes a comma-separated filter grammar, so a search containing
     // , ( ) . or * either broke the query outright (400) or widened it.
@@ -3123,7 +3177,7 @@ function resolveAuditValue(key, value) {
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) {
     const d = new Date(value);
-    if (!isNaN(d)) return d.toLocaleString();
+    if (!isNaN(d)) return d.toLocaleString(undefined, { timeZoneName: 'short' });
   }
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
@@ -3145,7 +3199,7 @@ async function renderAuditLog() {
   await resolveAuditRefs(_auditLog);
 
   el.innerHTML = _auditLog.map((r, idx) => {
-    const when = new Date(r.created_at).toLocaleString();
+    const when = new Date(r.created_at).toLocaleString(undefined, { timeZoneName: 'short' });
     const actor = r.actor_name || 'Unknown';
     const actorType = r.actor_type || 'system';
     const hasDetail = r.old_data || r.new_data;
