@@ -431,7 +431,7 @@ function showRecoveryBanner() {
 // failed for every signed-in user and _profile silently fell back to {} —
 // which is why the membership section always read "Not a Member", even for
 // an admin-granted member.
-const PROFILE_COLUMNS = [
+const PROFILE_COLUMNS_LIST = [
   'id', 'display_name', 'username', 'email', 'role', 'account_status',
   'age_band', 'deletion_scheduled_at', 'discord_id', 'google_id',
   'minecraft_username', 'minecraft_verified',
@@ -444,14 +444,30 @@ const PROFILE_COLUMNS = [
   // by the client (see the profile_version rule in
   // private.profiles_guard_columns()).
   'profile_version',
-].join(', ');
+];
+const PROFILE_COLUMNS = PROFILE_COLUMNS_LIST.join(', ');
+// Pre-migration fallback (see loadProfile): the profile_version column
+// arrives with migration 20261123_auth_lifecycle.sql. Until it lands,
+// loads and saves run without it so the page keeps working; the
+// concurrency check activates itself once the migration is applied.
+const PROFILE_COLUMNS_WITHOUT_VERSION = PROFILE_COLUMNS_LIST.filter(c => c !== 'profile_version').join(', ');
 
 async function loadProfile() {
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('profiles')
     .select(PROFILE_COLUMNS)
     .eq('id', _user.id)
     .single();
+  if (error && /profile_version/i.test(error.message || '')) {
+    // The profile_version column does not exist yet — the migration has
+    // not landed. Retry without it: the page works, optimistic
+    // concurrency simply stays off until the migration is applied.
+    ({ data, error } = await supabase
+      .from('profiles')
+      .select(PROFILE_COLUMNS_WITHOUT_VERSION)
+      .eq('id', _user.id)
+      .single());
+  }
   if (error) console.error('Could not load your profile:', error.message);
   _profile = data || {};
 }
@@ -1815,12 +1831,24 @@ document.getElementById('btn-save-profile').addEventListener('click', async () =
   // matches zero rows instead of silently overwriting another device's
   // edit. The client never writes profile_version itself; maybeSingle()
   // (not single()) is what makes zero rows a clean no-error null.
-  const saveProfile = async (version) => supabase.from('profiles')
-    .update({ display_name, username, public_listing_opt_in: directoryOptIn })
-    .eq('id', _user.id)
-    .eq('profile_version', version ?? 0)
-    .select('profile_version')
-    .maybeSingle();
+  const saveProfile = async (version) => {
+    // Pre-migration fallback: no profile_version column yet (version is
+    // null when loadProfile fell back) — plain update with no concurrency
+    // match; the check activates itself once the migration lands.
+    if (version == null) {
+      return supabase.from('profiles')
+        .update({ display_name, username, public_listing_opt_in: directoryOptIn })
+        .eq('id', _user.id)
+        .select('id')
+        .maybeSingle();
+    }
+    return supabase.from('profiles')
+      .update({ display_name, username, public_listing_opt_in: directoryOptIn })
+      .eq('id', _user.id)
+      .eq('profile_version', version ?? 0)
+      .select('profile_version')
+      .maybeSingle();
+  };
   let { data: saved, error } = await saveProfile(_profile.profile_version);
   if (!error && !saved) {
     // Zero rows: the profile changed since this page loaded. Reload and
@@ -1847,7 +1875,7 @@ document.getElementById('btn-save-profile').addEventListener('click', async () =
   _profile.display_name = display_name;
   _profile.username = username;
   _profile.public_listing_opt_in = directoryOptIn;
-  if (saved) _profile.profile_version = saved.profile_version;
+  if (saved && saved.profile_version != null) _profile.profile_version = saved.profile_version;
   document.getElementById('account-hero-name').textContent = display_name || username || _user.email?.split('@')[0];
   succEl.textContent = 'Saved.'; succEl.style.display = 'block';
   setTimeout(() => succEl.style.display = 'none', 3000);
