@@ -190,6 +190,7 @@ $function$;
 -- old password cannot sign in against the anonymized row. Civic rows
 -- themselves are kept intact; audit_log scrubbing stays with the
 -- separate private.scrub_audit_for_user maintenance function.
+drop function if exists private.anonymize_user(uuid);
 create or replace function private.anonymize_user(p_user_id uuid)
 returns void
 language plpgsql
