@@ -30,7 +30,7 @@
     .account-hero { border-bottom: 1px solid var(--border); padding-bottom: 2.5rem; margin-bottom: 2.5rem; }
     .account-hero-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 2.5px; text-transform: uppercase; color: var(--green-text); margin-bottom: 1rem; display: flex; align-items: center; gap: 10px; }
     .account-hero-eyebrow::after { content: ''; display: block; height: 1px; width: 40px; background: var(--green); opacity: .6; }
-    .account-hero h1 { font-family: 'Times New Roman', serif; font-size: clamp(28px, 4vw, 42px); font-weight: 700; color: var(--blue); line-height: 1.15; }
+    .account-hero h1 { font-family: 'Times New Roman', serif; font-size: clamp(28px, 4vw, 42px); font-weight: 700; color: var(--blue); line-height: 1.15; overflow-wrap: anywhere; }
     .account-hero-sub { font-size: 14px; color: var(--muted); margin-top: 0.5rem; }
 
     .account-section { border: 1px solid var(--border); border-radius: 6px; background: var(--white); margin-bottom: 1.25rem; overflow: hidden; }
@@ -333,7 +333,7 @@
       <div class="account-section-body">
         <div class="form-group">
           <label class="form-label" for="field-display-name">Display Name</label>
-          <input type="text" id="field-display-name" class="form-input" placeholder="Your display name">
+          <input type="text" id="field-display-name" class="form-input" placeholder="Your display name" maxlength="40">
         </div>
         <div class="form-group">
           <label class="form-label" for="field-username">Username</label>
