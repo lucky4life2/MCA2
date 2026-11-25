@@ -309,12 +309,14 @@ function setUploadingState(on) {
 
 async function uploadFileIfNeeded() {
   if (!_pendingFile) return { url: _currentFileUrl, name: _currentFileName };
-  // Archive docs previously had no size check at all. Mirror the 10 MB cap
-  // already enforced for message/product photos (proposal, not club policy).
-  // Type allowlisting is intentionally not added here: what counts as a
-  // legitimate club document is a policy call for Kyden, not a guess.
+  // Mirror the archive-files storage policy before upload: JPG, PNG,
+  // WebP, or PDF, at most 10 MB. Checking here keeps HEIC and other
+  // unsupported files from reaching Storage and surfacing as a raw
+  // row-level-security rejection.
+  const archiveFormatMessage = 'That file type is not supported. Please upload a JPG, PNG, WebP, or PDF file under 10 MB.';
   if (_pendingFile.size > 10 * 1024 * 1024) throw new Error('That file is over 10 MB. Please choose a smaller file.');
   const ext = (_pendingFile.name.split('.').pop() || '').toLowerCase();
+  if (!['jpg', 'jpeg', 'png', 'webp', 'pdf'].includes(ext)) throw new Error(archiveFormatMessage);
   // The storage RLS policy allowlists mimetypes (application/pdf, image/*),
   // but the recorded mimetype comes from the browser File's type, which is
   // empty when the file arrives without one — and then the policy rejects
@@ -360,7 +362,11 @@ async function saveDocInner(forcedStatus) {
   try {
     fileInfo = await uploadFileIfNeeded();
   } catch (err) {
-    toast('File upload failed: ' + err.message, true);
+    const rawMessage = err?.message || '';
+    const friendlyMessage = /row-level security|storage|policy|mime|extension|not supported/i.test(rawMessage)
+      ? 'That file type is not supported. Please upload a JPG, PNG, WebP, or PDF file under 10 MB.'
+      : rawMessage;
+    toast('File upload failed: ' + friendlyMessage, true);
     return;
   }
 
