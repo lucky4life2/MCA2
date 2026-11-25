@@ -1500,7 +1500,12 @@ function renderMinecraft() {
       minecraft_username: primaryUsername,
       minecraft_bedrock_username: bedrockUsername,
     }).eq('id', _user.id);
-    if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+    if (error) {
+    errEl.textContent = /profiles_display_name_length_check/i.test(error.message || '')
+      ? 'Display name must be 40 characters or fewer.'
+      : error.message;
+    errEl.style.display = 'block'; return;
+  }
     _profile.minecraft_username = primaryUsername;
     _profile.minecraft_bedrock_username = bedrockUsername;
     renderMinecraft();
@@ -1808,6 +1813,11 @@ document.getElementById('btn-save-profile').addEventListener('click', async () =
   const errEl  = document.getElementById('profile-error');
   const succEl = document.getElementById('profile-success');
   errEl.style.display = 'none'; succEl.style.display = 'none';
+
+  if (Array.from(display_name).length > 40) {
+    errEl.textContent = 'Display name must be 40 characters or fewer.';
+    errEl.style.display = 'block'; return;
+  }
 
   // Validate username format
   if (username && !/^[a-zA-Z0-9_]{3,32}$/.test(username)) {

@@ -516,6 +516,9 @@ export async function createBillingPortalSession(returnTo = 'account.html') {
 export async function optimizeImageFile(file, maxEdge = 2048) {
   if (!file || !file.type.startsWith('image/')) return file;
   if (file.type === 'image/svg+xml' || file.type === 'image/gif') return file;
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error('That image is over 10 MB. Please choose a smaller file.');
+  }
   let bitmap;
   try {
     bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });

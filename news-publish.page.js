@@ -602,6 +602,9 @@ function discardPendingUploads() {
 }
 
 async function uploadNewsImage(file) {
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error('That image is over 10 MB. Please choose a smaller file.');
+  }
   // News photos are optimized before upload (resized, converted, EXIF stripped).
   file = await optimizeImageFile(file);
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
