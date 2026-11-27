@@ -6,5 +6,6 @@
     const t = document.getElementById('toast');
     if (!t) return;
     t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 2000);
+    if (window.mcaPausableToast) window.mcaPausableToast(t, 2000, () => t.classList.remove('show'));
+    else setTimeout(() => t.classList.remove('show'), 2000);
   }

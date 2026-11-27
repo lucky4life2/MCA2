@@ -766,7 +766,8 @@ function showTaskToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   clearTimeout(t._hideTimer);
-  t._hideTimer = setTimeout(() => t.classList.remove('show'), 4000);
+  if (window.mcaPausableToast) window.mcaPausableToast(t, 4000, () => t.classList.remove('show'));
+  else t._hideTimer = setTimeout(() => t.classList.remove('show'), 4000);
 }
 
 const NOTIFY_SKIP_REASON = {

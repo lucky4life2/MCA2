@@ -101,7 +101,8 @@ function toast(msg, isError = false) {
   el.textContent = msg;
   el.className = 'show' + (isError ? ' error' : '');
   clearTimeout(el._timer);
-  el._timer = setTimeout(() => { el.className = ''; }, 3000);
+  if (window.mcaPausableToast) window.mcaPausableToast(el, 3000, () => { el.className = ''; });
+  else el._timer = setTimeout(() => { el.className = ''; }, 3000);
 }
 
 async function init() {
