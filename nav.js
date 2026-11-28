@@ -834,7 +834,8 @@ function copyAddress() {
   const t = document.getElementById('toast');
   if (!t) return;
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2000);
+  if (window.mcaPausableToast) window.mcaPausableToast(t, 2000, () => t.classList.remove('show'));
+  else setTimeout(() => t.classList.remove('show'), 2000);
 }
 window.copyAddress = copyAddress;
 
@@ -1470,8 +1471,244 @@ window.mcaShowError = function (errEl, message, inputEl) {
   const field = inputEl
     || errEl.closest('.login-panel, .onboard-step, form')?.querySelector('input, select')
     || errEl.parentElement?.querySelector('input, select');
+  if (field && field.setAttribute) {
+    field.dataset.mcaTouched = '1';
+    field.setAttribute('aria-invalid', 'true');
+    field._mcaErrorEl = errEl;
+    field._mcaErrorMessage = message;
+    if (errEl.id) {
+      const describedBy = (field.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean);
+      if (!describedBy.includes(errEl.id)) field.setAttribute('aria-describedby', [...describedBy, errEl.id].join(' '));
+    }
+  }
   window.mcaShakeField(field);
 };
+
+function mcaFieldLooksFixed(field, message) {
+  const value = String(field.value || '').trim();
+  const msg = String(message || '');
+  if (/email/i.test(msg) || field.type === 'email') return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  if (/code/i.test(msg) || /code/i.test(field.id || '')) return /^\d{6}$/.test(value);
+  if (/password/i.test(msg) || field.type === 'password') {
+    if (value.length < 8) return false;
+    if (/uppercase/i.test(msg) && !/[A-Z]/.test(value)) return false;
+    if (/lowercase/i.test(msg) && !/[a-z]/.test(value)) return false;
+    return true;
+  }
+  if (/please enter|enter your|enter the|required|pick|choose|select/i.test(msg)) return value.length > 0;
+  return field.checkValidity ? field.checkValidity() : value.length > 0;
+}
+
+function mcaClearFieldError(field) {
+  field.removeAttribute('aria-invalid');
+  if (field._mcaErrorEl && field._mcaErrorEl.textContent === field._mcaErrorMessage) {
+    field._mcaErrorEl.style.display = 'none';
+  }
+  field._mcaErrorEl = null;
+  field._mcaErrorMessage = '';
+}
+
+document.addEventListener('focusout', (e) => {
+  const field = e.target;
+  if (field && field.matches && field.matches('input, select, textarea')) field.dataset.mcaTouched = '1';
+}, true);
+
+document.addEventListener('input', (e) => {
+  const field = e.target;
+  if (!field || !field.dataset || field.dataset.mcaTouched !== '1' || field.getAttribute('aria-invalid') !== 'true') return;
+  if (mcaFieldLooksFixed(field, field._mcaErrorMessage || '')) mcaClearFieldError(field);
+}, true);
+
+// Toast timers pause while the reader is hovering/focused on the toast or
+// while the tab is hidden, then resume with the remaining time.
+window.mcaPausableToast = function (el, duration, onHide) {
+  if (!el) return;
+  const state = el._mcaToastState || (el._mcaToastState = {
+    timer: null,
+    remaining: duration,
+    startedAt: 0,
+    onHide: null,
+    hovered: false,
+    bound: false,
+  });
+  state.remaining = duration;
+  state.onHide = onHide;
+  const clear = () => {
+    if (state.timer) clearTimeout(state.timer);
+    state.timer = null;
+  };
+  const schedule = () => {
+    clear();
+    if (state.hovered || document.hidden) return;
+    state.startedAt = Date.now();
+    state.timer = setTimeout(() => {
+      state.timer = null;
+      if (state.onHide) state.onHide();
+    }, state.remaining);
+  };
+  const pause = () => {
+    if (!state.timer) return;
+    state.remaining = Math.max(0, state.remaining - (Date.now() - state.startedAt));
+    clear();
+  };
+  if (!state.bound) {
+    state.bound = true;
+    el.addEventListener('mouseenter', () => { state.hovered = true; pause(); });
+    el.addEventListener('mouseleave', () => { state.hovered = false; schedule(); });
+    el.addEventListener('focusin', () => { state.hovered = true; pause(); });
+    el.addEventListener('focusout', () => { state.hovered = false; schedule(); });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) pause();
+      else schedule();
+    });
+  }
+  schedule();
+};
+
+// Enter in a text-like field submits the nearby primary action. Existing
+// field-specific Enter handlers still win: they click first, and the
+// timestamp check below keeps this from clicking the same button twice.
+(function installEnterSubmit() {
+  const textTypes = new Set(['text', 'search', 'email', 'password', 'number', 'tel', 'url', 'date', 'time', 'month', 'week', 'datetime-local']);
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest?.('button');
+    if (btn) btn._mcaLastClickAt = Date.now();
+  }, true);
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.defaultPrevented || e.isComposing) return;
+    const input = e.target;
+    if (!input || input.tagName !== 'INPUT' || !textTypes.has((input.type || 'text').toLowerCase())) return;
+    if (input.disabled || input.readOnly || input.dataset.noEnterSubmit) return;
+    if (input.closest('form')) return;
+    const scope = input.closest('.modal-overlay, .modal, .mca-modal, .login-card, .login-panel, .onboard-card, .onboard-step, .account-section, .card, .form-card, .econ-modal, .shop-modal, .detail-modal, .cart-drawer, .np-panel, .admin-modal, .modal-content') || input.parentElement;
+    if (!scope) return;
+    const visible = (b) => !b.disabled && b.getClientRects().length > 0;
+    const bad = /cancel|close|back|delete|remove|clear|dismiss|toggle|menu|theme|show|hide|copy|share|view|edit|manage|new/i;
+    const good = /save|submit|sign in|log in|login|verify|continue|send|post|checkout|confirm|create|update|apply|approve|decline|revoke|schedule|certify|search/i;
+    const pick = (buttons) => buttons.find((b) => b.dataset.enterSubmit !== undefined)
+      || buttons.find((b) => (b.classList.contains('btn-primary') || b.classList.contains('btn-checkout')) && !bad.test(b.textContent || ''))
+      || buttons.find((b) => good.test(b.textContent || '') && !bad.test(b.textContent || ''));
+    const localButtons = input.parentElement ? Array.from(input.parentElement.querySelectorAll('button')).filter(visible) : [];
+    const candidate = pick(localButtons) || pick(Array.from(scope.querySelectorAll('button')).filter(visible));
+    if (!candidate) return;
+    if (candidate._mcaLastClickAt && Date.now() - candidate._mcaLastClickAt < 200) return;
+    e.preventDefault();
+    candidate.click();
+  });
+})();
+
+// Action buttons disable and relabel while their click is in flight. If a
+// page handler already owns the disabled state, this only supplies the
+// busy label and restores it when the handler re-enables the button.
+(function installBusyButtonGuard() {
+  const actionRe = /save|publish|submit|send|sign in|log in|verify|confirm|checkout|delete|remove|post|create|update|apply|approve|decline|revoke|schedule|certify|add|join|leave|unlink|link|reset|deactivate|mark|done|check off/i;
+  const excludeRe = /cancel|close|back|toggle|menu|theme|show|hide|copy|share|view|edit|manage|new|filter|search|tab|list|grid|drafts|tags|project|task/i;
+  const busyLabel = (text) => {
+    const t = text.trim().toLowerCase();
+    if (/save/.test(t)) return 'Saving…';
+    if (/publish/.test(t)) return 'Publishing…';
+    if (/send/.test(t)) return 'Sending…';
+    if (/sign in|log in/.test(t)) return 'Signing in…';
+    if (/verify/.test(t)) return 'Verifying…';
+    if (/delete|remove/.test(t)) return 'Deleting…';
+    if (/checkout/.test(t)) return 'Opening checkout…';
+    if (/post/.test(t)) return 'Posting…';
+    if (/create/.test(t)) return 'Creating…';
+    if (/update/.test(t)) return 'Updating…';
+    if (/submit/.test(t)) return 'Submitting…';
+    return 'Working…';
+  };
+  const isActionButton = (btn) => {
+    if (!btn || btn.disabled || btn.dataset.noBusyGuard) return false;
+    const text = (btn.textContent || '').trim();
+    if (!text) return false;
+    if (excludeRe.test(text) && !/cancel deletion/i.test(text)) return false;
+    return btn.classList.contains('btn-primary') || btn.classList.contains('btn-danger') || btn.classList.contains('btn-checkout') || actionRe.test(text);
+  };
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest?.('button');
+    if (!btn) return;
+    if (btn._mcaBusyGuard) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      return;
+    }
+    if (!isActionButton(btn)) return;
+    const originalText = btn.textContent;
+    const plainText = !btn.querySelector('svg, img');
+    setTimeout(() => {
+      if (!btn.isConnected || btn._mcaBusyGuard) return;
+      const handlerOwnsDisabled = btn.disabled;
+      const label = busyLabel(originalText);
+      btn._mcaBusyGuard = true;
+      btn.setAttribute('aria-busy', 'true');
+      btn.classList.add('is-busy');
+      if (plainText && btn.textContent === originalText) btn.textContent = label;
+      if (!handlerOwnsDisabled) btn.disabled = true;
+      let timer = null;
+      const restore = () => {
+        btn._mcaBusyGuard = false;
+        btn.removeAttribute('aria-busy');
+        btn.classList.remove('is-busy');
+        if (plainText && btn.textContent === label) btn.textContent = originalText;
+        if (!handlerOwnsDisabled && btn.disabled) btn.disabled = false;
+        observer.disconnect();
+        if (timer) clearTimeout(timer);
+      };
+      const observer = new MutationObserver(() => {
+        if (handlerOwnsDisabled && !btn.disabled) restore();
+      });
+      observer.observe(btn, { attributes: true, attributeFilter: ['disabled'] });
+      timer = setTimeout(restore, handlerOwnsDisabled ? 15000 : 2500);
+    }, 0);
+  }, true);
+})();
+
+// Loading placeholders and load failures always end with a way to retry.
+(function installLoadRetryWatchdog() {
+  const loadingSelectors = '#loading, #admin-loading, #account-loading, #shop-loading, #search-loading, #news-loading, #archive-loading, #article-loading, #document-loading, #faq-loading, .admin-loading, .shop-loading, .news-loading, .search-loading, .account-loading, .np-loading, .ap-loading, .verify-empty, .econ-muted, .t-empty, .loading-msg';
+  const errorSelectors = '.news-error, .faq-error, .t-empty, .orders-empty, .verify-empty, .econ-muted, .loading-msg, #news-error, #archive-error, #document-error, #article-error, #faq-error, #nations-grid p, #history-servers-tbody td';
+  const visible = (el) => el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+  const addRetry = (el, message) => {
+    if (!el || el.querySelector('.mca-load-retry')) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'mca-load-retry';
+    if (message) {
+      const p = document.createElement('p');
+      p.textContent = message;
+      wrap.appendChild(p);
+    }
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-outline btn-sm';
+    btn.textContent = 'Try again';
+    btn.addEventListener('click', () => location.reload());
+    wrap.appendChild(btn);
+    el.appendChild(wrap);
+  };
+  const scanLoading = () => {
+    document.querySelectorAll(loadingSelectors).forEach((el) => {
+      if (visible(el) && /loading/i.test(el.textContent || '')) addRetry(el, 'This is taking longer than expected.');
+    });
+  };
+  const scanErrors = () => {
+    document.querySelectorAll(errorSelectors).forEach((el) => {
+      if (!visible(el)) return;
+      const text = el.textContent || '';
+      if (/(could not load|couldn't load|failed to load|network error|taking longer)/i.test(text) && !el.querySelector('button, a')) addRetry(el, '');
+    });
+  };
+  setTimeout(scanLoading, 12000);
+  setTimeout(scanLoading, 20000);
+  let scheduled = false;
+  const scheduleScan = () => {
+    if (scheduled) return;
+    scheduled = true;
+    setTimeout(() => { scheduled = false; scanErrors(); }, 250);
+  };
+  if (document.body) new MutationObserver(scheduleScan).observe(document.body, { childList: true, subtree: true, characterData: true });
+  scanErrors();
+})();
 
 // Back-to-top: appears after scrolling, keyboard-focusable, honors
 // reduced motion, and sits clear of the cookie banner.
